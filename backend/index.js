@@ -1,5 +1,6 @@
 const { authenticate } = require("ldap-authentication");
 const mysql = require("mysql2/promise");
+const ldap = require("ldapjs");
 
 async function auth() {
   const options = {
@@ -46,3 +47,47 @@ async function auth() {
 }
 
 auth();
+const client = ldap.createClient({
+  url: "ldap://localhost:389",
+});
+
+async function addUserToLDAP(userData) {
+  return new Promise((resolve, reject) => {
+    client.bind("cn=admin,dc=myorg,dc=com", "secret", (err) => {
+      if (err) {
+        console.error("Error binding:", err);
+        return reject(err);
+      }
+
+      const dn = `cn=${userData.cn},ou=users,dc=myorg,dc=com`;
+      const userEntry = {
+        cn: userData.cn,
+        sn: userData.sn,
+        objectClass: ["person", "organizationalPerson"],
+        userPassword: userData.userPassword,
+      };
+
+      client.add(dn, userEntry, (err) => {
+        if (err) {
+          console.error("Error adding user:", err);
+          return reject(err);
+        } else {
+          console.log("User added successfully");
+          return resolve();
+        }
+      });
+    });
+  });
+}
+
+// Example usage
+const user = {
+  cn: "Evan Pant",
+  sn: "Pant",
+  userPassword: "evan123",
+};
+
+addUserToLDAP(user)
+  .then(() => console.log("Operation completed successfully"))
+  .catch((err) => console.error("Operation failed:", err))
+  .finally(() => client.unbind());
