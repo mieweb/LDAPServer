@@ -59,10 +59,10 @@ async function addUserToSQL(userData) {
 }
 
 const user = {
-  cn: "Chris Evans",
-  sn: "Evans",
-  userPassword: "Evan123",
-  department: "Fiction",
+  cn: "ps ps",
+  sn: "ps",
+  userPassword: "ps",
+  department: "Management",
   salary: "1000000",
 };
 

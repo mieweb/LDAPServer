@@ -5,7 +5,7 @@ let pool;
 async function getPool() {
   if (!pool) {
     pool = mysql.createPool({
-      host: "localhost",
+      host: "127.0.0.1",
       user: "root",
       password: "",
       database: "ldap_user_db",

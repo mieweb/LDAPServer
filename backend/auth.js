@@ -41,4 +41,4 @@ async function authenticateAndFetchUser(username, password) {
   }
 }
 
-authenticateAndFetchUser("Chris Evans", "Evan123");
+authenticateAndFetchUser("ps ps", "ps");
