@@ -2,18 +2,18 @@ const ldap = require("ldapjs");
 const { getPool } = require("./db");
 
 const client = ldap.createClient({
-  url: "ldap://localhost:389",
+  url: "ldap://localhost:1389",
 });
 
 async function addUserToLDAP(userData) {
   return new Promise((resolve, reject) => {
-    client.bind("cn=admin,dc=myorg,dc=com", "secret", (err) => {
+    client.bind("cn=admin,dc=mieweb,dc=com", "secret", (err) => {
       if (err) {
         console.error("Error binding:", err);
         return reject(err);
       }
 
-      const dn = `cn=${userData.cn},ou=users,dc=myorg,dc=com`;
+      const dn = `cn=${userData.cn},ou=users,dc=mieweb,dc=com`;
       const userEntry = {
         cn: userData.cn,
         sn: userData.sn,
@@ -59,9 +59,9 @@ async function addUserToSQL(userData) {
 }
 
 const user = {
-  cn: "ps ps",
-  sn: "ps",
-  userPassword: "ps",
+  cn: "ram ram",
+  sn: "ram",
+  userPassword: "ram",
   department: "Management",
   salary: "1000000",
 };

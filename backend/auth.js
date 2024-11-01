@@ -4,11 +4,11 @@ const { getPool } = require("./db");
 async function authenticateAndFetchUser(username, password) {
   const options = {
     ldapOpts: {
-      url: "ldap://localhost",
+      url: "ldap://localhost:1389",
     },
-    userDn: `cn=${username},ou=users,dc=myorg,dc=com`,
+    userDn: `cn=${username},ou=users,dc=mieweb,dc=com`,
     userPassword: password,
-    userSearchBase: "dc=myorg,dc=com",
+    userSearchBase: "dc=mieweb,dc=com",
     usernameAttribute: "cn",
     username: username,
     attributes: ["cn"],
@@ -41,4 +41,4 @@ async function authenticateAndFetchUser(username, password) {
   }
 }
 
-authenticateAndFetchUser("ps ps", "ps");
+authenticateAndFetchUser("ram ram", "ram");
