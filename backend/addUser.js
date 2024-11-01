@@ -1,35 +1,23 @@
+// main.js
 const ldap = require("ldapjs");
 const { getPool } = require("./db");
-const readline = require("readline");
+const { ldapConfig, mysqlConfig } = require("./config");
+const { askQuestion } = require("./utils/utils");
 
 const client = ldap.createClient({
-  url: "ldap://localhost:1389",
+  url: ldapConfig.url,
 });
-
-// Function to prompt for user input
-function askQuestion(query) {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  return new Promise((resolve) =>
-    rl.question(query, (answer) => {
-      rl.close();
-      resolve(answer);
-    })
-  );
-}
 
 // Function to add user to LDAP
 async function addUserToLDAP(userData) {
   return new Promise((resolve, reject) => {
-    client.bind("cn=admin,dc=mieweb,dc=com", "secret", (err) => {
+    client.bind(ldapConfig.adminDN, ldapConfig.adminPassword, (err) => {
       if (err) {
         console.error("Error binding:", err);
         return reject(err);
       }
 
-      const dn = `cn=${userData.cn},ou=users,dc=mieweb,dc=com`;
+      const dn = `cn=${userData.cn},ou=users,${ldapConfig.baseDN}`;
       const userEntry = {
         cn: userData.cn,
         sn: userData.sn,
@@ -37,15 +25,15 @@ async function addUserToLDAP(userData) {
         userPassword: userData.userPassword,
       };
 
-      console.log(dn);
-      console.log(userEntry);
+      console.log("Adding to LDAP with DN:", dn);
+      console.log("User Entry:", userEntry);
 
       client.add(dn, userEntry, (err) => {
         if (err) {
           console.error("Error adding user:", err);
           return reject(err);
         } else {
-          console.log("User added successfully");
+          console.log("User added successfully to LDAP");
           return resolve();
         }
       });
@@ -62,7 +50,7 @@ async function addUserToSQL(userData) {
     const { cn, department = "Unknown", age = 0, salary = "0.00" } = userData;
 
     const [result] = await connection.execute(
-      "INSERT INTO user_details (user_name, department, age, salary) VALUES (?, ?, ?, ?)",
+      `INSERT INTO ${mysqlConfig.tableName} (user_name, department, age, salary) VALUES (?, ?, ?, ?)`,
       [cn, department, age, salary]
     );
 
