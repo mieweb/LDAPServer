@@ -1,14 +1,30 @@
 const { authenticate } = require("ldap-authentication");
 const { getPool } = require("./db");
+const readline = require("readline");
 
+// Function to prompt for user input
+function askQuestion(query) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise((resolve) =>
+    rl.question(query, (answer) => {
+      rl.close();
+      resolve(answer);
+    })
+  );
+}
+
+// Function to authenticate user and fetch additional info from MySQL
 async function authenticateAndFetchUser(username, password) {
   const options = {
     ldapOpts: {
-      url: "ldap://localhost",
+      url: "ldap://localhost:1389",
     },
-    userDn: `cn=${username},ou=users,dc=myorg,dc=com`,
+    userDn: `cn=${username},ou=users,dc=mieweb,dc=com`,
     userPassword: password,
-    userSearchBase: "dc=myorg,dc=com",
+    userSearchBase: "dc=mieweb,dc=com",
     usernameAttribute: "cn",
     username: username,
     attributes: ["cn"],
@@ -41,4 +57,12 @@ async function authenticateAndFetchUser(username, password) {
   }
 }
 
-authenticateAndFetchUser("ps ps", "ps");
+// Main function to get user input and execute the authentication
+async function main() {
+  const username = await askQuestion("Enter Username: ");
+  const password = await askQuestion("Enter Password: ");
+
+  await authenticateAndFetchUser(username, password);
+}
+
+main();

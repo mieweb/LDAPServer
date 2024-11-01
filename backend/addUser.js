@@ -1,19 +1,35 @@
 const ldap = require("ldapjs");
 const { getPool } = require("./db");
+const readline = require("readline");
 
 const client = ldap.createClient({
-  url: "ldap://localhost:389",
+  url: "ldap://localhost:1389",
 });
 
+// Function to prompt for user input
+function askQuestion(query) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise((resolve) =>
+    rl.question(query, (answer) => {
+      rl.close();
+      resolve(answer);
+    })
+  );
+}
+
+// Function to add user to LDAP
 async function addUserToLDAP(userData) {
   return new Promise((resolve, reject) => {
-    client.bind("cn=admin,dc=myorg,dc=com", "secret", (err) => {
+    client.bind("cn=admin,dc=mieweb,dc=com", "secret", (err) => {
       if (err) {
         console.error("Error binding:", err);
         return reject(err);
       }
 
-      const dn = `cn=${userData.cn},ou=users,dc=myorg,dc=com`;
+      const dn = `cn=${userData.cn},ou=users,dc=mieweb,dc=com`;
       const userEntry = {
         cn: userData.cn,
         sn: userData.sn,
@@ -37,6 +53,7 @@ async function addUserToLDAP(userData) {
   });
 }
 
+// Function to add user to SQL database
 async function addUserToSQL(userData) {
   const pool = await getPool();
   const connection = await pool.getConnection();
@@ -44,7 +61,6 @@ async function addUserToSQL(userData) {
   try {
     const { cn, department = "Unknown", age = 0, salary = "0.00" } = userData;
 
-    // Insert user data into SQL database
     const [result] = await connection.execute(
       "INSERT INTO user_details (user_name, department, age, salary) VALUES (?, ?, ?, ?)",
       [cn, department, age, salary]
@@ -58,16 +74,21 @@ async function addUserToSQL(userData) {
   }
 }
 
-const user = {
-  cn: "ps ps",
-  sn: "ps",
-  userPassword: "ps",
-  department: "Management",
-  salary: "1000000",
-};
+// Main function to get user input and execute the operations
+async function main() {
+  const user = {
+    cn: await askQuestion("Enter CN (Username): "),
+    sn: await askQuestion("Enter SN (Surname): "),
+    userPassword: await askQuestion("Enter User Password: "),
+    department: await askQuestion("Enter Department: "),
+    salary: await askQuestion("Enter Salary: "),
+  };
 
-addUserToLDAP(user)
-  .then(() => addUserToSQL(user))
-  .then(() => console.log("Operation completed successfully"))
-  .catch((err) => console.error("Operation failed:", err))
-  .finally(() => client.unbind());
+  addUserToLDAP(user)
+    .then(() => addUserToSQL(user))
+    .then(() => console.log("Operation completed successfully"))
+    .catch((err) => console.error("Operation failed:", err))
+    .finally(() => client.unbind());
+}
+
+main();
