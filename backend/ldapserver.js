@@ -1,6 +1,5 @@
 const ldap = require("ldapjs");
 const mysql = require("mysql2/promise");
-const fs = require("fs");
 require("dotenv").config();
 
 // MySQL configuration
@@ -61,15 +60,16 @@ server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
     if (rows.length > 0) {
       const user = rows[0];
       const userEntry = {
-        dn: `cn=${user.user_name},${process.env.LDAP_BASE_DN}`,
+        dn: `cn=${user.user_name},ou=users,${process.env.LDAP_BASE_DN}`,
         attributes: {
           objectClass: [
             "top",
-            "person",
+            "inetOrgPerson",
             "organizationalPerson",
             "posixAccount",
           ],
           cn: user.user_name,
+          sn: user.sn,
           uid: user.user_name,
           uidNumber: user.uid,
           gidNumber: user.gid,
