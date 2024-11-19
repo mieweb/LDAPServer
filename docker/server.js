@@ -11,8 +11,8 @@ const dbConfig = {
 };
 
 const server = ldap.createServer({
-  certificate: fs.readFileSync("./ldap-cert.pem"),
-  key: fs.readFileSync("./ldap-key.pem"),
+  certificate: fs.readFileSync("./ssl/ldap-cert.pem"),
+  key: fs.readFileSync("./ssl/ldap-key.pem"),
 });
 
 server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
