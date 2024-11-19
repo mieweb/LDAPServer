@@ -18,6 +18,7 @@ services:
       - LDAP_ADMIN_PASSWORD=secret
     volumes:
       - ./ssl:/usr/src/app/ssl
+      - ./:/usr/src/app
     networks:
       - app-network
 
@@ -29,6 +30,29 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app-network
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: ldap_client
+    environment: 
+      - LDAP_BASE = dc=mieweb, dc=com
+      - LDAP_URI = ldap://app:1390
+      - LDAP_ADMIN_DN = cn=admin, dc=mieweb, dc=com
+      - LDAP_ADMIN_PW = secret
+      - LDAP_DOMAIN = mieweb.com
+      - LDAP_ORG = "MIE Organization"
+      - LDAP_CERT_SUBJ = "/C=US/ST=IN/L=FW/O=MIE/OU=OrgUnit/CN=mieweb.com"
+      - SSH_PORT = 2222
+    ports:
+      - "2222:2222"
+    volumes:
+      - ./client:/etc/client
+    depends_on:
+      - app
     networks:
       - app-network
 

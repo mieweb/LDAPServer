@@ -11,14 +11,16 @@ const dbConfig = {
 };
 
 const server = ldap.createServer({
-  certificate: fs.readFileSync("./ssl/ldap-cert.pem"),
-  key: fs.readFileSync("./ssl/ldap-key.pem"),
+  certificate: fs.readFileSync("./ldap-cert.pem"),
+  key: fs.readFileSync("./ldap-key.pem"),
 });
 
 server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
   console.log("Bind operation initiated.");
   const { credentials: password, dn } = req;
   const username = dn.toString().split(",")[0].split("=")[1];
+
+  console.log("Username", username);
 
   try {
     const connection = await mysql.createConnection(dbConfig);

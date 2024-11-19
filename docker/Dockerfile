@@ -11,8 +11,8 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install
 
-# Create ssl directory
-RUN mkdir -p ssl
+# # Create ssl directory
+# RUN mkdir -p ssl
 
 # Copy application code
 COPY . .
