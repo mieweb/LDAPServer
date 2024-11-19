@@ -1,0 +1,16 @@
+dn: ou=users,dc=mieweb,dc=com
+objectClass: organizationalUnit
+ou: users
+
+dn: cn=ann,ou=users,dc=mieweb,dc=com
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: top
+cn: ann
+sn: Doe
+uid: ann
+uidNumber: 1001
+gidNumber: 1001
+homeDirectory: /home/ann
+loginShell: /bin/bash
+userPassword: ann
