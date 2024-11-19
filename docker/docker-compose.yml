@@ -1,0 +1,40 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "1390:1390"
+    depends_on:
+      - mysql
+    environment:
+      - MYSQL_HOST=mysql
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=rootpassword
+      - MYSQL_DATABASE=ldap_user_db
+      - LDAP_PORT=1390
+      - LDAP_BASE_DN=dc=mieweb,dc=com
+      - LDAP_ADMIN_DN=cn=admin,dc=mieweb,dc=com
+      - LDAP_ADMIN_PASSWORD=secret
+    volumes:
+      - ./ssl:/usr/src/app/ssl
+    networks:
+      - app-network
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: ldap_user_db
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
