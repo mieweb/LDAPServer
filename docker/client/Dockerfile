@@ -21,14 +21,6 @@ RUN apt-get update && \
     tcpdump \
     openssl
 
-# # SSH Configuration
-# RUN mkdir /var/run/sshd && \
-#     . /tmp/ldap_env.sh && \
-#     echo "Port $SSH_PORT" >> /etc/ssh/sshd_config && \
-#     echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && \
-#     echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config && \
-#     echo 'UsePAM yes' >> /etc/ssh/sshd_config
-
 # SSH Configuration
 RUN [ ! -d /var/run/sshd ] && mkdir /var/run/sshd || echo "/var/run/sshd already exists" && \
     . /tmp/ldap_env.sh && \
@@ -100,7 +92,7 @@ RUN slapd -h "ldapi:///" -u openldap -g openldap -d 256 & \
     chmod 640 /etc/ssl/private/ldap-key.pem
 
 # Start services and set permissions
-# CMD service slapd start && \
-#     service ssh start && \
-#     service sssd start && \
-#     bash
+CMD service slapd start && \
+    service ssh start && \
+    service sssd start && \
+    bash
