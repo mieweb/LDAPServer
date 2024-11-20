@@ -1,7 +1,7 @@
 services:
   app:
     build:
-      context: .
+      context: ./server
       dockerfile: Dockerfile
     ports:
       - "1390:1390"
@@ -17,8 +17,8 @@ services:
       - LDAP_ADMIN_DN=cn=admin,dc=mieweb,dc=com
       - LDAP_ADMIN_PASSWORD=secret
     volumes:
+      - ./server:/usr/src/app
       - ./ssl:/usr/src/app/ssl
-      - ./:/usr/src/app
     networks:
       - app-network
 
@@ -40,7 +40,7 @@ services:
     container_name: ldap_client
     environment: 
       - LDAP_BASE = dc=mieweb, dc=com
-      - LDAP_URI = ldap://app:1390
+      - LDAP_URI = ldaps://app:1390
       - LDAP_ADMIN_DN = cn=admin, dc=mieweb, dc=com
       - LDAP_ADMIN_PW = secret
       - LDAP_DOMAIN = mieweb.com
