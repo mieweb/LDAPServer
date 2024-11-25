@@ -29,7 +29,7 @@ services:
       MYSQL_DATABASE: ldap_user_db
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - app-network
 

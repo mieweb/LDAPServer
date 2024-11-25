@@ -91,8 +91,8 @@ RUN slapd -h "ldapi:///" -u openldap -g openldap -d 256 & \
     killall slapd && \
     chmod 640 /etc/ssl/private/ldap-key.pem
 
-# Start services and set permissions
-CMD service slapd start && \
-    service ssh start && \
-    service sssd start && \
-    bash
+# # Start services and set permissions
+# CMD service slapd start && \
+#     service ssh start && \
+#     service sssd start && \
+#     bash
