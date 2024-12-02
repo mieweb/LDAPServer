@@ -3,22 +3,12 @@ version: "3.9"
 services:
   cert-generator:
     image: alpine
-    container_name: cert-generator
-    working_dir: /certs
     volumes:
-      - certs:/certs
-    command: >
-      sh -c "
-        apk add --no-cache openssl &&
-        openssl req -new -x509 -nodes -days 365 \
-          -keyout /certs/ldap-key.pem \
-          -out /certs/ldap-cert.pem \
-          -subj '/C=US/ST=IN/L=FW/O=MIE/OU=OrgUnit/CN=server' &&
-        cp /certs/ldap-cert.pem /certs/ca-cert.pem &&
-        chmod 600 /certs/ldap-key.pem &&
-        chmod 644 /certs/ldap-cert.pem /certs/ca-cert.pem &&
-        echo 'Certificates generated successfully'
-      "
+      - ./certs:/certs
+      - ./generate-certs.sh:/generate-certs.sh
+    command: sh -c "apk add --no-cache openssl && chmod +x /generate-certs.sh && /generate-certs.sh"
+    # To ensure the container doesn't exit immediately
+    restart: "no"
 
   app:
     build:
@@ -39,9 +29,9 @@ services:
       LDAP_BASE_DN: dc=mieweb,dc=com
       LDAP_ADMIN_DN: cn=admin,dc=mieweb,dc=com
       LDAP_ADMIN_PASSWORD: secret
-      LDAP_CERT_PATH: /certs/server-cert.pem
-      LDAP_KEY_PATH: /certs/server-key.pem
-      LDAP_CA_CERT_PATH: /certs/ca-cert.pem
+      LDAP_CERT_PATH: ../certs/server-cert.pem
+      LDAP_KEY_PATH: ../certs/server-key.pem
+      LDAP_CA_CERT_PATH: ../certs/ca-cert.pem
     volumes:
       - ./server:/usr/src/app
       - certs:/certs
@@ -78,7 +68,7 @@ services:
       LDAP_ORG: "MIE Organization"
       LDAP_CERT_SUBJ: "/C=US/ST=IN/L=FW/O=MIE/OU=OrgUnit/CN=mieweb.com"
       SSH_PORT: 2222
-      LDAP_CERT_PATH: /certs/ca-cert.pem
+      LDAP_CERT_PATH: /certificates/ca-cert.pem
     volumes:
       - certs:/certs
     networks:

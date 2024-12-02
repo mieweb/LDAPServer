@@ -1,20 +1,23 @@
-# Use Node.js as the base image
-FROM node:18-alpine
+# Use an official Node.js runtime as a parent image
+FROM node:16-alpine
 
-# Set the working directory inside the container
+# Set the working directory in the container
 WORKDIR /usr/src/app
 
-# Copy package.json and package-lock.json to install dependencies
+# Install system dependencies
+RUN apk add --no-cache openssl
+
+# Copy package.json and package-lock.json
 COPY package*.json ./
 
 # Install dependencies
 RUN npm install
 
-# Copy the application files
+# Copy the rest of the application code
 COPY . .
 
-# Expose the port app listens on
+# Expose the LDAP port
 EXPOSE 1390
 
-# Start the application
+# Command to run the application
 CMD ["node", "server.js"]

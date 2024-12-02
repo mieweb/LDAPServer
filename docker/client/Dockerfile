@@ -1,21 +1,30 @@
 # Use an official Debian base image
 FROM debian:latest
 
+# Copy environment variables
+COPY ldap_env.sh /tmp/ldap_env.sh
+RUN chmod +x /tmp/ldap_env.sh && . /tmp/ldap_env.sh
+
+# Reinitialize dpkg info database to avoid corruption
+RUN rm -rf /var/lib/dpkg/info/* && dpkg --configure -a 
 # Install necessary packages
 RUN apt-get update && \
-    apt-get install -y \
-    slapd \
-    ldap-utils \
-    openssh-server \
-    sssd \
-    sssd-ldap \
-    sudo \
-    vim \
-    net-tools \
-    procps \
-    traceroute \
-    tcpdump \
-    openssl
+    apt-get install -y --no-install-recommends \
+    slapd \ 
+    ldap-utils \ 
+    openssh-server \ 
+    sssd \ 
+    sssd-ldap \ 
+    sudo \ 
+    vim \ 
+    net-tools \ 
+    iputils-ping \
+    procps \ 
+    traceroute \ 
+    tcpdump \ 
+    openssl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # SSH Configuration
 RUN [ ! -d /var/run/sshd ] && mkdir /var/run/sshd || echo "/var/run/sshd already exists" && \
@@ -33,11 +42,13 @@ RUN useradd -m -s /bin/bash mie && \
 COPY users.ldif /etc/ldap/users.ldif
 COPY setup.ldif /etc/ldap/setup.ldif
 
+COPY certs/ /certificates/
+
 # Configure LDAP client
 RUN echo "BASE    dc=mieweb,dc=com" > /etc/ldap/ldap.conf && \
     echo "URI     ldaps://app:1390" >> /etc/ldap/ldap.conf && \
     echo "BINDDN  dc=mieweb,dc=com" >> /etc/ldap/ldap.conf && \
-    echo "TLS_CACERT /certs/ca-cert.pem" >> /etc/ldap/ldap.conf && \
+    echo "TLS_CACERT /certificates/ca-cert.pem" >> /etc/ldap/ldap.conf && \
     echo "TLS_REQCERT allow" >> /etc/ldap/ldap.conf
 
 # Configure SSSD
@@ -53,3 +64,5 @@ EXPOSE 2222
 
 # Start services
 CMD service ssh start && tail -f /dev/null
+
+
