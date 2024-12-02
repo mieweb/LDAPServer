@@ -42,7 +42,7 @@ RUN useradd -m -s /bin/bash mie && \
 COPY users.ldif /etc/ldap/users.ldif
 COPY setup.ldif /etc/ldap/setup.ldif
 
-COPY certs/ /certificates/
+# COPY certificates/ /certificates/
 
 # Configure LDAP client
 RUN echo "BASE    dc=mieweb,dc=com" > /etc/ldap/ldap.conf && \

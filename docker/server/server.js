@@ -16,8 +16,8 @@ const dbConfig = {
 async function startLDAPServer() {
   try {
     const server = ldap.createServer({
-      certificate: fs.readFileSync("./certs/server-cert.pem"),
-      key: fs.readFileSync("./certs/server-key.pem"),
+      certificate: fs.readFileSync("/certificates/server-cert.pem"),
+      key: fs.readFileSync("/certificates/server-key.pem"),
     });
 
     // Helper function to verify password

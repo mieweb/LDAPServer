@@ -1,13 +1,12 @@
 version: "3.9"
-
 services:
   cert-generator:
     image: alpine
     volumes:
-      - ./certs:/certs
+      - ./certificates:/certificates
       - ./generate-certs.sh:/generate-certs.sh
     command: sh -c "apk add --no-cache openssl && chmod +x /generate-certs.sh && /generate-certs.sh"
-    # To ensure the container doesn't exit immediately
+    # Ensure the container stays up until certificates are generated
     restart: "no"
 
   app:
@@ -18,8 +17,8 @@ services:
     ports:
       - "1390:1390"
     depends_on:
-      - mysql
-      - cert-generator
+      cert-generator:
+        condition: service_completed_successfully
     environment:
       MYSQL_HOST: mysql
       MYSQL_USER: root
@@ -29,12 +28,13 @@ services:
       LDAP_BASE_DN: dc=mieweb,dc=com
       LDAP_ADMIN_DN: cn=admin,dc=mieweb,dc=com
       LDAP_ADMIN_PASSWORD: secret
-      LDAP_CERT_PATH: ../certs/server-cert.pem
-      LDAP_KEY_PATH: ../certs/server-key.pem
-      LDAP_CA_CERT_PATH: ../certs/ca-cert.pem
+      LDAP_CERT_PATH: /certificates/server-cert.pem
+      LDAP_KEY_PATH: /certificates/server-key.pem
+      LDAP_CA_CERT_PATH: /certificates/ca-cert.pem
     volumes:
       - ./server:/usr/src/app
-      - certs:/certs
+      - certificates:/certificates
+      - ./certificates:/certificates
     networks:
       - app-network
 
@@ -56,7 +56,10 @@ services:
       dockerfile: Dockerfile
     container_name: ldap_client
     depends_on:
-      - app
+      cert-generator:
+        condition: service_completed_successfully
+      app:
+        condition: service_started
     ports:
       - "2222:2222"
     environment:
@@ -70,7 +73,8 @@ services:
       SSH_PORT: 2222
       LDAP_CERT_PATH: /certificates/ca-cert.pem
     volumes:
-      - certs:/certs
+      - certificates:/certificates
+      - ./certificates:/certificates
     networks:
       - app-network
 
@@ -79,5 +83,5 @@ networks:
     driver: bridge
 
 volumes:
-  certs:
+  certificates:
   mysql_data:

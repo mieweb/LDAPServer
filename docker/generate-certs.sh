@@ -1,52 +1,50 @@
 #!/bin/sh
+set -e
 
-# Ensure the certs directory exists
-mkdir -p /certs
+# Print current working directory and volume mount point
+echo "Current Working Directory: $(pwd)"
+echo "Listing current directory contents:"
+ls -la
 
-# Generate CA key and certificate
-openssl genrsa -out /certs/ca-key.pem 2048
-openssl req -new -x509 -days 365 \
-    -key /certs/ca-key.pem \
-    -sha256 \
-    -out /certs/ca-cert.pem \
-    -subj "/C=US/ST=Indiana/L=Fort Wayne/O=MIE/CN=MIE CA"
+# Ensure /certificates directory exists
+mkdir -p /certificates
 
-# Generate server key
-openssl genrsa -out /certs/server-key.pem 2048
+# Verbose certificate generation with extensive logging
+echo "Generating CA Key..."
+openssl genrsa -out /certificates/ca-key.pem 2048
 
-# Create server certificate signing request
-openssl req -new \
-    -key /certs/server-key.pem \
-    -out /certs/server.csr \
-    -subj "/C=US/ST=Indiana/L=Fort Wayne/O=MIE/CN=ldap-server"
+echo "Generating CA Certificate..."
+openssl req -x509 -new -nodes -key /certificates/ca-key.pem -sha256 -days 365 -out /certificates/ca-cert.pem -subj "/C=US/ST=Indiana/L=Fort Wayne/O=MIE/CN=MIEWebCA"
 
-# Create an extension file for the server certificate
-cat > /certs/server-ext.cnf << EOF
+echo "Generating Server Key..."
+openssl genrsa -out /certificates/server-key.pem 2048
+
+echo "Creating Server CSR Configuration..."
+cat > /certificates/server-ext.cnf <<EOF
 authorityKeyIdentifier=keyid,issuer
 basicConstraints=CA:FALSE
 keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
 subjectAltName = @alt_names
 
 [alt_names]
-DNS.1 = app
+DNS.1 = ldap-server
 DNS.2 = localhost
 IP.1 = 127.0.0.1
 EOF
 
-# Sign the server certificate
-openssl x509 -req \
-    -in /certs/server.csr \
-    -CA /certs/ca-cert.pem \
-    -CAkey /certs/ca-key.pem \
-    -CAcreateserial \
-    -out /certs/server-cert.pem \
-    -days 365 \
-    -sha256 \
-    -extfile /certs/server-ext.cnf
+echo "Generating Server CSR..."
+openssl req -new -key /certificates/server-key.pem -out /certificates/server.csr -subj "/C=US/ST=Indiana/L=Fort Wayne/O=MIE/CN=ldap-server"
 
-# Set appropriate permissions
-chmod 644 /certs/*.pem
-chmod 600 /certs/server-key.pem
+echo "Generating Server Certificate..."
+openssl x509 -req -in /certificates/server.csr -CA /certificates/ca-cert.pem -CAkey /certificates/ca-key.pem -CAcreateserial -out /certificates/server-cert.pem -days 365 -sha256 -extfile /certificates/server-ext.cnf
 
-# List the generated certificates
-ls -l /certs
+# Comprehensive file listing with details
+echo "Generated Certificate Files:"
+ls -l /certificates
+
+# Verify file contents are not empty
+echo "Verifying file contents:"
+for file in /certificates/*.pem; do
+    echo "$file size:"
+    wc -c "$file"
+done
