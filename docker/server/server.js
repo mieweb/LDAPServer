@@ -1,6 +1,5 @@
 const ldap = require("ldapjs");
 const mysql = require("mysql2/promise");
-const fs = require("fs");
 const crypto = require("crypto");
 
 // MySQL connection configuration
@@ -27,10 +26,7 @@ function hashPassword(password, salt) {
 // Main server function
 async function startLDAPServer() {
   try {
-    const server = ldap.createServer({
-      // certificate: fs.readFileSync("/certificates/server-cert.pem"),
-      // key: fs.readFileSync("/certificates/server-key.pem"),
-    });
+    const server = ldap.createServer();
 
     // Bind operation - authentication
     server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
@@ -48,9 +44,7 @@ async function startLDAPServer() {
           );
 
           if (rows.length === 0) {
-            return next(
-              new ldap.InvalidCredentialsError("RAYYYYYYYYYY User not found")
-            );
+            return next(new ldap.InvalidCredentialsError("User not found"));
           }
 
           const user = rows[0];
