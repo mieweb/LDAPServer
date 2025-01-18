@@ -15,7 +15,7 @@ services:
       dockerfile: Dockerfile
     container_name: ldap_server
     ports:
-      - "1390:1390"
+      - "389:389"
     depends_on:
       cert-generator:
         condition: service_completed_successfully
@@ -24,7 +24,7 @@ services:
       MYSQL_USER: root
       MYSQL_PASSWORD: rootpassword
       MYSQL_DATABASE: ldap_user_db
-      LDAP_PORT: 1390
+      LDAP_PORT: 389
       LDAP_BASE_DN: dc=mieweb,dc=com
       LDAP_ADMIN_DN: cn=admin,dc=mieweb,dc=com
       LDAP_ADMIN_PASSWORD: secret
@@ -64,7 +64,7 @@ services:
       - "2222:2222"
     environment:
       LDAP_BASE: dc=mieweb,dc=com
-      LDAP_URI: ldaps://app:1390
+      LDAP_URI: ldap://app:389
       LDAP_ADMIN_DN: cn=admin,dc=mieweb,dc=com
       LDAP_ADMIN_PW: secret
       LDAP_DOMAIN: mieweb.com

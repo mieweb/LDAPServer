@@ -17,6 +17,7 @@ RUN apt-get update && \
     sssd-ldap \ 
     sudo \ 
     vim \ 
+    openssl \
     net-tools \ 
     iputils-ping \
     procps \ 
@@ -46,7 +47,7 @@ COPY setup.ldif /etc/ldap/setup.ldif
 
 # Configure LDAP client
 RUN echo "BASE    dc=mieweb,dc=com" > /etc/ldap/ldap.conf && \
-    echo "URI     ldaps://app:1390" >> /etc/ldap/ldap.conf && \
+    echo "URI     ldap://app:389" >> /etc/ldap/ldap.conf && \
     echo "BINDDN  dc=mieweb,dc=com" >> /etc/ldap/ldap.conf && \
     echo "TLS_CACERT /certificates/ca-cert.pem" >> /etc/ldap/ldap.conf && \
     echo "TLS_REQCERT allow" >> /etc/ldap/ldap.conf

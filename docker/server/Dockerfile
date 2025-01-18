@@ -17,7 +17,7 @@ RUN npm install
 COPY . .
 
 # Expose the LDAP port
-EXPOSE 1390
+EXPOSE 389
 
 # Command to run the application
 CMD ["node", "server.js"]
