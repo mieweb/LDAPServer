@@ -1,29 +1,29 @@
+version: "3.9"
 services:
   app:
     build:
       context: ./server
       dockerfile: Dockerfile
+    container_name: ldap_server
     ports:
-      - "1390:1390"
-    depends_on:
-      - mysql
+      - "389:389"
     environment:
-      - MYSQL_HOST=mysql
-      - MYSQL_USER=root
-      - MYSQL_PASSWORD=rootpassword
-      - MYSQL_DATABASE=ldap_user_db
-      - LDAP_PORT=1390
-      - LDAP_BASE_DN=dc=mieweb,dc=com
-      - LDAP_ADMIN_DN=cn=admin,dc=mieweb,dc=com
-      - LDAP_ADMIN_PASSWORD=secret
+      MYSQL_HOST: mysql
+      MYSQL_USER: root
+      MYSQL_PASSWORD: rootpassword
+      MYSQL_DATABASE: ldap_user_db
+      LDAP_PORT: 389
+      LDAP_BASE_DN: dc=mieweb,dc=com
+      LDAP_ADMIN_DN: cn=admin,dc=mieweb,dc=com
+      LDAP_ADMIN_PASSWORD: secret
     volumes:
       - ./server:/usr/src/app
-      - ./ssl:/usr/src/app/ssl
     networks:
       - app-network
 
   mysql:
     image: mysql:8.0
+    container_name: mysql
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
       MYSQL_DATABASE: ldap_user_db
@@ -38,21 +38,20 @@ services:
       context: ./client
       dockerfile: Dockerfile
     container_name: ldap_client
-    environment: 
-      - LDAP_BASE = dc=mieweb, dc=com
-      - LDAP_URI = ldaps://app:1390
-      - LDAP_ADMIN_DN = cn=admin, dc=mieweb, dc=com
-      - LDAP_ADMIN_PW = secret
-      - LDAP_DOMAIN = mieweb.com
-      - LDAP_ORG = "MIE Organization"
-      - LDAP_CERT_SUBJ = "/C=US/ST=IN/L=FW/O=MIE/OU=OrgUnit/CN=mieweb.com"
-      - SSH_PORT = 2222
+    depends_on:
+      app:
+        condition: service_started
     ports:
       - "2222:2222"
-    volumes:
-      - ./client:/etc/client
-    depends_on:
-      - app
+    environment:
+      LDAP_BASE: dc=mieweb,dc=com
+      LDAP_URI: ldap://app:389
+      LDAP_ADMIN_DN: cn=admin,dc=mieweb,dc=com
+      LDAP_ADMIN_PW: secret
+      LDAP_DOMAIN: mieweb.com
+      LDAP_ORG: "MIE Organization"
+      LDAP_CERT_SUBJ: "/C=US/ST=IN/L=FW/O=MIE/OU=OrgUnit/CN=mieweb.com"
+      SSH_PORT: 2222
     networks:
       - app-network
 
@@ -61,4 +60,5 @@ networks:
     driver: bridge
 
 volumes:
+  certificates:
   mysql_data:

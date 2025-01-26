@@ -1,14 +1,21 @@
-CREATE TABLE IF NOT EXISTS user_details (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_name VARCHAR(255) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
-    sn VARCHAR(255),
-    uid INT,
-    gid INT,
-    home_directory VARCHAR(255),
-    shell VARCHAR(255)
+CREATE DATABASE IF NOT EXISTS ldap_user_db;
+USE ldap_user_db;
+
+-- Create users table with salt and hashed password
+CREATE TABLE users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(50) UNIQUE NOT NULL,
+  password VARCHAR(128) NOT NULL,
+  salt VARCHAR(50) NOT NULL,
+  full_name VARCHAR(100),
+  email VARCHAR(100),
+  uid_number INT UNIQUE,
+  gid_number INT,
+  home_directory VARCHAR(200)
 );
 
-INSERT INTO user_details (user_name, password, sn, uid, gid, home_directory, shell)
-VALUES 
-('testuser', 'password123', 'Test User', 1000, 1000, '/home/testuser', '/bin/bash');
+-- Insert example users (manual hash for simplicity in init script)
+INSERT INTO users (username, password, salt, full_name, email, uid_number, gid_number, home_directory)
+VALUES
+  ('ann', '21c4474515c9869005f9de3f75c083eaf092bd9f8d5461c7c617f88a3fa32253e2abfbeda31a80b34fa38e374e4602d8b04db55f6e52e84c4bcf59fe9a585eb1', '09c3b732633eb3e92fd05b4dadf50254', 'Ann', 'ann@mieweb.com', 1001, 1001, '/home/ann'),
+  ('admin', '21c4474515c9869005f9de3f75c083eaf092bd9f8d5461c7c617f88a3fa32253e2abfbeda31a80b34fa38e374e4602d8b04db55f6e52e84c4bcf59fe9a585eb1', '09c3b732633eb3e92fd05b4dadf50254', 'System Administrator', 'admin@mieweb.com', 1000, 0, '/home/admin');

@@ -1,105 +1,150 @@
 const ldap = require("ldapjs");
 const mysql = require("mysql2/promise");
-const fs = require("fs");
-require("dotenv").config();
+const crypto = require("crypto");
 
+// MySQL connection configuration
 const dbConfig = {
-  host: process.env.MYSQL_HOST,
-  user: process.env.MYSQL_USER,
-  password: process.env.MYSQL_PASSWORD,
-  database: process.env.MYSQL_DATABASE,
+  host: process.env.MYSQL_HOST || "mysql",
+  user: process.env.MYSQL_USER || "root",
+  password: process.env.MYSQL_PASSWORD || "rootpassword",
+  database: process.env.MYSQL_DATABASE || "ldap_user_db",
 };
 
-const server = ldap.createServer({
-  certificate: fs.readFileSync("./ldap-cert.pem"),
-  key: fs.readFileSync("./ldap-key.pem"),
-});
+// Helper function to hash passwords
+function hashPassword(password, salt) {
+  return crypto
+    .pbkdf2Sync(
+      password,
+      salt,
+      1000, // iterations
+      64, // key length
+      "sha512"
+    )
+    .toString("hex");
+}
 
-server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
-  console.log("Bind operation initiated.");
-  const { credentials: password, dn } = req;
-  const username = dn.toString().split(",")[0].split("=")[1];
-
-  console.log("Username", username);
-
+// Main server function
+async function startLDAPServer() {
   try {
-    const connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute(
-      "SELECT * FROM user_details WHERE user_name = ? AND password = ?",
-      [username, password]
-    );
+    const server = ldap.createServer();
 
-    if (rows.length > 0) {
-      res.end();
-      next();
-    } else {
-      next(new ldap.InvalidCredentialsError());
-    }
+    // Bind operation - authentication
+    server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
+      console.log("Start Bind operation...");
+      const dnParts = req.dn.toString().split(",");
+      const username = dnParts[0].split("=")[1];
+      const password = req.credentials;
 
-    await connection.end();
-  } catch (err) {
-    next(new ldap.OperationsError());
-  }
-});
+      try {
+        const connection = await mysql.createConnection(dbConfig);
+        try {
+          const [rows] = await connection.execute(
+            "SELECT username, password, salt FROM users WHERE username = ?",
+            [username]
+          );
 
-server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
-  console.log("Search operation initiated.");
-  const filter = req.filter.toString();
+          if (rows.length === 0) {
+            return next(new ldap.InvalidCredentialsError("User not found"));
+          }
 
-  let query, queryParams;
+          const user = rows[0];
 
-  if (filter === "(objectClass=*)") {
-    // Broad search query to fetch all users from MySQL
-    query = "SELECT * FROM user_details";
-    queryParams = [];
-  } else {
-    // Extract the username for specific searches
-    const username = filter.split("=")[1].replace(")", "");
-    console.log("Specific search for username:", username);
-    query = "SELECT * FROM user_details WHERE user_name = ?";
-    queryParams = [username];
-  }
+          // Verify password
+          if (hashPassword(password, user.salt) !== user.password) {
+            return next(
+              new ldap.InvalidCredentialsError("Invalid credentials")
+            );
+          }
 
-  try {
-    const connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute(query, queryParams);
+          res.end();
+        } finally {
+          await connection.end();
+        }
+      } catch (error) {
+        console.error("Authentication error:", error);
+        return next(new ldap.OperationsError("Authentication failed"));
+      }
+    });
 
-    if (rows.length > 0) {
-      rows.forEach((user) => {
-        const userEntry = {
-          dn: `cn=${user.user_name},ou=users,${process.env.LDAP_BASE_DN}`,
+    server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
+      console.log("\n[DEBUG] Incoming search request:");
+      console.log("Filter:", req.filter.toString());
+      console.log("Attributes Requested:", req.attributes);
+      console.log(
+        "[DEBUG] Connection Bind DN:",
+        req.connection.ldap.bindDN.toString()
+      );
+      console.log("[DEBUG] Request Log ID:", req.logId);
+
+      const match = req.filter.toString().match(/\(uid=([^)]*)\)/);
+      const username = match ? match[1] : null;
+
+      if (!username) {
+        console.error("[ERROR] Invalid filter for extracting username");
+        res.end();
+        return next(new ldap.OperationsError("Invalid filter"));
+      }
+
+      try {
+        const connection = await mysql.createConnection(dbConfig);
+        const [rows] = await connection.execute(
+          `SELECT 
+            username, 
+            uid_number, 
+            gid_number, 
+            home_directory, 
+            full_name,
+            password
+           FROM users 
+           WHERE username = ?`,
+          [username]
+        );
+
+        if (rows.length === 0) {
+          console.error("[ERROR] User not found:", username);
+          res.end();
+          return next();
+        }
+
+        const user = rows[0];
+        const entry = {
+          dn: `cn=${user.username},${process.env.LDAP_BASE_DN}`,
           attributes: {
-            objectClass: [
-              "top",
-              "person",
-              "organizationalPerson",
-              "posixAccount",
-            ],
-            cn: user.user_name,
-            sn: user.sn,
-            uid: user.user_name,
-            uidNumber: user.uid,
-            gidNumber: user.gid,
+            objectClass: ["posixAccount", "inetOrgPerson", "shadowAccount"],
+            uid: user.username,
+            uidNumber: user.uid_number.toString(),
+            gidNumber: user.gid_number.toString(),
+            cn: user.full_name || user.username,
+            gecos: user.full_name || user.username,
             homeDirectory: user.home_directory,
-            loginShell: user.shell,
-            userPassword: user.password,
+            loginShell: "/bin/bash",
+            shadowLastChange: "0",
+            userpassword: `{CRYPT}${user.password}`,
           },
         };
-        res.send(userEntry);
-        console.log("Sending LDAP response for user:", user.user_name);
-      });
-    } else {
-      console.log("No users found for query.");
-    }
 
-    res.end();
-    await connection.end();
-  } catch (err) {
-    console.error("Error during search:", err);
-    next(new ldap.OperationsError());
+        console.log("\n[DEBUG] Responding with entry:");
+        console.log(JSON.stringify(entry, null, 2));
+
+        res.send(entry);
+        res.end();
+      } catch (error) {
+        console.error("[ERROR] Search operation failed:", error.message);
+        return next(new ldap.OperationsError("Search failed"));
+      }
+    });
+
+    const PORT = process.env.LDAP_PORT || 389;
+    server.listen(PORT, "0.0.0.0", () => {
+      console.log(
+        `Secure LDAP Authentication Server listening on port ${PORT}`
+      );
+    });
+  } catch (error) {
+    console.error("Failed to start LDAP server:", error);
+    process.exit(1);
   }
-});
+}
 
-server.listen(process.env.LDAP_PORT, "0.0.0.0", () => {
-  console.log(`LDAP server listening on port ${process.env.LDAP_PORT}`);
-});
+// Call the start function
+startLDAPServer();
