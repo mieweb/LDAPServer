@@ -1,12 +1,9 @@
 # Use an official Debian base image
 FROM debian:latest
 
-# Copy environment variables
-COPY ldap_env.sh /tmp/ldap_env.sh
-RUN chmod +x /tmp/ldap_env.sh && . /tmp/ldap_env.sh
-
 # Reinitialize dpkg info database to avoid corruption
 RUN rm -rf /var/lib/dpkg/info/* && dpkg --configure -a 
+
 # Install necessary packages
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -42,8 +39,7 @@ RUN useradd -m -s /bin/bash mie && \
 # Configure LDAP client
 RUN echo "BASE    dc=mieweb,dc=com" > /etc/ldap/ldap.conf && \
     echo "URI     ldap://app:389" >> /etc/ldap/ldap.conf && \
-    echo "BINDDN  dc=mieweb,dc=com" >> /etc/ldap/ldap.conf && \
-    echo "TLS_REQCERT allow" >> /etc/ldap/ldap.conf
+    echo "BINDDN  dc=mieweb,dc=com" >> /etc/ldap/ldap.conf
 
 # Configure SSSD
 COPY sssd.conf /etc/sssd/sssd.conf
