@@ -8,7 +8,6 @@ This project implements an LDAP gateway server using `ldapjs` that connects to a
 
 - **Node.js**: The main runtime environment for the application.
 - **ldapjs**: A library for creating and managing LDAP servers in Node.js.
-- **ldap-authentication**: A library that authenticates a user against an LDAP/AD Server.
 - **MySQL**: A relational database used to store extended user details.
 - **dotenv**: Manages environment variables securely.
 
@@ -29,6 +28,7 @@ Ensure you have the following installed:
 ### **Installation**
 
 1. **Clone the Repository**:
+
    ```bash
    git clone https://github.com/anishapant21/LDAP-SQL-Auth.git
    cd LDAP-SQL-Auth/docker
@@ -45,27 +45,31 @@ Ensure you have the following installed:
 ## **Usage**
 
 1. **Starting the LDAP Server (Docker)**:
+
    - To build and start the Docker containers, run:
      ```bash
      docker-compose up --build
      ```
 
 2. **Access the Client Bash**:
+
    - Enter the client container:
      ```bash
      docker exec -it ldap_client bash
      ```
 
 3. **Perform an LDAP Search**:
+
    - Query the LDAP server using:
      ```bash
      ldapsearch -x -H ldaps://app:1390 -b "dc=mieweb,dc=com" "(cn=testuser)"
      ```
 
 4. **Authentication**:
-    ```bash
-    ssh testuser@localhost -p 2222
-     ```
+
+   ```bash
+   ssh testuser@localhost -p 2222
+   ```
 
    **Note**: The functionality for login to the Linux system using LDAP users is currently under development.
 
