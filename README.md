@@ -62,13 +62,20 @@ Ensure you have the following installed:
 
    - Query the LDAP server using:
      ```bash
-     ldapsearch -x -H ldaps://app:1390 -b "dc=mieweb,dc=com" "(cn=testuser)"
+     ldapsearch -x -H ldap://app:389 -b "dc=mieweb,dc=com" "(uid=ann)"
      ```
 
-4. **Authentication**:
+4. **Run SSSD**:
+
+   - Run SSSD using:
+     ```bash
+     sssd -i
+     ```
+
+5. **Authentication**:
 
    ```bash
-   ssh testuser@localhost -p 2222
+   ssh ann@localhost -p 2222
    ```
 
    **Note**: The functionality for login to the Linux system using LDAP users is currently under development.
@@ -81,16 +88,9 @@ Ensure you have the following installed:
 docker/
 ├── client/
 │   ├── Dockerfile         # Dockerfile for the Linux client setup
-│   ├── enable-tls.ldif    # LDIF file for enabling TLS on LDAP
-│   ├── ldap_env.sh        # Environment variables for LDAP
-│   ├── setup.ldif         # LDIF file for initial LDAP setup
 │   ├── sssd.conf          # SSSD configuration for client
-│   └── users.ldif         # LDIF file for adding test users
 ├── server/
 │   ├── Dockerfile         # Dockerfile for Node.js application
-│   ├── ssl/
-│   │   ├── ldap-cert.pem  # TLS certificate for LDAP
-│   │   └── ldap-key.pem   # Private key for LDAP
 │   ├── package.json       # Dependencies for Node.js
 │   ├── package-lock.json  # Lock file for Node.js dependencies
 │   └── server.js          # Main Node.js application
@@ -100,8 +100,3 @@ docker/
 ```
 
 ---
-
-## **Notes**
-
-- **Certificates**: TLS certificates for the server and client are generated dynamically (WIP) and shared via Docker volumes.
-- **Login Work in Progress**: Integrating full Linux login for LDAP users is ongoing.
