@@ -1,35 +1,18 @@
 version: "3.9"
 services:
-  app:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-    container_name: ldap_server
-    ports:
-      - "389:389"
-    environment:
-      MYSQL_HOST: mysql
-      MYSQL_USER: root
-      MYSQL_PASSWORD: rootpassword
-      MYSQL_DATABASE: ldap_user_db
-      LDAP_PORT: 389
-      LDAP_BASE_DN: dc=mieweb,dc=com
-      LDAP_ADMIN_DN: cn=admin,dc=mieweb,dc=com
-      LDAP_ADMIN_PASSWORD: secret
-    volumes:
-      - ./server:/usr/src/app
-    networks:
-      - app-network
-
   mysql:
     image: mysql:8.0
     container_name: mysql
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_USER: root
       MYSQL_DATABASE: ldap_user_db
+      MYSQL_HOST: mysql
     volumes:
       - mysql_data:/var/lib/mysql
       - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "3306:3306"
     networks:
       - app-network
 
@@ -38,14 +21,11 @@ services:
       context: ./client
       dockerfile: Dockerfile
     container_name: ldap_client
-    depends_on:
-      app:
-        condition: service_started
     ports:
       - "2222:2222"
     environment:
       LDAP_BASE: dc=mieweb,dc=com
-      LDAP_URI: ldap://app:389
+      LDAP_URI: ldap://host.docker.internal:389
       LDAP_ADMIN_DN: cn=admin,dc=mieweb,dc=com
       LDAP_ADMIN_PW: secret
       LDAP_DOMAIN: mieweb.com
@@ -60,5 +40,4 @@ networks:
     driver: bridge
 
 volumes:
-  certificates:
   mysql_data:

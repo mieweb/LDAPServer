@@ -3,11 +3,11 @@
     "version": "1.0.0",
     "main": "src/server.js",
     "scripts": {
-        "start": "node src/server.js"
+        "start": "node server.js"
     },
     "dependencies": {
         "@ldapjs/controls": "^2.1.0",
-        "dotenv": "^16.0.3",
+        "dotenv": "^16.4.7",
         "ldapjs": "^3.0.7",
         "mysql2": "^3.2.0"
     }

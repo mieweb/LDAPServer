@@ -1,6 +1,7 @@
 const ldap = require("ldapjs");
 const mysql = require("mysql2/promise");
 const crypto = require("crypto");
+require("dotenv").config();
 
 // MySQL connection configuration
 const dbConfig = {
