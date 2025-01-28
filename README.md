@@ -1,102 +1,141 @@
+
+
 # LDAP-MySQL Authentication
 
 This project implements an LDAP gateway server using `ldapjs` that connects to a MySQL database to manage and authenticate users. It is designed to support applications that require LDAP authentication but can store extended user information in MySQL, making it compatible with legacy systems.
 
----
-
-## **Technologies Used**
+## Technologies Used
 
 - **Node.js**: The main runtime environment for the application.
 - **ldapjs**: A library for creating and managing LDAP servers in Node.js.
 - **MySQL**: A relational database used to store extended user details.
 - **dotenv**: Manages environment variables securely.
+- **Docker**: For containerizing the MySQL and LDAP services.
 
----
+## Getting Started
 
-## **Getting Started**
-
-### **Prerequisites**
+### Prerequisites
 
 Ensure you have the following installed:
 
-- **Node.js**: [Download Node.js](https://nodejs.org)
-- **MySQL**: [Download MySQL](https://dev.mysql.com/downloads/)
-- **Docker**: [Download Docker](https://www.docker.com/) for setting up the LDAP server in a containerized environment.
+- [Docker](https://www.docker.com/): For setting up the LDAP server and MySQL in containers.
+- [Node.js](https://nodejs.org/): JavaScript runtime for running the Node.js server.
 
----
-
-### **Installation**
+### Installation
 
 1. **Clone the Repository**:
 
    ```bash
    git clone https://github.com/anishapant21/LDAP-SQL-Auth.git
-   cd LDAP-SQL-Auth/docker
+   cd LDAP-SQL-Auth
    ```
 
-2. **Install Dependencies**:
-   Navigate to the `server` directory and run:
-   ```bash
-   npm install
-   ```
+### Usage
 
----
+#### Starting the Server and Containers
 
-## **Usage**
+To start both the Docker containers (MySQL and LDAP client) and the Node.js server locally, use the provided `launch.sh` script.
 
-1. **Starting the LDAP Server (Docker)**:
-
-   - To build and start the Docker containers, run:
-     ```bash
-     docker-compose up --build
-     ```
-
-2. **Access the Client Bash**:
-
-   - Enter the client container:
-     ```bash
-     docker exec -it ldap_client bash
-     ```
-
-3. **Perform an LDAP Search**:
-
-   - Query the LDAP server using:
-     ```bash
-     ldapsearch -x -H ldap://app:389 -b "dc=mieweb,dc=com" "(uid=ann)"
-     ```
-
-4. **Run SSSD**:
-
-   - Run SSSD using:
-     ```bash
-     sssd -i
-     ```
-
-5. **Authentication**:
+1. Ensure the `launch.sh` script is executable. You can make it executable using the following command:
 
    ```bash
-   ssh ann@localhost -p 2222
+   chmod +x launch.sh
    ```
 
-   **Note**: The functionality for login to the Linux system using LDAP users is currently under development.
+2. Run the `launch.sh` script:
 
----
+   ```bash
+   ./launch.sh
+   ```
 
-## **Project Structure**
+   This script will:
 
-```plaintext
-docker/
-├── client/
-│   ├── Dockerfile         # Dockerfile for the Linux client setup
-│   ├── sssd.conf          # SSSD configuration for client
-├── server/
-│   ├── Dockerfile         # Dockerfile for Node.js application
-│   ├── package.json       # Dependencies for Node.js
-│   ├── package-lock.json  # Lock file for Node.js dependencies
-│   └── server.js          # Main Node.js application
-├── docker-compose.yml     # Docker Compose configuration
-├── init.sql               # MySQL initialization script
-└── README.md              # Documentation (this file)
+   - Start the Docker containers (`mysql` and `ldap_client`) using Docker Compose.
+   - Install the Node.js dependencies.
+   - Start the Node.js server locally.
+
+#### Access the Client Bash
+
+To interact with the LDAP client container, enter it using:
+
+```bash
+docker exec -it ldap_client /bin/bash
 ```
 
----
+#### Perform an LDAP Search
+
+Query the LDAP server using the `ldapsearch` command:
+
+```bash
+ldapsearch -x -H ldap://host.docker.internal:389 -b "dc=mieweb,dc=com" "(uid=ann)"
+```
+
+#### Run SSSD (System Security Services Daemon)
+
+Run SSSD using:
+
+```bash
+sssd -i
+```
+
+This will allow you to manage and authenticate against the LDAP server.
+
+#### Authentication
+
+To authenticate via SSH using the LDAP credentials, run:
+
+```bash
+ssh ann@localhost -p 2222
+```
+
+> **Note**: The functionality for logging into the Linux system using LDAP users is currently under development.
+
+### Stopping the Server
+
+To stop the LDAP server and associated containers, run:
+
+```bash
+./shutdown.sh
+```
+
+This will stop and clean up Docker containers, networks, and the Node.js server.
+
+## Project Structure
+
+```plaintext
+/LDAP
+├── docker/
+│   ├── client/
+│   │   ├── Dockerfile         # Dockerfile for the Linux client setup
+│   │   ├── sssd.conf          # SSSD configuration for client
+│   ├── sql/
+│   │   └── init.sql           # MySQL initialization script for user data
+│   ├── docker-compose.yml     # Docker Compose configuration
+├── launch.sh                  # Shell script to start Docker containers and Node.js server
+├── shutdown.sh                # Shell script to stop and clean up services
+├── src/
+│   ├── server.js              # Main Node.js application (LDAP server)
+│   ├── package.json           # Dependencies for Node.js
+│   ├── package-lock.json      # Lock file for Node.js dependencies
+│   └── .env.example           # Environment variables configuration file
+└── README.md                  # Documentation (this file)
+```
+
+### Configuration
+
+- **Environment Variables**: 
+  The environment variables required to run the application are configured in `.env` and should include:
+  - `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`: MySQL connection details.
+  - `LDAP_BASE_DN`: Base DN for the LDAP directory.
+  - `LDAP_PORT`: The port on which the LDAP server listens (default: 389).
+
+### MySQL Initialization
+
+The `init.sql` file will automatically populate the MySQL database with initial user data when the Docker containers are started. Modify the SQL script to fit your user data and schema.
+
+### Docker Compose
+
+The `docker-compose.yml` file configures two services:
+
+- **mysql**: The MySQL container.
+- **ldap_server**: The Node.js LDAP server that authenticates using data from MySQL.
