@@ -121,21 +121,18 @@ This will stop and clean up Docker containers, networks, and the Node.js server.
 └── README.md                  # Documentation (this file)
 ```
 
-### Configuration
+### Environment Variables
 
-- **Environment Variables**: 
-  The environment variables required to run the application are configured in `.env` and should include:
-  - `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`: MySQL connection details.
-  - `LDAP_BASE_DN`: Base DN for the LDAP directory.
-  - `LDAP_PORT`: The port on which the LDAP server listens (default: 389).
+The environment variables required to run the application are provided in the `.env.example` file. To configure the environment, you need to create a `.env` file by copying the contents of `.env.example` and adding the appropriate values.
 
-### MySQL Initialization
+The `.env` file should include:
 
-The `init.sql` file will automatically populate the MySQL database with initial user data when the Docker containers are started. Modify the SQL script to fit your user data and schema.
+- `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`: MySQL connection details.
+- `LDAP_BASE_DN`: Base DN for the LDAP directory.
+- `LDAP_PORT`: The port on which the LDAP server listens (default: 389).
 
-### Docker Compose
+To create the `.env` file, run the following command:
 
-The `docker-compose.yml` file configures two services:
+```bash
+cp .env.example .env
 
-- **mysql**: The MySQL container.
-- **ldap_server**: The Node.js LDAP server that authenticates using data from MySQL.
