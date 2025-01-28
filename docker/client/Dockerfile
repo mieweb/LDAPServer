@@ -38,7 +38,7 @@ RUN useradd -m -s /bin/bash mie && \
 
 # Configure LDAP client
 RUN echo "BASE    dc=mieweb,dc=com" > /etc/ldap/ldap.conf && \
-    echo "URI     ldap://app:389" >> /etc/ldap/ldap.conf && \
+    echo "URI     ldap://host.docker.internal:389" >> /etc/ldap/ldap.conf && \
     echo "BINDDN  dc=mieweb,dc=com" >> /etc/ldap/ldap.conf
 
 # Configure SSSD
