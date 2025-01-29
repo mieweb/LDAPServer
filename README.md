@@ -30,6 +30,20 @@ Ensure you have the following installed:
    cd LDAP-SQL-Auth
    ```
 
+### Environment Variables Setup
+
+The required environment variables are listed in `.env.example`. You need to create a `.env` file and populate it with your own values.
+
+```sh
+cp .env.example .env
+```
+
+Then, edit the `.env` file with appropriate values:
+
+- `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`: MySQL connection details.
+- `LDAP_BASE_DN`: Base DN for the LDAP directory.
+- `LDAP_PORT`: The port on which the LDAP server listens (default: 389).
+
 ### Usage
 
 #### Starting the Server and Containers
@@ -120,19 +134,3 @@ This will stop and clean up Docker containers, networks, and the Node.js server.
 │   └── .env.example           # Environment variables configuration file
 └── README.md                  # Documentation (this file)
 ```
-
-### Environment Variables
-
-The environment variables required to run the application are provided in the `.env.example` file. To configure the environment, you need to create a `.env` file by copying the contents of `.env.example` and adding the appropriate values.
-
-The `.env` file should include:
-
-- `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`: MySQL connection details.
-- `LDAP_BASE_DN`: Base DN for the LDAP directory.
-- `LDAP_PORT`: The port on which the LDAP server listens (default: 389).
-
-To create the `.env` file, run the following command:
-
-```bash
-cp .env.example .env
-
