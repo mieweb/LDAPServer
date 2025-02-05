@@ -23,7 +23,7 @@ services:
       - "2222:2222"
     environment:
       LDAP_BASE: dc=mieweb,dc=com
-      LDAP_URI: ldap://host.docker.internal:389
+      LDAP_URI: ldaps://host.docker.internal:1389
       LDAP_ADMIN_DN: cn=admin,dc=mieweb,dc=com
       LDAP_ADMIN_PW: secret
       LDAP_DOMAIN: mieweb.com
