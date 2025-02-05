@@ -38,7 +38,7 @@ RUN useradd -m -s /bin/bash mie && \
 
 # Configure LDAP client
 RUN echo "BASE    dc=mieweb,dc=com" > /etc/ldap/ldap.conf && \
-    echo "URI     ldaps://host.docker.internal:389" >> /etc/ldap/ldap.conf && \
+    echo "URI     ldaps://host.docker.internal:636" >> /etc/ldap/ldap.conf && \
     echo "BINDDN  dc=mieweb,dc=com" >> /etc/ldap/ldap.conf && \
     echo "TLS_CACERT /certificates/ca-cert.pem" >> /etc/ldap/ldap.conf && \
     echo "TLS_REQCERT allow" >> /etc/ldap/ldap.conf
