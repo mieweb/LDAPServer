@@ -1,6 +1,8 @@
 const ldap = require("ldapjs");
 const mysql = require("mysql2/promise");
+const fs = require("fs");
 const crypto = require("crypto");
+const path = require("path");
 require("dotenv").config();
 
 // MySQL connection configuration
@@ -27,7 +29,24 @@ function hashPassword(password, salt) {
 // Main server function
 async function startLDAPServer() {
   try {
-    const server = ldap.createServer();
+    const certPath = path.join(__dirname, "certificates", "server-cert.pem");
+    const keyPath = path.join(__dirname, "certificates", "server-key.pem");
+
+    if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
+      console.error("Error: Certificate files are missing!");
+      process.exit(1);
+    }
+
+    const server = ldap.createServer({
+      certificate: fs.readFileSync(certPath),
+      key: fs.readFileSync(keyPath),
+    });
+
+    // const server = ldap.createServer();
+    // const server = ldap.createServer({
+    //   certificate: fs.readFileSync("/certificates/server-cert.pem"),
+    //   key: fs.readFileSync("/certificates/server-key.pem"),
+    // });
 
     // Bind operation - authentication
     server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
@@ -135,7 +154,7 @@ async function startLDAPServer() {
       }
     });
 
-    const PORT = process.env.LDAP_PORT || 389;
+    const PORT = 636;
     server.listen(PORT, "0.0.0.0", () => {
       console.log(
         `Secure LDAP Authentication Server listening on port ${PORT}`
