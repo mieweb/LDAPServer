@@ -9,6 +9,7 @@ const { hashPassword } = require("./utils/passwordUtils");
 const NotificationService = require("./services/notificationService");
 const { NOTIFICATION_ACTIONS } = require("./constants/constants");
 const { extractCredentials } = require("./utils/utils");
+const { createLdapEntry } = require("./utils/ldapUtils");
 
 // Main server function
 async function startLDAPServer() {
