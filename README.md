@@ -1,5 +1,3 @@
-
-
 # LDAP-MySQL Authentication
 
 This project implements an LDAP gateway server using `ldapjs` that connects to a MySQL database to manage and authenticate users. It is designed to support applications that require LDAP authentication but can store extended user information in MySQL, making it compatible with legacy systems.
@@ -82,6 +80,10 @@ Query the LDAP server using the `ldapsearch` command:
 
 ```bash
 ldapsearch -x -H ldap://host.docker.internal:389 -b "dc=mieweb,dc=com" "(uid=ann)"
+```
+
+```bash
+ldapsearch -x -H ldaps://host.docker.internal:636 -b "dc=mieweb,dc=com" "(uid=ann)"
 ```
 
 #### Run SSSD (System Security Services Daemon)

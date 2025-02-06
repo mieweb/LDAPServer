@@ -4,6 +4,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const path = require("path");
 require("dotenv").config();
+const axios = require("axios");
 
 // MySQL connection configuration
 const dbConfig = {
@@ -70,6 +71,7 @@ async function startLDAPServer() {
           const user = rows[0];
 
           // Verify password
+          console.log("Verifying password...");
           if (hashPassword(password, user.salt) !== user.password) {
             return next(
               new ldap.InvalidCredentialsError("Invalid credentials")
@@ -77,6 +79,77 @@ async function startLDAPServer() {
           }
 
           res.end();
+        } finally {
+          await connection.end();
+        }
+      } catch (error) {
+        console.error("Authentication error:", error);
+        return next(new ldap.OperationsError("Authentication failed"));
+      }
+    });
+
+    server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
+      console.log("Start Bind operation...");
+      const dnParts = req.dn.toString().split(",");
+      const username = dnParts[0].split("=")[1];
+      const password = req.credentials;
+
+      try {
+        const connection = await mysql.createConnection(dbConfig);
+        try {
+          const [rows] = await connection.execute(
+            "SELECT username, password, salt FROM users WHERE username = ?",
+            [username]
+          );
+
+          if (rows.length === 0) {
+            return next(new ldap.InvalidCredentialsError("User not found"));
+          }
+
+          const user = rows[0];
+
+          // Verify password
+          console.log("Verifying password...");
+          if (hashPassword(password, user.salt) !== user.password) {
+            return next(
+              new ldap.InvalidCredentialsError("Invalid credentials")
+            );
+          }
+
+          // Send push notification
+          console.log("Sending push notification...");
+          try {
+            const response = await axios.post(
+              "https://7c50-50-221-78-186.ngrok-free.app/send-notification",
+              {
+                appId: "bc97e17cea5f1261000de618f0a87725",
+                title: "SSH TEST",
+                body: "Please review and respond to your pending MIE request in the app.",
+                actions: [
+                  { icon: "approve", title: "Approve", callback: "approve" },
+                  { icon: "reject", title: "Reject", callback: "reject" },
+                ],
+              },
+              { headers: { "Content-Type": "application/json" } }
+            );
+
+            console.log("Waiting for response...");
+            console.log("Response:", response);
+            if (response?.data.action === "approve") {
+              console.log("User approved request.");
+              res.end();
+            } else {
+              console.log("User rejected request.");
+              return next(
+                new ldap.InvalidCredentialsError(
+                  "Authentication rejected by user"
+                )
+              );
+            }
+          } catch (notificationError) {
+            console.error("Notification error:", notificationError);
+            return next(new ldap.OperationsError("Notification failed"));
+          }
         } finally {
           await connection.end();
         }
