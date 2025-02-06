@@ -31,6 +31,9 @@ RUN [ ! -d /var/run/sshd ] && mkdir /var/run/sshd || echo "/var/run/sshd already
     echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config && \
     echo 'UsePAM yes' >> /etc/ssh/sshd_config
 
+# Enable pam_mkhomedir to create home directories on login
+RUN echo "session required pam_mkhomedir.so skel=/etc/skel umask=0077" >> /etc/pam.d/sshd
+
 # Create a local user 'mie' with password 'mie' and sudo privileges
 RUN useradd -m -s /bin/bash mie && \
     echo 'mie:mie' | chpasswd && \
