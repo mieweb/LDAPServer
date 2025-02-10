@@ -18,6 +18,8 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
+      args:
+        LDAP_CA_CERT: ${LDAP_CA_CERT}
     container_name: ldap_client
     ports:
       - "2222:2222"
@@ -30,6 +32,7 @@ services:
       LDAP_ORG: "MIE Organization"
       LDAP_CERT_SUBJ: "/C=US/ST=IN/L=FW/O=MIE/OU=OrgUnit/CN=mieweb.com"
       SSH_PORT: 2222
+      LDAP_CA_CERT: ${LDAP_CA_CERT}
     networks:
       - app-network
 
