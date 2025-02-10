@@ -31,6 +31,9 @@ RUN [ ! -d /var/run/sshd ] && mkdir /var/run/sshd || echo "/var/run/sshd already
     echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config && \
     echo 'UsePAM yes' >> /etc/ssh/sshd_config
 
+# Enable pam_mkhomedir to create home directories on login
+RUN echo "session required pam_mkhomedir.so skel=/etc/skel umask=0077" >> /etc/pam.d/sshd
+
 # Create a local user 'mie' with password 'mie' and sudo privileges
 RUN useradd -m -s /bin/bash mie && \
     echo 'mie:mie' | chpasswd && \
@@ -38,8 +41,10 @@ RUN useradd -m -s /bin/bash mie && \
 
 # Configure LDAP client
 RUN echo "BASE    dc=mieweb,dc=com" > /etc/ldap/ldap.conf && \
-    echo "URI     ldap://host.docker.internal:389" >> /etc/ldap/ldap.conf && \
-    echo "BINDDN  dc=mieweb,dc=com" >> /etc/ldap/ldap.conf
+    echo "URI     ldaps://host.docker.internal:636" >> /etc/ldap/ldap.conf && \
+    echo "BINDDN  dc=mieweb,dc=com" >> /etc/ldap/ldap.conf && \
+    echo "TLS_CACERT /certificates/ca-cert.pem" >> /etc/ldap/ldap.conf && \
+    echo "TLS_REQCERT allow" >> /etc/ldap/ldap.conf
 
 # Configure SSSD
 COPY sssd.conf /etc/sssd/sssd.conf
