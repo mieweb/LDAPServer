@@ -14,17 +14,20 @@ const { createLdapEntry } = require("./utils/ldapUtils");
 // Main server function
 async function startLDAPServer() {
   try {
-    const certPath = path.join(__dirname, "certificates", "server-cert.pem");
-    const keyPath = path.join(__dirname, "certificates", "server-key.pem");
+    const certContent = process.env.LDAP_CERT_CONTENT;
+    const keyContent = process.env.LDAP_KEY_CONTENT;
 
-    if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
-      console.error("Error: Certificate files are missing!");
+    if (!certContent || !keyContent) {
+      console.error(
+        "Error: Certificate or key content is missing in environment variables!"
+      );
       process.exit(1);
     }
 
+    // Create server using the certificate and key from env variables
     const server = ldap.createServer({
-      certificate: fs.readFileSync(certPath),
-      key: fs.readFileSync(keyPath),
+      certificate: certContent,
+      key: keyContent,
     });
 
     server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
