@@ -37,11 +37,6 @@ RUN [ ! -d /var/run/sshd ] && mkdir /var/run/sshd || echo "/var/run/sshd already
 # Enable pam_mkhomedir to create home directories on login
 RUN echo "session required pam_mkhomedir.so skel=/etc/skel umask=0077" >> /etc/pam.d/sshd
 
-# Create a local user 'mie' with password 'mie' and sudo privileges
-RUN useradd -m -s /bin/bash mie && \
-    echo 'mie:mie' | chpasswd && \
-    echo 'mie ALL=(ALL:ALL) NOPASSWD:ALL' >> /etc/sudoers.d/mie
-
 # Set up directory to store certificates
 RUN mkdir -p /certificates
 

@@ -1,13 +1,11 @@
 require("dotenv").config();
 const ldap = require("ldapjs");
 const mysql = require("mysql2/promise");
-const fs = require("fs");
-const path = require("path");
 
 const dbConfig = require("./config/dbconfig");
-const { hashPassword } = require("./utils/passwordUtils");
-const NotificationService = require("./services/notificationService");
 const { NOTIFICATION_ACTIONS } = require("./constants/constants");
+const NotificationService = require("./services/notificationService");
+const { hashPassword } = require("./utils/passwordUtils");
 const { extractCredentials } = require("./utils/utils");
 const { createLdapEntry } = require("./utils/ldapUtils");
 
