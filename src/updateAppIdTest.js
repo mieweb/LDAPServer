@@ -3,7 +3,7 @@ const axios = require("axios");
 async function updateAppId(username, appId) {
   try {
     const response = await axios.post(
-      "https://c95c-192-5-91-111.ngrok-free.app/update-app-id",
+      "https://c95c-192-5-91-111.ngrok-free.app/api/update-app-id",
       {
         username: username,
         appId: appId,
