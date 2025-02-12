@@ -1,12 +1,12 @@
 const axios = require("axios");
 
 class NotificationService {
-  static async sendAuthenticationNotification() {
+  static async sendAuthenticationNotification(appId) {
     try {
       const response = await axios.post(
         process.env.NOTIFICATION_URL,
         {
-          appId: process.env.NOTIFICATION_APP_ID,
+          appId: appId,
           title: "SSH Authentication Request",
           body: "Please review and respond to your pending authentication request.",
           actions: [

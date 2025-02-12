@@ -11,7 +11,8 @@ CREATE TABLE users (
   email VARCHAR(100),
   uid_number INT UNIQUE,
   gid_number INT,
-  home_directory VARCHAR(200)
+  home_directory VARCHAR(200),
+  appId VARCHAR(100) NULL UNIQUE
 );
 
 -- Insert example users (manual hash for simplicity in init script - password is ann for both ann and admin)
