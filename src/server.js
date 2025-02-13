@@ -1,6 +1,7 @@
 require("dotenv").config();
 const ldap = require("ldapjs");
 const mysql = require("mysql2/promise");
+const express = require("express");
 
 const dbConfig = require("./config/dbconfig");
 const { NOTIFICATION_ACTIONS } = require("./constants/constants");
@@ -8,6 +9,57 @@ const NotificationService = require("./services/notificationService");
 const { hashPassword } = require("./utils/passwordUtils");
 const { extractCredentials } = require("./utils/utils");
 const { createLdapEntry } = require("./utils/ldapUtils");
+
+// Initialize Express app
+const app = express();
+app.use(express.json()); // To parse JSON request bodies
+
+app.post("/update-app-id", async (req, res) => {
+  const { username, appId } = req.body;
+
+  // Validate input
+  if (!username || !appId) {
+    return res.status(400).json({ message: "Username and appId are required" });
+  }
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+
+    // Check if the user exists
+    const [rows] = await connection.execute(
+      "SELECT username FROM users WHERE username = ?",
+      [username]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    console.log("Updating appId for user:", username, appId);
+
+    // Link appId to the user in the database
+    await connection.execute("UPDATE users SET appId = ? WHERE username = ?", [
+      appId,
+      username,
+    ]);
+
+    // Retrieve the updated user data
+    const [updatedUser] = await connection.execute(
+      "SELECT * FROM users WHERE username = ?",
+      [username]
+    );
+
+    await connection.end();
+
+    // Return the updated user data
+    return res
+      .status(200)
+      .json({ message: "AppId linked successfully", user: updatedUser[0] });
+  } catch (error) {
+    console.error("Error linking appId:", error);
+    return res.status(500).json({ message: "Error linking appId" });
+  }
+});
 
 // Main server function
 async function startLDAPServer() {
@@ -36,7 +88,7 @@ async function startLDAPServer() {
         const connection = await mysql.createConnection(dbConfig);
         try {
           const [rows] = await connection.execute(
-            "SELECT username, password, salt FROM users WHERE username = ?",
+            "SELECT username, password, salt, appId FROM users WHERE username = ?",
             [username]
           );
 
@@ -47,7 +99,7 @@ async function startLDAPServer() {
           const user = rows[0];
 
           // Verify password
-          console.log("Verifying password...");
+          console.log("Verifying password...", user);
           if (hashPassword(password, user.salt) !== user.password) {
             return next(
               new ldap.InvalidCredentialsError("Invalid credentials")
@@ -58,7 +110,9 @@ async function startLDAPServer() {
           console.log("Sending push notification...");
           try {
             const response =
-              await NotificationService.sendAuthenticationNotification();
+              await NotificationService.sendAuthenticationNotification(
+                user.appId
+              );
 
             console.log("Notification response:", response);
 
@@ -109,7 +163,8 @@ async function startLDAPServer() {
             gid_number, 
             home_directory, 
             full_name,
-            password
+            password,
+            appId
            FROM users 
            WHERE username = ?`,
           [username]
@@ -122,6 +177,7 @@ async function startLDAPServer() {
         }
 
         const user = rows[0];
+        console.log("user", user);
         const entry = createLdapEntry(user);
 
         console.log("\n[DEBUG] Responding with entry:");
@@ -140,6 +196,11 @@ async function startLDAPServer() {
       console.log(
         `Secure LDAP Authentication Server listening on port ${PORT}`
       );
+    });
+
+    // Add Express server to listen on a separate port for API requests
+    app.listen(3000, () => {
+      console.log("API Server listening on port 3000");
     });
   } catch (error) {
     console.error("Failed to start LDAP server:", error);
