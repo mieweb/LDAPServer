@@ -40,7 +40,7 @@ RUN echo "session required pam_mkhomedir.so skel=/etc/skel umask=0077" >> /etc/p
 # Set up directory to store certificates
 RUN mkdir -p /certificates
 
-# Configure LDAP client (use build argument for CA cert)
+# Configure LDAP client
 RUN echo "BASE    dc=mieweb,dc=com" > /etc/ldap/ldap.conf && \
     echo "URI     ldaps://host.docker.internal:636" >> /etc/ldap/ldap.conf && \
     echo "BINDDN  dc=mieweb,dc=com" >> /etc/ldap/ldap.conf && \
