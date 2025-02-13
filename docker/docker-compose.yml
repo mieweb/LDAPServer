@@ -26,8 +26,6 @@ services:
     environment:
       LDAP_BASE: dc=mieweb,dc=com
       LDAP_URI: ldaps://host.docker.internal:636
-      LDAP_ADMIN_DN: cn=admin,dc=mieweb,dc=com
-      LDAP_ADMIN_PW: secret
       LDAP_DOMAIN: mieweb.com
       LDAP_ORG: "MIE Organization"
       LDAP_CERT_SUBJ: "/C=US/ST=IN/L=FW/O=MIE/OU=OrgUnit/CN=mieweb.com"

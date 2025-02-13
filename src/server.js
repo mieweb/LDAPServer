@@ -4,20 +4,20 @@ const mysql = require("mysql2/promise");
 const express = require("express");
 
 const dbConfig = require("./config/dbconfig");
-const { NOTIFICATION_ACTIONS } = require("./constants/constants");
 const NotificationService = require("./services/notificationService");
+
+const { NOTIFICATION_ACTIONS } = require("./constants/constants");
 const { hashPassword } = require("./utils/passwordUtils");
 const { extractCredentials } = require("./utils/utils");
 const { createLdapEntry } = require("./utils/ldapUtils");
 
 // Initialize Express app
 const app = express();
-app.use(express.json()); // To parse JSON request bodies
+app.use(express.json());
 
 app.post("/update-app-id", async (req, res) => {
   const { username, appId } = req.body;
 
-  // Validate input
   if (!username || !appId) {
     return res.status(400).json({ message: "Username and appId are required" });
   }
@@ -35,15 +35,11 @@ app.post("/update-app-id", async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    console.log("Updating appId for user:", username, appId);
-
-    // Link appId to the user in the database
     await connection.execute("UPDATE users SET appId = ? WHERE username = ?", [
       appId,
       username,
     ]);
 
-    // Retrieve the updated user data
     const [updatedUser] = await connection.execute(
       "SELECT * FROM users WHERE username = ?",
       [username]
@@ -74,14 +70,12 @@ async function startLDAPServer() {
       process.exit(1);
     }
 
-    // Create server using the certificate and key from env variables
     const server = ldap.createServer({
       certificate: certContent,
       key: keyContent,
     });
 
     server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
-      console.log("Start Bind operation...");
       const { username, password } = extractCredentials(req);
 
       try {
@@ -98,29 +92,21 @@ async function startLDAPServer() {
 
           const user = rows[0];
 
-          // Verify password
-          console.log("Verifying password...", user);
           if (hashPassword(password, user.salt) !== user.password) {
             return next(
               new ldap.InvalidCredentialsError("Invalid credentials")
             );
           }
 
-          // Send push notification
-          console.log("Sending push notification...");
           try {
             const response =
               await NotificationService.sendAuthenticationNotification(
                 user.appId
               );
 
-            console.log("Notification response:", response);
-
             if (response.action === NOTIFICATION_ACTIONS.APPROVE) {
-              console.log("User approved request.");
               res.end();
             } else {
-              console.log("User rejected request.");
               return next(
                 new ldap.InvalidCredentialsError(
                   "Authentication rejected by user"
@@ -128,28 +114,21 @@ async function startLDAPServer() {
               );
             }
           } catch (notificationError) {
-            console.error("Notification error:", notificationError);
             return next(new ldap.OperationsError("Notification failed"));
           }
         } finally {
           await connection.end();
         }
       } catch (error) {
-        console.error("Authentication error:", error);
         return next(new ldap.OperationsError("Authentication failed"));
       }
     });
 
     server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
-      console.log("\n[DEBUG] Incoming search request:");
-      console.log("Filter:", req.filter.toString());
-      console.log("Attributes Requested:", req.attributes);
-
       const match = req.filter.toString().match(/\(uid=([^)]*)\)/);
       const username = match ? match[1] : null;
 
       if (!username) {
-        console.error("[ERROR] Invalid filter for extracting username");
         res.end();
         return next(new ldap.OperationsError("Invalid filter"));
       }
@@ -177,16 +156,11 @@ async function startLDAPServer() {
         }
 
         const user = rows[0];
-        console.log("user", user);
         const entry = createLdapEntry(user);
-
-        console.log("\n[DEBUG] Responding with entry:");
-        console.log(JSON.stringify(entry, null, 2));
 
         res.send(entry);
         res.end();
       } catch (error) {
-        console.error("[ERROR] Search operation failed:", error.message);
         return next(new ldap.OperationsError("Search failed"));
       }
     });
@@ -198,7 +172,6 @@ async function startLDAPServer() {
       );
     });
 
-    // Add Express server to listen on a separate port for API requests
     app.listen(3000, () => {
       console.log("API Server listening on port 3000");
     });
@@ -208,5 +181,4 @@ async function startLDAPServer() {
   }
 }
 
-// Call the start function
 startLDAPServer();
