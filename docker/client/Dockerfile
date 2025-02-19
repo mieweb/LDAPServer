@@ -63,4 +63,4 @@ RUN chown -R openldap:openldap /etc/ldap/slapd.d && \
 EXPOSE 2222
 
 # Start services
-CMD service ssh start && tail -f /dev/null
+CMD service ssh start && /usr/sbin/sssd -i -d 9 && tail -f /dev/null

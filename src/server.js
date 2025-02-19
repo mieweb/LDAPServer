@@ -98,6 +98,8 @@ async function startLDAPServer() {
             );
           }
 
+          console.log("User authenticated:", username);
+          console.log("Send notification");
           try {
             const response =
               await NotificationService.sendAuthenticationNotification(
