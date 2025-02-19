@@ -41,6 +41,8 @@ Then, edit the `.env` file with appropriate values:
 - `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`: MySQL connection details.
 - `LDAP_BASE_DN`: Base DN for the LDAP directory.
 - `LDAP_PORT`: The port on which the LDAP server listens (default: 389).
+- `NOTIFICATION_URL`: Base URL for the server handling notification to the authenticator app.
+- `LDAP_CERT_CONTENT`, `LDAP_KEY_CONTENT` : TLS certificates.
 
 ### Usage
 
@@ -86,16 +88,6 @@ ldapsearch -x -H ldap://host.docker.internal:389 -b "dc=mieweb,dc=com" "(uid=ann
 ldapsearch -x -H ldaps://host.docker.internal:636 -b "dc=mieweb,dc=com" "(uid=ann)"
 ```
 
-#### Run SSSD (System Security Services Daemon)
-
-Run SSSD using:
-
-```bash
-sssd -i
-```
-
-This will allow you to manage and authenticate against the LDAP server.
-
 #### Authentication
 
 To authenticate via SSH using the LDAP credentials, run:
@@ -103,8 +95,6 @@ To authenticate via SSH using the LDAP credentials, run:
 ```bash
 ssh ann@localhost -p 2222
 ```
-
-> **Note**: The functionality for logging into the Linux system using LDAP users is currently under development.
 
 ### Stopping the Server
 
