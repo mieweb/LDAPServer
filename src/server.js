@@ -77,6 +77,7 @@ async function startLDAPServer() {
 
     server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
       const { username, password } = extractCredentials(req);
+      console.log("Authenticating user:", username);
 
       try {
         const connection = await mysql.createConnection(dbConfig);
@@ -92,7 +93,10 @@ async function startLDAPServer() {
 
           const user = rows[0];
 
+          console.log("User found:", user);
+
           if (hashPassword(password, user.salt) !== user.password) {
+            console.log("Invalid credentials");
             return next(
               new ldap.InvalidCredentialsError("Invalid credentials")
             );
@@ -126,47 +130,102 @@ async function startLDAPServer() {
       }
     });
 
-    server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
-      const match = req.filter.toString().match(/\(uid=([^)]*)\)/);
-      const username = match ? match[1] : null;
+    async function handleUserSearch(username, res) {
+      console.log("[USER] Searching for:", username);
 
-      if (!username) {
+      const connection = await mysql.createConnection(dbConfig);
+      const [users] = await connection.execute(
+        `SELECT * FROM users WHERE username = ?`,
+        [username]
+      );
+
+      if (users.length === 0) {
+        await connection.end();
         res.end();
-        return next(new ldap.OperationsError("Invalid filter"));
+        return;
       }
+
+      const user = users[0];
+      const entry = createLdapEntry(user);
+
+      res.send(entry);
+      res.end();
+      await connection.end();
+    }
+
+    const handleGroupSearch = async (filterStr, res) => {
+      const memberUidMatch = filterStr.match(/memberUid=([^)&]+)/i);
+      const connection = await mysql.createConnection(dbConfig);
 
       try {
-        const connection = await mysql.createConnection(dbConfig);
-        const [rows] = await connection.execute(
-          `SELECT 
-            username, 
-            uid_number, 
-            gid_number, 
-            home_directory, 
-            full_name,
-            password,
-            appId
-           FROM users 
-           WHERE username = ?`,
-          [username]
-        );
+        if (memberUidMatch) {
+          // Search groups by memberUid
+          const username = memberUidMatch[1];
+          // make this configurable in a script
+          const [groups] = await connection.execute(
+            `SELECT g.name, g.gid, g.member_uids 
+         FROM \`groups\` g
+         WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))`,
+            [username]
+          );
 
-        if (rows.length === 0) {
-          console.error("[ERROR] User not found:", username);
-          res.end();
-          return next();
+          console.log(`[GROUP SEARCH] Found ${groups.length} groups`);
+
+          groups.forEach((group) => {
+            console.log(`[GROUP] Sending group: ${group.name}, ${group}`);
+            res.send({
+              dn: `cn=${group.name},ou=groups,dc=mieweb,dc=com`,
+              attributes: {
+                objectClass: ["posixGroup"],
+                cn: group.name,
+                gidNumber: group.gid.toString(),
+                memberUid: ["ann"],
+              },
+            });
+          });
         }
 
-        const user = rows[0];
-        const entry = createLdapEntry(user);
-
-        res.send(entry);
         res.end();
+      } finally {
+        await connection.end();
+      }
+    };
+
+    const getUsernameFromFilter = (filterStr) => {
+      // Handles: (uid=*), (&(uid=ann)(...)), (|(uid=ann)(...))
+      const uidPattern = /\((?:&|\||!)?(?:.*?\(uid=([^)&]+)\)|uid=([^)&]+))/i;
+      const match = filterStr.match(uidPattern);
+      return match?.[1] || match?.[2] || null;
+    };
+
+    server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
+      try {
+        const filterStr = req.filter.toString();
+        const username = getUsernameFromFilter(filterStr);
+        console.log(`[SEARCH] Filter: ${filterStr}`);
+        console.log(`[SEARCH] Parsed username: ${username || "none"}`);
+
+        // Handle user searches
+        if (username) {
+          console.log("[HANDLER] Processing user search");
+          await handleUserSearch(username, res);
+        }
+        // Handle group searches (posixGroup or memberUid filters)
+        else if (/(objectClass=posixGroup)|(memberUid=)/i.test(filterStr)) {
+          console.log("[HANDLER] Processing group search");
+          await handleGroupSearch(filterStr, res);
+        }
+        // Unknown search type
+        else {
+          console.log("[HANDLER] Unhandled search type");
+          res.end();
+        }
       } catch (error) {
-        return next(new ldap.OperationsError("Search failed"));
+        console.error("[ERROR] Search failed:", error.message);
+        console.error(error.stack);
+        return next(new ldap.OperationsError("Search operation failed"));
       }
     });
-
     const PORT = 636;
     server.listen(PORT, "0.0.0.0", () => {
       console.log(
