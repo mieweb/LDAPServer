@@ -15,6 +15,54 @@ const { createLdapEntry } = require("./utils/ldapUtils");
 const app = express();
 app.use(express.json());
 
+async function authenticateWithLDAP(username, password) {
+  console.log("Authenticating with LDAP:", username, password);
+  return new Promise((resolve, reject) => {
+    try {
+      const client = ldap.createClient({
+        url: "ldap://localhost:389",
+        timeout: 5000, // Add a timeout
+        connectTimeout: 5000, // Add a connect timeout
+      });
+
+      // Add error event handlers
+      client.on("error", (err) => {
+        console.error("LDAP client error:", err);
+        resolve(false);
+      });
+
+      client.on("connectTimeout", (err) => {
+        console.error("LDAP connection timeout:", err);
+        resolve(false);
+      });
+
+      client.on("connectError", (err) => {
+        console.error("LDAP connection error:", err);
+        resolve(false);
+      });
+
+      const userDN = `cn=${username},ou=users,dc=mieweb,dc=com`;
+      console.log("userDN", userDN);
+
+      client.bind(userDN, password, (err) => {
+        console.log("userDn, password", userDN, password);
+        if (err) {
+          console.error("LDAP Authentication failed:", err);
+          client.unbind();
+          resolve(false);
+        } else {
+          console.log("LDAP Authentication successful for user:", username);
+          client.unbind();
+          resolve(true);
+        }
+      });
+    } catch (err) {
+      console.error("Error creating LDAP client:", err);
+      resolve(false);
+    }
+  });
+}
+
 app.post("/update-app-id", async (req, res) => {
   const { username, appId } = req.body;
 
@@ -95,32 +143,49 @@ async function startLDAPServer() {
 
           console.log("User found:", user);
 
-          if (hashPassword(password, user.salt) !== user.password) {
-            console.log("Invalid credentials");
+          const isAuthenticated = await authenticateWithLDAP(
+            username,
+            password
+          );
+
+          console.log("LDAP Authentication result:", isAuthenticated);
+
+          if (!isAuthenticated) {
+            console.log("LDAP authentication failed for user:", username);
             return next(
               new ldap.InvalidCredentialsError("Invalid credentials")
             );
           }
 
           console.log("User authenticated:", username);
-          console.log("Send notification");
-          try {
-            const response =
-              await NotificationService.sendAuthenticationNotification(
-                user.appId
-              );
+          // Handle notification if user has appId
+          if (user.appId) {
+            try {
+              console.log("Sending notification to appId:", user.appId);
+              const response =
+                await NotificationService.sendAuthenticationNotification(
+                  user.appId
+                );
 
-            if (response.action === NOTIFICATION_ACTIONS.APPROVE) {
-              res.end();
-            } else {
-              return next(
-                new ldap.InvalidCredentialsError(
-                  "Authentication rejected by user"
-                )
-              );
+              if (response.action === NOTIFICATION_ACTIONS.APPROVE) {
+                console.log("Notification approved for user:", username);
+                res.end();
+              } else {
+                console.log("Notification rejected for user:", username);
+                return next(
+                  new ldap.InvalidCredentialsError(
+                    "Authentication rejected by user"
+                  )
+                );
+              }
+            } catch (notificationError) {
+              console.error("Notification error:", notificationError);
+              return next(new ldap.OperationsError("Notification failed"));
             }
-          } catch (notificationError) {
-            return next(new ldap.OperationsError("Notification failed"));
+          } else {
+            // If authentication succeeded and no appId for notification
+            console.log("Authentication successful (no notification needed)");
+            res.end();
           }
         } finally {
           await connection.end();
