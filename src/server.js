@@ -7,7 +7,6 @@ const dbConfig = require("./config/dbconfig");
 const NotificationService = require("./services/notificationService");
 
 const { NOTIFICATION_ACTIONS } = require("./constants/constants");
-const { hashPassword } = require("./utils/passwordUtils");
 const { extractCredentials } = require("./utils/utils");
 const { createLdapEntry } = require("./utils/ldapUtils");
 
@@ -131,7 +130,7 @@ async function startLDAPServer() {
         const connection = await mysql.createConnection(dbConfig);
         try {
           const [rows] = await connection.execute(
-            "SELECT username, password, salt, appId FROM users WHERE username = ?",
+            "SELECT username, appId FROM users WHERE username = ?",
             [username]
           );
 
@@ -244,7 +243,7 @@ async function startLDAPServer() {
                 objectClass: ["posixGroup"],
                 cn: group.name,
                 gidNumber: group.gid.toString(),
-                memberUid: ["ann"],
+                memberUid: group.member_uids,
               },
             });
           });
