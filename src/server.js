@@ -1,14 +1,18 @@
 require("dotenv").config();
 const ldap = require("ldapjs");
-const mysql = require("mysql2/promise");
 const express = require("express");
 
 const dbConfig = require("./config/dbconfig");
+const sqlQueries = require("./config/sqlQueries");
+const DatabaseService = require("./services/databaseServices");
 const NotificationService = require("./services/notificationService");
 
 const { NOTIFICATION_ACTIONS } = require("./constants/constants");
 const { extractCredentials } = require("./utils/utils");
 const { createLdapEntry } = require("./utils/ldapUtils");
+
+// Create database service instance
+const db = new DatabaseService(dbConfig, sqlQueries);
 
 // Initialize Express app
 const app = express();
@@ -72,34 +76,25 @@ app.post("/update-app-id", async (req, res) => {
   console.log("Updating appId for user:", username, appId);
 
   try {
-    const connection = await mysql.createConnection(dbConfig);
-
     // Check if the user exists
-    const [rows] = await connection.execute(
-      "SELECT username FROM users WHERE username = ?",
-      [username]
-    );
+    const user = await db.findOne("users", "findByUsername", [username]);
 
-    if (rows.length === 0) {
+    if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    await connection.execute("UPDATE users SET appId = ? WHERE username = ?", [
-      appId,
+    // Update the appId
+    await db.executeQuery("users", "updateAppId", [appId, username]);
+
+    // Get the updated user
+    const updatedUser = await db.findOne("users", "findUserDetails", [
       username,
     ]);
-
-    const [updatedUser] = await connection.execute(
-      "SELECT * FROM users WHERE username = ?",
-      [username]
-    );
-
-    await connection.end();
 
     // Return the updated user data
     return res
       .status(200)
-      .json({ message: "AppId linked successfully", user: updatedUser[0] });
+      .json({ message: "AppId linked successfully", user: updatedUser });
   } catch (error) {
     console.error("Error linking appId:", error);
     return res.status(500).json({ message: "Error linking appId" });
@@ -129,76 +124,63 @@ async function startLDAPServer() {
       console.log("Authenticating user:", username);
 
       try {
-        const connection = await mysql.createConnection(dbConfig);
-        try {
-          const [rows] = await connection.execute(
-            "SELECT username, appId FROM users WHERE username = ?",
-            [username]
-          );
+        // Find user with appId
+        const user = await db.findOne("users", "findByUsernameWithAppId", [
+          username,
+        ]);
 
-          if (rows.length === 0) {
-            return next(new ldap.InvalidCredentialsError("User not found"));
-          }
+        if (!user) {
+          return next(new ldap.InvalidCredentialsError("User not found"));
+        }
 
-          const user = rows[0];
+        console.log("User found:", user);
 
-          console.log("User found:", user);
+        const isAuthenticated = await authenticateWithLDAP(username, password);
 
-          const isAuthenticated = await authenticateWithLDAP(
-            username,
-            password
-          );
+        console.log("LDAP Authentication result:", isAuthenticated);
 
-          console.log("LDAP Authentication result:", isAuthenticated);
+        if (!isAuthenticated) {
+          console.log("LDAP authentication failed for user:", username);
+          return next(new ldap.InvalidCredentialsError("Invalid credentials"));
+        }
 
-          if (!isAuthenticated) {
-            console.log("LDAP authentication failed for user:", username);
-            return next(
-              new ldap.InvalidCredentialsError("Invalid credentials")
-            );
-          }
+        console.log("User authenticated:", username);
+        // Handle notification if user has appId
+        if (user.appId) {
+          try {
+            console.log("Sending notification to appId:", user.appId);
+            const response =
+              await NotificationService.sendAuthenticationNotification(
+                user.appId
+              );
 
-          console.log("User authenticated:", username);
-          // Handle notification if user has appId
-          if (user.appId) {
-            try {
-              console.log("Sending notification to appId:", user.appId);
-              const response =
-                await NotificationService.sendAuthenticationNotification(
-                  user.appId
-                );
-
-              if (response.action === NOTIFICATION_ACTIONS.APPROVE) {
-                console.log("Notification approved for user:", username);
-                res.end();
-              } else if (response.action === NOTIFICATION_ACTIONS.TIMEOUT) {
-                console.log("Notification timeout for user:", username);
-                return next(
-                  new ldap.UnavailableError(
-                    "Authentication timeout (30 seconds)"
-                  )
-                );
-              } else {
-                console.log("Notification rejected for user:", username);
-                return next(
-                  new ldap.InvalidCredentialsError(
-                    "Authentication rejected by user"
-                  )
-                );
-              }
-            } catch (notificationError) {
-              console.error("Notification error:", notificationError);
-              return next(new ldap.OperationsError("Notification failed"));
+            if (response.action === NOTIFICATION_ACTIONS.APPROVE) {
+              console.log("Notification approved for user:", username);
+              res.end();
+            } else if (response.action === NOTIFICATION_ACTIONS.TIMEOUT) {
+              console.log("Notification timeout for user:", username);
+              return next(
+                new ldap.UnavailableError("Authentication timeout (30 seconds)")
+              );
+            } else {
+              console.log("Notification rejected for user:", username);
+              return next(
+                new ldap.InvalidCredentialsError(
+                  "Authentication rejected by user"
+                )
+              );
             }
-          } else {
-            // If authentication succeeded and no appId for notification
-            console.log("Authentication successful (no notification needed)");
-            res.end();
+          } catch (notificationError) {
+            console.error("Notification error:", notificationError);
+            return next(new ldap.OperationsError("Notification failed"));
           }
-        } finally {
-          await connection.end();
+        } else {
+          // If authentication succeeded and no appId for notification
+          console.log("Authentication successful (no notification needed)");
+          res.end();
         }
       } catch (error) {
+        console.error("Database error:", error);
         return next(new ldap.OperationsError("Authentication failed"));
       }
     });
@@ -206,39 +188,31 @@ async function startLDAPServer() {
     async function handleUserSearch(username, res) {
       console.log("[USER] Searching for:", username);
 
-      const connection = await mysql.createConnection(dbConfig);
-      const [users] = await connection.execute(
-        `SELECT * FROM users WHERE username = ?`,
-        [username]
-      );
+      const user = await db.findOne("users", "findUserDetails", [username]);
 
-      if (users.length === 0) {
-        await connection.end();
+      if (!user) {
         res.end();
         return;
       }
 
-      const user = users[0];
       const entry = createLdapEntry(user);
 
       res.send(entry);
       res.end();
-      await connection.end();
     }
 
     const handleGroupSearch = async (filterStr, res) => {
       const memberUidMatch = filterStr.match(/memberUid=([^)&]+)/i);
-      const connection = await mysql.createConnection(dbConfig);
 
       try {
         if (memberUidMatch) {
           // Search groups by memberUid
           const username = memberUidMatch[1];
-          // make this configurable in a script
-          const [groups] = await connection.execute(
-            `SELECT g.name, g.gid, g.member_uids 
-         FROM \`groups\` g
-         WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))`,
+
+          // Using configured SQL query to find groups
+          const groups = await db.executeQuery(
+            "groups",
+            "findGroupsByMemberUid",
             [username]
           );
 
@@ -259,8 +233,9 @@ async function startLDAPServer() {
         }
 
         res.end();
-      } finally {
-        await connection.end();
+      } catch (error) {
+        console.error("[GROUP SEARCH] Error:", error);
+        res.end();
       }
     };
 
@@ -299,6 +274,7 @@ async function startLDAPServer() {
         return next(new ldap.OperationsError("Search operation failed"));
       }
     });
+
     const PORT = 636;
     server.listen(PORT, "0.0.0.0", () => {
       console.log(
