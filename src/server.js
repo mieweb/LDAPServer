@@ -69,6 +69,8 @@ app.post("/update-app-id", async (req, res) => {
     return res.status(400).json({ message: "Username and appId are required" });
   }
 
+  console.log("Updating appId for user:", username, appId);
+
   try {
     const connection = await mysql.createConnection(dbConfig);
 
@@ -169,6 +171,13 @@ async function startLDAPServer() {
               if (response.action === NOTIFICATION_ACTIONS.APPROVE) {
                 console.log("Notification approved for user:", username);
                 res.end();
+              } else if (response.action === NOTIFICATION_ACTIONS.TIMEOUT) {
+                console.log("Notification timeout for user:", username);
+                return next(
+                  new ldap.UnavailableError(
+                    "Authentication timeout (30 seconds)"
+                  )
+                );
               } else {
                 console.log("Notification rejected for user:", username);
                 return next(
