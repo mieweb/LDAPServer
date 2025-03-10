@@ -32,10 +32,19 @@ RUN [ ! -d /var/run/sshd ] && mkdir /var/run/sshd || echo "/var/run/sshd already
     echo "Port 2222" >> /etc/ssh/sshd_config && \
     echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && \
     echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config && \
-    echo 'UsePAM yes' >> /etc/ssh/sshd_config
+    echo 'UsePAM yes' >> /etc/ssh/sshd_config && \
+    echo 'AllowGroups developers devops' >> /etc/ssh/sshd_config && \
+    echo 'LoginGraceTime 90' >> /etc/ssh/sshd_config && \
+    echo 'MaxAuthTries 3' >> /etc/ssh/sshd_config && \
+    echo 'ClientAliveInterval 15' >> /etc/ssh/sshd_config
+
+# Create local groups with EXACT GIDs from LDAP
+RUN groupadd -g 5000 developers && \
+    groupadd -g 5002 devops
 
 # Enable pam_mkhomedir to create home directories on login
-RUN echo "session required pam_mkhomedir.so skel=/etc/skel umask=0077" >> /etc/pam.d/sshd
+RUN echo "session required pam_mkhomedir.so skel=/etc/skel umask=0077" >> /etc/pam.d/sshd && \
+    echo "auth required pam_faildelay.so delay=5000000" >> /etc/pam.d/sshd
 
 # Set up directory to store certificates
 RUN mkdir -p /certificates

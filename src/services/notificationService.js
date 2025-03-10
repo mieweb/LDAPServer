@@ -18,6 +18,7 @@ class NotificationService {
           headers: { "Content-Type": "application/json" },
         }
       );
+
       return response.data;
     } catch (error) {
       throw new Error(`Notification failed: ${error.message}`);
