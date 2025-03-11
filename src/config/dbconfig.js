@@ -1,3 +1,8 @@
+// dbconfig.js
+// Database configuration with environment variable support
+// Allows the connection settings to be configured per environment
+// through .env files or direct environment variables.
+// Default fallback values are provided for local development.
 require("dotenv").config();
 
 const dbConfig = {
