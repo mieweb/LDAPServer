@@ -6,11 +6,11 @@
         "start": "node server.js"
     },
     "dependencies": {
-        "@ldapjs/controls": "^2.1.0",
+        "@ldapjs/controls": "git+https://github.com/anishapant21/controls.git#fixes/password-policy-crash",
         "axios": "^1.7.9",
         "dotenv": "^16.4.7",
         "express": "^4.21.2",
-        "ldapjs": "^3.0.7",
+        "ldapjs": "git+https://github.com/anishapant21/node-ldapjs.git#fixes/attributes",
         "mysql2": "^3.2.0"
-    }
+      }
 }
