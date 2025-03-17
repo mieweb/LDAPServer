@@ -1,31 +1,29 @@
 # LDAP-MySQL Authentication
 
-This project implements an LDAP gateway server using `ldapjs` that connects to a MySQL database to manage and authenticate users. It is designed to support applications that require LDAP authentication but can store extended user information in MySQL, making it compatible with legacy systems.
+This project implements an LDAP gateway server using `ldapjs` that connects to a database to manage and authenticate users. It is designed to support applications that require LDAP authentication but can store extended user information in databases(MySQL, MongoDB), making it compatible with legacy systems.
 
 ```mermaid
 sequenceDiagram
     participant User as ann (User)
     participant Client as Client (SSHD)
     participant SSSD as SSSD
-    participant NodeLDAP as Node.js LDAP Server
-    participant SQL as MySQL Server
-    participant OpenLDAP as OpenLDAP Server
-    participant MeteorJS as MeteorJS (Notification Service)
-
+    participant LDAP as LDAPServer
+    participant DB as Database (MySQL/MongoDB)
     User->>Client: SSH login request (ann)
     Client->>SSSD: Authenticate user (ann)
-    SSSD->>NodeLDAP: Check user authentication
-    NodeLDAP->>SQL: Check if user exists
-    SQL-->>NodeLDAP: User exists
-    NodeLDAP->>OpenLDAP: Authenticate user credentials
-    OpenLDAP-->>NodeLDAP: Authentication successful
-    NodeLDAP-->>SSSD: Authentication successful
-    SSSD-->>Client: Authentication successful
-    NodeLDAP->>MeteorJS: Send notification for approval
-    MeteorJS-->>User: Push notification to phone
-    User-->>MeteorJS: Approve SSH request
-    MeteorJS-->>NodeLDAP: Send approval response
-    NodeLDAP-->>Client: Allow SSH login
+    SSSD->>LDAP: Fetch user info (id, groups)
+    LDAP->>DB: Check if user exists
+    DB-->>LDAP: User exists
+    LDAP-->>SSSD: Return user info + group memberships
+    SSSD->>LDAP: Check user credentials
+    LDAP->>DB: Validate password
+    DB-->>LDAP: Password correct
+    SSSD->>SSSD: Verify group membership (e.g., "devops")
+    SSSD-->>Client: Authentication success/failure
+    Client-->>User: Login allowed/denied
+
+
+
 ```
 
 ## Technologies Used
@@ -151,4 +149,65 @@ This will stop and clean up Docker containers, networks, and the Node.js server.
 │   ├── package-lock.json      # Lock file for Node.js dependencies
 │   └── .env.example           # Environment variables configuration file
 └── README.md                  # Documentation (this file)
+```
+
+## Elaborative
+
+### With AD/LDAP for authentication
+
+```mermaid
+sequenceDiagram
+    participant User as ann (User)
+    participant Client as Client (SSHD)
+    participant SSSD as SSSD
+    participant CustomLDAP as Custom LDAPServer (ldapjs)
+    participant DB as Database (MySQL/MongoDB)
+    participant AuthSys as Authentication System (AD/LDAP)
+    
+    User->>Client: SSH login request (ann)
+    Client->>SSSD: Authenticate user (ann)
+    
+    %% User information lookup
+    SSSD->>CustomLDAP: Fetch user info (id, groups)
+    CustomLDAP->>DB: Check if user exists
+    DB-->>CustomLDAP: User exists
+    CustomLDAP-->>SSSD: Return user info + group memberships
+    
+    %% Password verification via your custom LDAP server connecting to auth system
+    SSSD->>CustomLDAP: Verify user credentials
+    CustomLDAP->>AuthSys: Forward authentication request
+    AuthSys-->>CustomLDAP: Authentication result
+    CustomLDAP-->>SSSD: Forward authentication result
+    
+    %% Group membership and final authorization
+    SSSD->>SSSD: Verify group membership (e.g., "devops")
+    SSSD-->>Client: Authentication success/failure
+    Client-->>User: Login allowed/denied
+```
+
+### Integration with Push notification
+```mermaid
+sequenceDiagram
+    participant User as ann (User)
+    participant Client as Client (SSHD)
+    participant SSSD as SSSD
+    participant CustomLDAP as Custom LDAPServer (ldapjs)
+    participant DB as Database (MySQL/MongoDB)
+    participant AuthSys as Authentication System (AD/LDAP)
+    participant NotifSvc as Notification Service
+    
+    User->>Client: SSH login request (ann)
+    Client->>SSSD: Authenticate user (ann)
+    SSSD->>CustomLDAP: Check user authentication
+    CustomLDAP->>DB: Check if user exists
+    DB-->>CustomLDAP: User exists
+    CustomLDAP->>AuthSys: Authenticate user credentials
+    AuthSys-->>CustomLDAP: Authentication successful
+    CustomLDAP-->>SSSD: Authentication successful
+    SSSD-->>Client: Authentication successful
+    CustomLDAP->>NotifSvc: Send notification for approval
+    NotifSvc-->>User: Push notification to phone
+    User-->>NotifSvc: Approve SSH request
+    NotifSvc-->>CustomLDAP: Send approval response
+    CustomLDAP-->>Client: Allow SSH login
 ```
