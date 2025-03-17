@@ -1,4 +1,4 @@
-# LDAP-MySQL Authentication
+# LDAPServer
 
 This project implements an LDAP gateway server using `ldapjs` that connects to a database to manage and authenticate users. It is designed to support applications that require LDAP authentication but can store extended user information in databases(MySQL, MongoDB), making it compatible with legacy systems.
 
