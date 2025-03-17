@@ -11,14 +11,13 @@ sequenceDiagram
     participant DB as Database (MySQL/MongoDB)
     User->>Client: SSH login request (ann)
     Client->>SSSD: Authenticate user (ann)
-    SSSD->>LDAP: Fetch user info (id, groups)
+    SSSD->>LDAP: Fetch user info
     LDAP->>DB: Check if user exists
     DB-->>LDAP: User exists
     LDAP-->>SSSD: Return user info + group memberships
     SSSD->>LDAP: Check user credentials
     LDAP->>DB: Validate password
     DB-->>LDAP: Password correct
-    SSSD->>SSSD: Verify group membership (e.g., "devops")
     SSSD-->>Client: Authentication success/failure
     Client-->>User: Login allowed/denied
 
@@ -180,7 +179,6 @@ sequenceDiagram
     CustomLDAP-->>SSSD: Forward authentication result
     
     %% Group membership and final authorization
-    SSSD->>SSSD: Verify group membership (e.g., "devops")
     SSSD-->>Client: Authentication success/failure
     Client-->>User: Login allowed/denied
 ```
