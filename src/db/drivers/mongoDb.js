@@ -43,7 +43,7 @@ async function updateUserAppId(db, username, appId) {
 // Group operations
 async function findGroupsByMemberUid(db, username) {
   const groups = await db.collection("groups")
-    .find({ members: username })
+    .find({ member_uids: username })
     .toArray();
   
   // Transform the result to match the expected format
