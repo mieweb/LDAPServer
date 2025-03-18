@@ -50,7 +50,7 @@ async function findGroupsByMemberUid(db, username) {
   return groups.map(group => ({
     name: group.name,
     gid: group.gid,
-    member_uids: group.members
+    member_uids: group.member_uids
   }));
 }
 
