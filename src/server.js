@@ -273,7 +273,7 @@ async function startLDAPServer() {
       );
     });
 
-    app.listen(3000, () => {
+    app.listen(3000, "0.0.0.0", () => {
       console.log("API Server listening on port 3000");
       console.log(`Using database type: ${dbConfig.type}`);
     });
