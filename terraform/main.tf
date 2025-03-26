@@ -34,7 +34,7 @@ resource "aws_security_group" "ldap_sg" {
 resource "aws_instance" "ldap_server" {
   ami             = "ami-08b5b3a93ed654d19"
   instance_type   = "t2.micro"
-  key_name        = "your-ec2-key"
+  key_name        = "mietest"
   security_groups = [aws_security_group.ldap_sg.name]
 
   tags = {
