@@ -28,11 +28,11 @@ jobs:
       
 
     - name: Initialize Terraform
-      run: terraform init
-
+      run: cd terraform && terraform init
+    
     - name: Apply Terraform Configuration
-      run: terraform apply -auto-approve
-
+      run: cd terraform && terraform apply -auto-approve
+    
     - name: Fetch EC2 Instance Public IP
       id: get-ec2-ip
       run: echo "EC2_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=LDAPServer" --query "Reservations[*].Instances[*].PublicIpAddress" --output text)" >> $GITHUB_ENV
