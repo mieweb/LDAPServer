@@ -31,14 +31,26 @@ jobs:
     
     - name: Apply Terraform Configuration
       run: cd terraform && terraform apply -auto-approve
-    
+
     - name: Fetch EC2 Instance Public IP
       id: get-ec2-ip
       run: |
-        IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=LDAPServer" --query "Reservations[*].Instances[*].PublicIpAddress" --output text)
-        echo "EC2_IP=$IP" >> $GITHUB_ENV
-        echo "Found IP: $IP"
-
+        # Get the most recent instance with the LDAPServer tag
+        IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=LDAPServer" "Name=instance-state-name,Values=running" \
+            --query "Reservations[*].Instances[*].[LaunchTime,PublicIpAddress]" \
+            --output text | sort -r | head -n 1 | awk '{print $2}')
+        
+        # Check if we got a valid IP
+        if [[ -z "$IP" ]]; then
+            echo "Error: Could not find running instance with tag LDAPServer"
+            exit 1
+        fi
+        
+        # Set the environment variable correctly
+        echo "EC2_IP=${IP}" >> $GITHUB_ENV
+        echo "Found IP: ${IP}"
+    
     - name: Wait for EC2 to be ready
       run: sleep 60  # Ensure EC2 instance is fully initialized
 
