@@ -1,7 +1,42 @@
+resource "aws_security_group" "ldap_sg" {
+  name        = "ldap-security-group"
+  description = "Allow LDAP, API, and SSH (for deployment)"
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # Change later to GitHub Actions IPs
+  }
+
+  ingress {
+    from_port   = 636
+    to_port     = 636
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # Allow LDAP connections
+  }
+
+  ingress {
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # Allow API access
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
 resource "aws_instance" "ldap_server" {
-  ami           = var.ami_id
-  instance_type = var.instance_type
-  key_name      = "mietest"
+  ami             = "ami-08b5b3a93ed654d19"
+  instance_type   = "t2.micro"
+  key_name        = "your-ec2-key"
+  security_groups = [aws_security_group.ldap_sg.name]
+
   tags = {
     Name = "LDAPServer"
   }

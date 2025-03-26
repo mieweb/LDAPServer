@@ -3,12 +3,12 @@ name: Deploy LDAP Node.js Server
 on:
   pull_request:
     branches:
-      - main  # Trigger when a PR is created to `main`
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: dev  # Use environment-specific secrets and variables
+    environment: dev
 
     steps:
     - name: Checkout the repository
