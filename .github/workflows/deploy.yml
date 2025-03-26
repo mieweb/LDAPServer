@@ -77,7 +77,7 @@ jobs:
             LDAP_CERT_CONTENT="${{ secrets.LDAP_CERT_CONTENT }}"
             LDAP_KEY_CONTENT="${{ secrets.LDAP_KEY_CONTENT }}"
             LDAP_URL=${{ secrets.LDAP_URL }}
-            EOT
+            EOT            
             
             # Install dependencies and start the Node.js server
             cd /home/ec2-user/LDAPServer
