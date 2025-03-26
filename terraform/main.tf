@@ -1,6 +1,6 @@
 resource "aws_security_group" "ldap_sg" {
   name        = "ldap-security-group"
-  description = "Allow LDAP, API, and SSH (for deployment)"
+  description = "Allow LDAP, API, and SSH (for deployments)"
 
   ingress {
     from_port   = 22
