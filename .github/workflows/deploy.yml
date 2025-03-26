@@ -26,7 +26,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
       
-
     - name: Initialize Terraform
       run: cd terraform && terraform init
     
@@ -35,7 +34,10 @@ jobs:
     
     - name: Fetch EC2 Instance Public IP
       id: get-ec2-ip
-      run: echo "EC2_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=LDAPServer" --query "Reservations[*].Instances[*].PublicIpAddress" --output text)" >> $GITHUB_ENV
+      run: |
+        IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=LDAPServer" --query "Reservations[*].Instances[*].PublicIpAddress" --output text)
+        echo "EC2_IP=$IP" >> $GITHUB_ENV
+        echo "Found IP: $IP"
 
     - name: Wait for EC2 to be ready
       run: sleep 60  # Ensure EC2 instance is fully initialized
@@ -70,7 +72,6 @@ jobs:
           cd /home/ec2-user/LDAPServer
           npm install
           nohup node server.js > server.log 2>&1 &
-
         EOF
 
     - name: Output EC2 Instance Public IP
