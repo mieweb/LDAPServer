@@ -1,5 +1,5 @@
 resource "aws_security_group" "ldap_sg" {
-  name        = "new-ldap-security-group"  # Changed name to be unique
+  name        = "newest-ldap-security-group"  # Changed name to be unique
   description = "Allow LDAP, API, and SSH (for deployments)"
 
   ingress {
