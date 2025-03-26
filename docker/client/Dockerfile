@@ -4,6 +4,10 @@ FROM debian:latest
 # Reinitialize dpkg info database to avoid corruption
 RUN rm -rf /var/lib/dpkg/info/* && dpkg --configure -a 
 
+# Copy environment variables
+COPY ldap_env.sh /tmp/ldap_env.sh
+RUN chmod +x /tmp/ldap_env.sh && . /tmp/ldap_env.sh
+
 # Accept the CA certificate as a build argument
 ARG LDAP_CA_CERT
 
@@ -40,6 +44,7 @@ RUN [ ! -d /var/run/sshd ] && mkdir /var/run/sshd || echo "/var/run/sshd already
 
 # Create local groups with EXACT GIDs from LDAP
 RUN groupadd -g 5000 developers && \
+    groupadd -g 5001 sysadmins && \
     groupadd -g 5002 devops
 
 # Enable pam_mkhomedir to create home directories on login
@@ -50,10 +55,11 @@ RUN echo "session required pam_mkhomedir.so skel=/etc/skel umask=0077" >> /etc/p
 RUN mkdir -p /certificates
 
 # Configure LDAP client
-RUN echo "BASE    dc=mieweb,dc=com" > /etc/ldap/ldap.conf && \
-    echo "URI     ldaps://host.docker.internal:636" >> /etc/ldap/ldap.conf && \
-    echo "BINDDN  dc=mieweb,dc=com" >> /etc/ldap/ldap.conf && \
-    echo "TLS_CACERT /certificates/ca-cert.pem" >> /etc/ldap/ldap.conf && \
+RUN . /tmp/ldap_env.sh && \ 
+    echo "BASE    $LDAP_BASE" > /etc/ldap/ldap.conf && \
+    echo "URI     $LDAP_URI" >> /etc/ldap/ldap.conf && \
+    echo "BINDDN  $LDAP_BASE" >> /etc/ldap/ldap.conf && \
+    echo "TLS_CACERT $LDAP_CERT" >> /etc/ldap/ldap.conf && \
     echo "TLS_REQCERT allow" >> /etc/ldap/ldap.conf
 
 # Copy the CA certificate content from the environment variable
@@ -69,7 +75,7 @@ RUN chown -R openldap:openldap /etc/ldap/slapd.d && \
     chmod -R 750 /etc/ldap/slapd.d
 
 # Expose port for SSH
-EXPOSE 2222
+EXPOSE $SSH_PORT
 
 # Start services
 CMD service ssh start && /usr/sbin/sssd -i -d 9 && tail -f /dev/null
