@@ -1,7 +1,7 @@
 resource "aws_instance" "ldap_server" {
   ami           = var.ami_id
   instance_type = var.instance_type
-  key_name      = "your-ec2-key"
+  key_name      = "mietest"
   tags = {
     Name = "LDAPServer"
   }
