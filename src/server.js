@@ -10,7 +10,6 @@ const { NOTIFICATION_ACTIONS } = require("./constants/constants");
 const { extractCredentials } = require("./utils/utils");
 const { createLdapEntry } = require("./utils/ldapUtils");
 
-// Create database service instance with simplified configuration
 const db = new DatabaseService(dbConfig);
 
 // Initialize Express app
@@ -23,11 +22,10 @@ async function authenticateWithLDAP(username, password) {
     try {
       const client = ldap.createClient({
         url: process.env.LDAP_URL,
-        timeout: 5000, // Add a timeout
-        connectTimeout: 5000, // Add a connect timeout
+        timeout: 5000, 
+        connectTimeout: 5000,
       });
 
-      // Add error event handlers
       client.on("error", (err) => {
         console.error("LDAP client error:", err);
         resolve(false);
