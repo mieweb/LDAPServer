@@ -3,7 +3,6 @@ const ldap = require("ldapjs");
 const express = require("express");
 
 const dbConfig = require("./config/dbconfig");
-const sqlQueries = require("./config/sqlQueries");
 const DatabaseService = require("./services/databaseServices");
 const NotificationService = require("./services/notificationService");
 
@@ -11,8 +10,7 @@ const { NOTIFICATION_ACTIONS } = require("./constants/constants");
 const { extractCredentials } = require("./utils/utils");
 const { createLdapEntry } = require("./utils/ldapUtils");
 
-// Create database service instance
-const db = new DatabaseService(dbConfig, sqlQueries);
+const db = new DatabaseService(dbConfig);
 
 // Initialize Express app
 const app = express();
@@ -23,12 +21,11 @@ async function authenticateWithLDAP(username, password) {
   return new Promise((resolve, reject) => {
     try {
       const client = ldap.createClient({
-        url: "ldap://localhost:389",
-        timeout: 5000, // Add a timeout
-        connectTimeout: 5000, // Add a connect timeout
+        url: process.env.LDAP_URL,
+        timeout: 5000, 
+        connectTimeout: 5000,
       });
 
-      // Add error event handlers
       client.on("error", (err) => {
         console.error("LDAP client error:", err);
         resolve(false);
@@ -77,19 +74,17 @@ app.post("/update-app-id", async (req, res) => {
 
   try {
     // Check if the user exists
-    const user = await db.findOne("users", "findByUsername", [username]);
+    const user = await db.findUserByUsername(username);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
     // Update the appId
-    await db.executeQuery("users", "updateAppId", [appId, username]);
+    await db.updateUserAppId(username, appId);
 
     // Get the updated user
-    const updatedUser = await db.findOne("users", "findUserDetails", [
-      username,
-    ]);
+    const updatedUser = await db.findUserDetails(username);
 
     // Return the updated user data
     return res
@@ -125,9 +120,7 @@ async function startLDAPServer() {
 
       try {
         // Find user with appId
-        const user = await db.findOne("users", "findByUsernameWithAppId", [
-          username,
-        ]);
+        const user = await db.findUserWithAppId(username);
 
         if (!user) {
           return next(new ldap.InvalidCredentialsError("User not found"));
@@ -188,7 +181,7 @@ async function startLDAPServer() {
     async function handleUserSearch(username, res) {
       console.log("[USER] Searching for:", username);
 
-      const user = await db.findOne("users", "findUserDetails", [username]);
+      const user = await db.findUserDetails(username);
 
       if (!user) {
         res.end();
@@ -209,12 +202,8 @@ async function startLDAPServer() {
           // Search groups by memberUid
           const username = memberUidMatch[1];
 
-          // Using configured SQL query to find groups
-          const groups = await db.executeQuery(
-            "groups",
-            "findGroupsByMemberUid",
-            [username]
-          );
+          // Using driver to find groups
+          const groups = await db.findGroupsByMemberUid(username);
 
           console.log(`[GROUP SEARCH] Found ${groups.length} groups`);
 
@@ -282,8 +271,9 @@ async function startLDAPServer() {
       );
     });
 
-    app.listen(3000, () => {
+    app.listen(3000, "0.0.0.0", () => {
       console.log("API Server listening on port 3000");
+      console.log(`Using database type: ${dbConfig.type}`);
     });
   } catch (error) {
     console.error("Failed to start LDAP server:", error);
