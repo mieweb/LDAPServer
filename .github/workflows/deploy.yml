@@ -1,0 +1,76 @@
+name: Deploy LDAP Node.js Server
+
+on:
+  pull_request:
+    branches:
+      - main  # Trigger when a PR is created to `main`
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: dev  # Use environment-specific secrets and variables
+
+    steps:
+    - name: Checkout the repository
+      uses: actions/checkout@v2
+
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.3.0
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws_region: "us-east-1"
+
+    - name: Initialize Terraform
+      run: terraform init
+
+    - name: Apply Terraform Configuration
+      run: terraform apply -auto-approve
+
+    - name: Fetch EC2 Instance Public IP
+      id: get-ec2-ip
+      run: echo "EC2_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=LDAPServer" --query "Reservations[*].Instances[*].PublicIpAddress" --output text)" >> $GITHUB_ENV
+
+    - name: Wait for EC2 to be ready
+      run: sleep 60  # Ensure EC2 instance is fully initialized
+
+    - name: SSH into EC2 and deploy the app
+      run: |
+        echo "${{ secrets.EC2_PRIVATE_KEY }}" > ec2-key.pem
+        chmod 600 ec2-key.pem
+
+        ssh -o StrictHostKeyChecking=no -i ec2-key.pem ec2-user@${{ env.EC2_IP }} << 'EOF'
+          sudo yum update -y
+          sudo yum install -y git
+          curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
+          sudo yum install -y nodejs
+
+          # Clone the repository
+          git clone https://github.com/anishapant21/LDAPServer.git /home/ec2-user/LDAPServer
+
+          # Create the .env file
+          cat <<EOT > /home/ec2-user/LDAPServer/.env
+          DB_TYPE=${{ vars.DB_TYPE }}
+          MONGO_URI=${{ secrets.MONGO_URI }}
+          MONGO_DATABASE=${{ vars.MONGO_DATABASE }}
+          LDAP_BASE_DN=${{ vars.LDAP_BASE_DN }}
+          LDAP_PORT=${{ vars.LDAP_PORT }}
+          LDAP_CERT_CONTENT="${{ secrets.LDAP_CERT_CONTENT }}"
+          LDAP_KEY_CONTENT="${{ secrets.LDAP_KEY_CONTENT }}"
+          LDAP_URL=${{ secrets.LDAP_URL }}
+          EOT
+
+          # Install dependencies and start the Node.js server
+          cd /home/ec2-user/LDAPServer
+          npm install
+          nohup node server.js > server.log 2>&1 &
+
+        EOF
+
+    - name: Output EC2 Instance Public IP
+      run: echo "LDAP Server running at http://${{ env.EC2_IP }}"
