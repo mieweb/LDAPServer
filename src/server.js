@@ -22,7 +22,7 @@ async function authenticateWithLDAP(username, password) {
   return new Promise((resolve, reject) => {
     try {
       const client = ldap.createClient({
-        url: process.env.LDAP_BASE_DN,
+        url: LDAP_URL,
         timeout: 5000, // Add a timeout
         connectTimeout: 5000, // Add a connect timeout
       });
