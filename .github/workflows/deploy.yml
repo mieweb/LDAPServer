@@ -69,14 +69,14 @@ jobs:
             
             # Create the .env file
             cat > /home/ec2-user/LDAPServer/.env << "EOT"
-            DB_TYPE=${{ vars.DB_TYPE }}
-            MONGO_URI=${{ secrets.MONGO_URI }}
-            MONGO_DATABASE=${{ vars.MONGO_DATABASE }}
-            LDAP_BASE_DN=${{ vars.LDAP_BASE_DN }}
-            LDAP_PORT=${{ vars.LDAP_PORT }}
+            DB_TYPE="${{ vars.DB_TYPE }}"
+            MONGO_URI="${{ secrets.MONGO_URI }}"
+            MONGO_DATABASE="${{ vars.MONGO_DATABASE }}"
+            LDAP_BASE_DN="${{ vars.LDAP_BASE_DN }}"
+            LDAP_PORT="${{ vars.LDAP_PORT }}"
             LDAP_CERT_CONTENT="${{ secrets.LDAP_CERT_CONTENT }}"
             LDAP_KEY_CONTENT="${{ secrets.LDAP_KEY_CONTENT }}"
-            LDAP_URL=${{ secrets.LDAP_URL }}
+            LDAP_URL="${{ secrets.LDAP_URL }}"
             EOT
             
             # Install dependencies and start the Node.js server
