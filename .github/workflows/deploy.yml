@@ -53,31 +53,28 @@ jobs:
           
       - name: Wait for EC2 to be ready
         run: sleep 90 # Increased wait time to ensure system is ready
-        
+
       - name: Deploy app to EC2
         run: |
-          echo "${{ secrets.EC2_PRIVATE_KEY }}" > ec2-key.pem
-          chmod 600 ec2-key.pem
-          
-          ssh -o StrictHostKeyChecking=no -i ec2-key.pem ec2-user@${{ env.EC2_IP }} << 'EOSSH'
-            # Clone the repository (only done here, not in Terraform)
+            echo "${{ secrets.EC2_PRIVATE_KEY }}" > ec2-key.pem
+            chmod 600 ec2-key.pem
+            
+            ssh -o StrictHostKeyChecking=no -i ec2-key.pem ec2-user@${{ env.EC2_IP }} << 'EOSSH'
+            # Clone the repository
             if [ -d "/home/ec2-user/LDAPServer" ]; then
-              rm -rf /home/ec2-user/LDAPServer
+                rm -rf /home/ec2-user/LDAPServer
             fi
             
             git clone https://github.com/anishapant21/LDAPServer.git /home/ec2-user/LDAPServer
             
-            # Create the .env file
-            cat > /home/ec2-user/LDAPServer/.env << "EOT"
-            DB_TYPE="${{ vars.DB_TYPE }}"
-            MONGO_URI="${{ secrets.MONGO_URI }}"
-            MONGO_DATABASE="${{ vars.MONGO_DATABASE }}"
-            LDAP_BASE_DN="${{ vars.LDAP_BASE_DN }}"
-            LDAP_PORT="${{ vars.LDAP_PORT }}"
-            LDAP_CERT_CONTENT="${{ secrets.LDAP_CERT_CONTENT }}"
-            LDAP_KEY_CONTENT="${{ secrets.LDAP_KEY_CONTENT }}"
-            LDAP_URL="${{ secrets.LDAP_URL }}"
-            EOT
+            echo "DB_TYPE=${{ vars.DB_TYPE }}
+            MONGO_URI=${{ secrets.MONGO_URI }}
+            MONGO_DATABASE=${{ vars.MONGO_DATABASE }}
+            LDAP_BASE_DN=${{ vars.LDAP_BASE_DN }}
+            LDAP_PORT=${{ vars.LDAP_PORT }}
+            LDAP_CERT_CONTENT=\"${{ secrets.LDAP_CERT_CONTENT }}\"
+            LDAP_KEY_CONTENT=\"${{ secrets.LDAP_KEY_CONTENT }}\"
+            LDAP_URL=${{ secrets.LDAP_URL }}" > /home/ec2-user/LDAPServer/.env
             
             # Install dependencies and start the Node.js server
             cd /home/ec2-user/LDAPServer
@@ -90,7 +87,7 @@ jobs:
             nohup node server.js > server.log 2>&1 &
             
             echo "Server started successfully"
-          EOSSH
+            EOSSH
           
       - name: Output EC2 Instance Public IP
         run: echo "LDAP Server running at http://${{ env.EC2_IP }}"
