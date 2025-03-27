@@ -68,7 +68,7 @@ jobs:
             git clone https://github.com/anishapant21/LDAPServer.git /home/ec2-user/LDAPServer
             
             # Create the .env file
-            cat > /home/ec2-user/LDAPServer/.env << 'EOT'
+            cat > /home/ec2-user/LDAPServer/.env << "EOT"
             DB_TYPE=${{ vars.DB_TYPE }}
             MONGO_URI=${{ secrets.MONGO_URI }}
             MONGO_DATABASE=${{ vars.MONGO_DATABASE }}
