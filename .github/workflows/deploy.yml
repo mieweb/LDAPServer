@@ -77,17 +77,17 @@ jobs:
             LDAP_URL=${{ secrets.LDAP_URL }}" > /home/ec2-user/LDAPServer/.env
             
             # Install dependencies and start the Node.js server
-            cd /home/ec2-user/LDAPServer
+            cd /home/ec2-user/LDAPServer/src
             npm install
             
             # Kill any existing node process
             pkill -f "node server.js" || true
             
             # Start the server
-            nohup node server.js > server.log 2>&1 &
+            nohup node server.js > ../server.log 2>&1 &
             
             echo "Server started successfully"
             EOSSH
-          
+  
       - name: Output EC2 Instance Public IP
         run: echo "LDAP Server running at http://${{ env.EC2_IP }}"
