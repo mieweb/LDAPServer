@@ -52,7 +52,7 @@ jobs:
           echo "Found IP: ${IP}"
           
       - name: Wait for EC2 to be ready
-        run: sleep 90 # Increased wait time to ensure system is ready
+        run: sleep 50 # Ensure system is ready
         
       - name: Create .env file locally
         run: |
@@ -67,7 +67,6 @@ jobs:
           LDAP_URL=${{ secrets.LDAP_URL }}
           EOF
           
-          # Debug: Show file was created (without showing sensitive values)
           echo "Created .env file"
           
       - name: Deploy app to EC2
@@ -84,19 +83,19 @@ jobs:
           git clone https://github.com/anishapant21/LDAPServer.git /home/ec2-user/LDAPServer
           EOSSH
           
-          # Now copy the .env file to the server
-          scp -o StrictHostKeyChecking=no -i ec2-key.pem .env ec2-user@${{ env.EC2_IP }}:/home/ec2-user/LDAPServer/.env
+          # Now copy the .env file to the server - place it in the src directory
+          scp -o StrictHostKeyChecking=no -i ec2-key.pem .env ec2-user@${{ env.EC2_IP }}:/home/ec2-user/LDAPServer/src/.env
           
           # Finally, install dependencies and start the server
           ssh -o StrictHostKeyChecking=no -i ec2-key.pem ec2-user@${{ env.EC2_IP }} << 'EOSSH'
           # Install dependencies and start the Node.js server
-          cd /home/ec2-user/LDAPServer
+          cd /home/ec2-user/LDAPServer/src
           npm install
           
           # Kill any existing node process
           pkill -f "node server.js" || true
           
-          # Start the server
+          # Start the server (already in the src directory)
           nohup node server.js > server.log 2>&1 &
           
           # Verify the server has started
