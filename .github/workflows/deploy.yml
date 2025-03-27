@@ -96,7 +96,7 @@ jobs:
           pkill -f "node server.js" || true
           
           # Start the server (already in the src directory)
-          nohup node server.js > server.log 2>&1 &
+          nohup sudo node server.js > server.log 2>&1 &
           
           # Verify the server has started
           sleep 5

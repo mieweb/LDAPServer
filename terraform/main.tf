@@ -1,5 +1,5 @@
 resource "aws_security_group" "ldap_sg" {
-  name        = "newestj-tddin-tmz-sd-top-ldap-security-group"
+  name        = "newestj-tddi-dfn-tmz-sd-top-ldap-security-group"
   description = "Allow LDAP, API, and SSH (for deployments)"
   
   ingress {
