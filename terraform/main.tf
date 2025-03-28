@@ -1,6 +1,6 @@
 data "aws_ami" "amazon_linux_ami" {
   most_recent = true
-  owners      = [var.ami_owner_id]  # Using the owner ID variable
+  owners      = [var.owners]  # Using the owners variable
 
   filters = {
     name   = var.os_filter
@@ -9,7 +9,7 @@ data "aws_ami" "amazon_linux_ami" {
 }
 
 resource "aws_security_group" "ldap_sg" {
-  name        = "news-security-group"
+  name        = "newestj-tddi-dfn-tmz-sd-top-ldap-security-group"
   description = "Allow LDAP, API, and SSH (for deployments)"
   
   ingress {
