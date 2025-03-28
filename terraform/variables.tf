@@ -10,6 +10,11 @@ variable "os_filter" {
   default = "al2023-ami-*-x86_64"
 }
 
+variable "ami_id" {
+  description = "The AMI ID to use for the EC2 instance"
+  type        = string
+}
+
 variable "owners" {
   default = "137112412989" # Amazon Linux owner ID
 }
