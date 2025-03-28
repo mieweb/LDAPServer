@@ -1,9 +1,5 @@
-provider "aws" {
-  region = var.aws_region
-}
-
 resource "aws_security_group" "ldap_sg" {
-  name        = "newestj-tddi-dfn-tmz-sd-top-ldap-security-group"
+  name        = "mie-mie-ldap-security-group"
   description = "Allow LDAP, API, and SSH (for deployments)"
   
   ingress {
