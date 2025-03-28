@@ -152,6 +152,17 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
       
+      - name: Create ECR Repository if it doesn't exist
+        run: |
+          # Check if the repository exists
+          if ! aws ecr describe-repositories --repository-names ldap-client 2>/dev/null; then
+            echo "Creating ECR repository ldap-client..."
+            aws ecr create-repository --repository-name ldap-client
+            echo "Repository created successfully"
+          else
+            echo "Repository ldap-client already exists"
+          fi
+      
       - name: Login to ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
@@ -176,15 +187,17 @@ jobs:
           echo "Created client .env file with LDAP Server IP: ${SERVER_IP}"
           cat docker/client/.env | grep -v "LDAP_CA_CERT"
       
-      - name: Build and push Docker image to existing ECR
+      - name: Build and push Docker image to ECR
         run: |
           # Get ECR repository URI
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY=ldap-client
           IMAGE_TAG=${{ github.sha }}
           
-          # Build and push Docker image
+          echo "Building Docker image..."
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest ./docker/client
+          
+          echo "Pushing Docker image to ECR..."
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
           
@@ -215,23 +228,52 @@ jobs:
           chmod 600 ec2-key.pem
           
           ssh -o StrictHostKeyChecking=no -i ec2-key.pem ec2-user@${{ env.CLIENT_IP }} << EOSSH
+          # Install Docker if not already installed
+          if ! command -v docker &> /dev/null; then
+            echo "Installing Docker..."
+            sudo yum update -y
+            sudo yum install -y docker
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            sudo usermod -aG docker ec2-user
+            echo "Docker installed successfully"
+          else
+            echo "Docker is already installed"
+          fi
+          
+          # Install AWS CLI if not already installed
+          if ! command -v aws &> /dev/null; then
+            echo "Installing AWS CLI..."
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+            echo "AWS CLI installed successfully"
+          else
+            echo "AWS CLI is already installed"
+          fi
+          
           # Login to ECR
+          echo "Logging in to ECR..."
           aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
           
           # Pull the latest client image
+          echo "Pulling Docker image..."
           docker pull ${{ env.IMAGE_URI }}
           
           # Stop any running client container
+          echo "Stopping any existing containers..."
           docker stop ldap-client || true
           docker rm ldap-client || true
           
           # Run the new container
+          echo "Starting new container..."
           docker run -d --name ldap-client \
             -p 2222:2222 \
             --restart unless-stopped \
             ${{ env.IMAGE_URI }}
           
           # Verify the container is running
+          echo "Verifying container is running..."
           docker ps | grep ldap-client
           EOSSH
           
