@@ -1,12 +1,14 @@
-name: Deploy LDAP Node.js Server
+name: Deploy LDAP Client
 
 on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'docker/client/**'  # Only trigger when client files change
 
 jobs:
-  deploy:
+  deploy-client:
     runs-on: ubuntu-latest
     environment: dev
     
@@ -14,11 +16,6 @@ jobs:
       - name: Checkout the repository
         uses: actions/checkout@v2
         
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.3.0
-          
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -26,109 +23,113 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
           
-      - name: Fetch AMI ID for Amazon Linux
-        id: fetch_ami
-        run: |
-          os_filter="al2023-ami-*-x86_64"
-          owners="137112412989" # Amazon Linux owner ID
-          
-          ami_id=$(aws ec2 describe-images \
-            --filters "Name=name,Values=$os_filter" "Name=state,Values=available" \
-            --owners $owners \
-            --query "Images | sort_by(@, &CreationDate)[-1].ImageId" \
-            --output text)
-
-          if [ -z "$ami_id" ]; then
-            echo "Failed to find valid AMI ID"
-            exit 1
-          fi
-
-          echo "ami_id=$ami_id" >> "$GITHUB_ENV"
-
-      - name: Initialize Terraform
-        run: cd terraform && terraform init
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
         
-      - name: Apply Terraform Configuration
-        run: |
-          cd terraform
-          terraform apply -auto-approve -var="ami_id=${{ env.ami_id }}"
-        
-      - name: Fetch EC2 Instance Public IP
-        id: get-ec2-ip
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Fetch LDAP Server IP
+        id: get-ldap-server-ip
         run: |
           # Get the most recent instance with the LDAPServer tag
-          IP=$(aws ec2 describe-instances \
+          SERVER_IP=$(aws ec2 describe-instances \
             --filters "Name=tag:Name,Values=LDAPServer" "Name=instance-state-name,Values=running" \
             --query "Reservations[*].Instances[*].[LaunchTime,PublicIpAddress]" \
             --output text | sort -r | head -n 1 | awk '{print $2}')
           
           # Check if we got a valid IP
-          if [[ -z "$IP" ]]; then
+          if [[ -z "$SERVER_IP" ]]; then
             echo "Error: Could not find running instance with tag LDAPServer"
             exit 1
           fi
           
           # Set the environment variable correctly
-          echo "EC2_IP=${IP}" >> $GITHUB_ENV
-          echo "Found IP: ${IP}"
-          
-      - name: Wait for EC2 to be ready
-        run: sleep 50 # Ensure system is ready
-        
-      - name: Create .env file locally
+          echo "LDAP_SERVER_IP=${SERVER_IP}" >> $GITHUB_ENV
+          echo "Found LDAP Server IP: ${SERVER_IP}"
+
+      - name: Create .env file for client
         run: |
-          cat > .env << EOF
-          DB_TYPE=${{ vars.DB_TYPE }}
-          MONGO_URI=${{ secrets.MONGO_URI }}
-          MONGO_DATABASE=${{ vars.MONGO_DATABASE }}
-          LDAP_BASE_DN=${{ vars.LDAP_BASE_DN }}
-          LDAP_PORT=${{ vars.LDAP_PORT }}
-          LDAP_CERT_CONTENT="${{ secrets.LDAP_CERT_CONTENT }}"
-          LDAP_KEY_CONTENT="${{ secrets.LDAP_KEY_CONTENT }}"
-          LDAP_URL=${{ secrets.LDAP_URL }}
+          cat > docker/client/.env << EOF
+          # LDAP Environment Configuration
+          LDAP_BASE="${{ vars.LDAP_BASE_DN }}"
+          LDAP_DOMAIN="${{ vars.LDAP_DOMAIN }}"
+          LDAP_ORG="${{ vars.LDAP_ORG }}"
+          SSH_PORT=2222
+          LDAP_CERT_SUBJ="/C=US/ST=IN/L=City/O=${{ vars.LDAP_ORG }}/CN=localhost"
+          LDAP_URI="ldaps://${{ env.LDAP_SERVER_IP }}:${{ vars.LDAP_PORT }}"
+          LDAP_CERT="/certificates/ca-cert.pem"
+          LDAP_CA_CERT="${{ secrets.LDAP_CERT_CONTENT }}"
           EOF
           
-          echo "Created .env file"
+          echo "Created client .env file with LDAP Server IP: ${{ env.LDAP_SERVER_IP }}"
+          cat docker/client/.env | grep -v "LDAP_CA_CERT"
+      
+      - name: Build and push Docker image
+        id: docker-build
+        uses: docker/build-push-action@v2
+        with:
+          context: ./docker/client
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/ldap-client:${{ github.sha }},${{ steps.login-ecr.outputs.registry }}/ldap-client:latest
+
+      - name: Fetch EC2 Client Instance
+        id: get-ec2-client
+        run: |
+          # Get the most recent instance with the LDAPClient tag
+          IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=LDAPClient" "Name=instance-state-name,Values=running" \
+            --query "Reservations[*].Instances[*].[LaunchTime,PublicIpAddress]" \
+            --output text | sort -r | head -n 1 | awk '{print $2}')
           
-      - name: Deploy app to EC2
+          # Check if we got a valid IP
+          if [[ -z "$IP" ]]; then
+            echo "Error: Could not find running instance with tag LDAPClient"
+            exit 1
+          fi
+          
+          # Set the environment variable correctly
+          echo "CLIENT_EC2_IP=${IP}" >> $GITHUB_ENV
+          echo "Found Client IP: ${IP}"
+      
+      - name: Wait for EC2 to be ready
+        run: sleep 30 # Ensure system is ready
+        
+      - name: Deploy client to EC2
         run: |
           echo "${{ secrets.EC2_PRIVATE_KEY }}" > ec2-key.pem
           chmod 600 ec2-key.pem
           
-          # First, clone the repository and set up the directory
-          ssh -o StrictHostKeyChecking=no -i ec2-key.pem ec2-user@${{ env.EC2_IP }} << 'EOSSH'
-          # Clone the repository
-          if [ -d "/home/ec2-user/LDAPServer" ]; then
-            rm -rf /home/ec2-user/LDAPServer
-          fi
-          git clone https://github.com/anishapant21/LDAPServer.git /home/ec2-user/LDAPServer
+          ssh -o StrictHostKeyChecking=no -i ec2-key.pem ec2-user@${{ env.CLIENT_EC2_IP }} << 'EOSSH'
+          # Login to ECR
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+          
+          # Pull the latest client image
+          docker pull ${{ steps.login-ecr.outputs.registry }}/ldap-client:latest
+          
+          # Stop any running client container
+          docker stop ldap-client || true
+          docker rm ldap-client || true
+          
+          # Run the new container
+          docker run -d --name ldap-client \
+            -p 2222:2222 \
+            --restart unless-stopped \
+            ${{ steps.login-ecr.outputs.registry }}/ldap-client:latest
+          
+          # Verify the container is running
+          docker ps | grep ldap-client
           EOSSH
           
-          # Now copy the .env file to the server - place it in the src directory
-          scp -o StrictHostKeyChecking=no -i ec2-key.pem .env ec2-user@${{ env.EC2_IP }}:/home/ec2-user/LDAPServer/src/.env
-          
-          # Finally, install dependencies and start the server
-          ssh -o StrictHostKeyChecking=no -i ec2-key.pem ec2-user@${{ env.EC2_IP }} << 'EOSSH'
-          # Install dependencies and start the Node.js server
-          cd /home/ec2-user/LDAPServer/src
-          npm install
-          
-          # Kill any existing node process
-          pkill -f "node server.js" || true
-          
-          # Start the server (already in the src directory)
-          nohup sudo node server.js > server.log 2>&1 &
-          
-          # Verify the server has started
-          sleep 5
-          if pgrep -f "node server.js" > /dev/null; then
-            echo "Server started successfully"
-            ps aux | grep "node server.js" | grep -v grep
-          else
-            echo "Server failed to start"
-            tail -n 20 server.log 
-          fi
-          EOSSH
-          
-      - name: Output EC2 Instance Public IP
-        run: echo "LDAP Server running at http://${{ env.EC2_IP }}"
+      - name: Output Deployment Information
+        run: |
+          echo "=============== DEPLOYMENT SUMMARY ==============="
+          echo "LDAP Server IP: ${{ env.LDAP_SERVER_IP }}"
+          echo "LDAP Client IP: ${{ env.CLIENT_EC2_IP }}"
+          echo ""
+          echo "LDAP Client deployed successfully!"
+          echo "SSH accessible at: ssh -p 2222 user@${{ env.CLIENT_EC2_IP }}"
+          echo ""
+          echo "LDAP connectivity configured from Client to Server at ldaps://${{ env.LDAP_SERVER_IP }}:${{ vars.LDAP_PORT }}"
+          echo "=================================================="
