@@ -1,18 +1,15 @@
-# Fetch the latest Amazon Linux AMI based on the owner and filter
 data "aws_ami" "amazon_linux_ami" {
   most_recent = true
-  owners      = [var.owners]
-  filter {
-    name   = "name"
-    values = [var.os_filter]
-  }
+  owners      = [var.ami_owner_id]  # Using the owner ID variable
 
-  region = var.aws_region
+  filters = {
+    name   = var.os_filter
+    virtualization-type = "hvm"
+  }
 }
 
-# Security Group configuration
 resource "aws_security_group" "ldap_sg" {
-  name        = "main-security-group"
+  name        = "news-security-group"
   description = "Allow LDAP, API, and SSH (for deployments)"
   
   ingress {
@@ -44,9 +41,8 @@ resource "aws_security_group" "ldap_sg" {
   }
 }
 
-# EC2 instance configuration
 resource "aws_instance" "ldap_server" {
-  ami             = data.aws_ami.amazon_linux_ami.id
+  ami             = data.aws_ami.amazon_linux_ami.id  # Using the AMI ID from the data source
   instance_type   = var.instance_type
   key_name        = var.key_name
   security_groups = [aws_security_group.ldap_sg.name]
@@ -54,7 +50,7 @@ resource "aws_instance" "ldap_server" {
   tags = {
     Name = "LDAPServer"
   }
-  
+
   # Added lifecycle configuration to replace the instance
   lifecycle {
     create_before_destroy = true
