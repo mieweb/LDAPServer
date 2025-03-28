@@ -126,7 +126,7 @@ jobs:
             ps aux | grep "node server.js" | grep -v grep
           else
             echo "Server failed to start"
-            tail -n 20 /home/ec2-user/LDAPServer/src/server.log  # Show last 20 lines of the server log for debugging
+            tail -n 20 server.log 
           fi
           EOSSH
           
