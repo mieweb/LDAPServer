@@ -1,11 +1,5 @@
-data "aws_ami" "amazon_linux_ami" {
-  most_recent = true
-  owners      = [var.owners]  # Using the owners variable
-
-  filters = {
-    name   = var.os_filter
-    virtualization-type = "hvm"
-  }
+provider "aws" {
+  region = var.aws_region
 }
 
 resource "aws_security_group" "ldap_sg" {
@@ -42,7 +36,7 @@ resource "aws_security_group" "ldap_sg" {
 }
 
 resource "aws_instance" "ldap_server" {
-  ami             = data.aws_ami.amazon_linux_ami.id  # Using the AMI ID from the data source
+  ami             = var.ami_id  # Use the fetched AMI ID
   instance_type   = var.instance_type
   key_name        = var.key_name
   security_groups = [aws_security_group.ldap_sg.name]
@@ -51,20 +45,17 @@ resource "aws_instance" "ldap_server" {
     Name = "LDAPServer"
   }
 
-  # Added lifecycle configuration to replace the instance
   lifecycle {
     create_before_destroy = true
   }
 
   user_data = <<-EOF
               #!/bin/bash
-              # Just install system dependencies
               sudo yum update -y
               sudo yum install -y git
               curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
               sudo yum install -y nodejs
               
-              # Prepare the directory - will be populated by GitHub Actions
               if [ -d "/home/ec2-user/LDAPServer" ]; then
                 sudo rm -rf /home/ec2-user/LDAPServer
               fi

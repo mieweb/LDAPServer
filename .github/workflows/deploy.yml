@@ -26,6 +26,25 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
           
+      - name: Fetch AMI ID for Amazon Linux
+        id: fetch_ami
+        run: |
+          os_filter="al2023-ami-*-x86_64"
+          owners="137112412989" # Amazon Linux owner ID
+          
+          ami_id=$(aws ec2 describe-images \
+            --filters "Name=name,Values=$os_filter" "Name=state,Values=available" \
+            --owners $owners \
+            --query "Images | sort_by(@, &CreationDate)[-1].ImageId" \
+            --output text)
+
+          if [ -z "$ami_id" ]; then
+            echo "Failed to find valid AMI ID"
+            exit 1
+          fi
+
+          echo "ami_id=$ami_id" >> "$GITHUB_ENV"
+
       - name: Initialize Terraform
         run: cd terraform && terraform init
         
