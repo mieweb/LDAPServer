@@ -203,54 +203,114 @@ jobs:
           
           echo "Image pushed to $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
-
-      - name: Fetch EC2 Client Instance
-        id: get-client-ip
+      
+      - name: Create Client EC2 Instance
         run: |
-          # Get the instance with the LDAPClient tag
-          CLIENT_IP=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=LDAPClient" "Name=instance-state-name,Values=running" \
-            --query "Reservations[*].Instances[*].[PublicIpAddress]" \
-            --output text | head -n 1)
+          # Create a security group for the client
+          echo "Creating security group for LDAP client..."
+          SG_ID=$(aws ec2 create-security-group \
+            --group-name LDAPClient-${{ github.run_id }} \
+            --description "Security group for LDAP client" \
+            --query 'GroupId' \
+            --output text)
           
-          # Check if we got a valid IP
-          if [[ -z "$CLIENT_IP" ]]; then
-            echo "Error: Could not find running instance with tag LDAPClient"
-            exit 1
-          fi
+          # Allow SSH access
+          aws ec2 authorize-security-group-ingress \
+            --group-id $SG_ID \
+            --protocol tcp \
+            --port 22 \
+            --cidr 0.0.0.0/0
+            
+          # Allow custom SSH port (2222)
+          aws ec2 authorize-security-group-ingress \
+            --group-id $SG_ID \
+            --protocol tcp \
+            --port 2222 \
+            --cidr 0.0.0.0/0
+          
+          # Create a key pair or use an existing one
+          KEY_NAME="ldap-client-key-${{ github.run_id }}"
+          
+          # Create the EC2 instance
+          echo "Creating EC2 instance..."
+          INSTANCE_ID=$(aws ec2 run-instances \
+            --image-id ${{ env.ami_id }} \
+            --instance-type t2.micro \
+            --security-group-ids $SG_ID \
+            --key-name ${{ secrets.EC2_KEY_NAME }} \
+            --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=LDAPClient}]" \
+            --user-data "#!/bin/bash
+              yum update -y
+              yum install -y docker
+              systemctl start docker
+              systemctl enable docker
+              usermod -aG docker ec2-user
+              curl 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o 'awscliv2.zip'
+              yum install -y unzip
+              unzip awscliv2.zip
+              ./aws/install
+            " \
+            --query 'Instances[0].InstanceId' \
+            --output text)
+          
+          echo "Waiting for instance to be running..."
+          aws ec2 wait instance-running --instance-ids $INSTANCE_ID
+          
+          # Get the public IP of the instance
+          CLIENT_IP=$(aws ec2 describe-instances \
+            --instance-ids $INSTANCE_ID \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)
           
           echo "CLIENT_IP=${CLIENT_IP}" >> $GITHUB_ENV
-          echo "Found Client IP: ${CLIENT_IP}"
+          echo "INSTANCE_ID=${INSTANCE_ID}" >> $GITHUB_ENV
+          echo "Created EC2 instance with IP: ${CLIENT_IP}"
+      
+      - name: Wait for EC2 instance to be ready
+        run: |
+          echo "Waiting for instance to be ready..."
+          sleep 120  # Give the instance time to start up and install docker
       
       - name: Deploy client to EC2
         run: |
           echo "${{ secrets.EC2_PRIVATE_KEY }}" > ec2-key.pem
           chmod 600 ec2-key.pem
           
-          ssh -o StrictHostKeyChecking=no -i ec2-key.pem ec2-user@${{ env.CLIENT_IP }} << EOSSH
-          # Install Docker if not already installed
-          if ! command -v docker &> /dev/null; then
-            echo "Installing Docker..."
-            sudo yum update -y
-            sudo yum install -y docker
-            sudo systemctl start docker
-            sudo systemctl enable docker
-            sudo usermod -aG docker ec2-user
-            echo "Docker installed successfully"
-          else
-            echo "Docker is already installed"
-          fi
+          # Try SSH connection with retry
+          MAX_RETRIES=5
+          RETRY_COUNT=0
           
-          # Install AWS CLI if not already installed
-          if ! command -v aws &> /dev/null; then
-            echo "Installing AWS CLI..."
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            sudo ./aws/install
-            echo "AWS CLI installed successfully"
-          else
-            echo "AWS CLI is already installed"
-          fi
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "Attempting SSH connection (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)..."
+            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ec2-key.pem ec2-user@${{ env.CLIENT_IP }} echo "SSH connection successful"; then
+              break
+            fi
+            RETRY_COUNT=$((RETRY_COUNT+1))
+            if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+              echo "Failed to establish SSH connection after $MAX_RETRIES attempts"
+              exit 1
+            fi
+            echo "SSH connection failed, retrying in 30 seconds..."
+            sleep 30
+          done
+          
+          # Deploy the container
+          ssh -o StrictHostKeyChecking=no -i ec2-key.pem ec2-user@${{ env.CLIENT_IP }} << EOSSH
+          # Wait for Docker to be ready
+          echo "Waiting for Docker to be ready..."
+          while ! docker info > /dev/null 2>&1; do
+            sleep 10
+            echo "Waiting for Docker service..."
+          done
+          
+          # Configure AWS credentials
+          mkdir -p ~/.aws
+          cat > ~/.aws/credentials << EOF
+          [default]
+          aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region=us-east-1
+          EOF
           
           # Login to ECR
           echo "Logging in to ECR..."
@@ -260,13 +320,8 @@ jobs:
           echo "Pulling Docker image..."
           docker pull ${{ env.IMAGE_URI }}
           
-          # Stop any running client container
-          echo "Stopping any existing containers..."
-          docker stop ldap-client || true
-          docker rm ldap-client || true
-          
-          # Run the new container
-          echo "Starting new container..."
+          # Run the container
+          echo "Starting the container..."
           docker run -d --name ldap-client \
             -p 2222:2222 \
             --restart unless-stopped \
