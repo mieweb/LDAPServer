@@ -1,7 +1,3 @@
-provider "aws" {
-  region = var.aws_region
-}
-
 # Fetch the latest Amazon Linux AMI based on the owner and filter
 data "aws_ami" "amazon_linux_ami" {
   most_recent = true
