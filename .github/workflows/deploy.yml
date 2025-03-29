@@ -73,7 +73,7 @@ jobs:
           echo "Found IP: ${IP}"
           
       - name: Wait for EC2 to be ready
-        run: sleep 50 # Ensure system is ready
+        run: sleep 60 # Ensure system is ready
         
       - name: Create .env file locally
         run: |
