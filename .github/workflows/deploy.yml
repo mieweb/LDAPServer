@@ -1,4 +1,4 @@
-name: Deploy LDAP Node.js Server
+name: Deploy LDAP and Client
 
 on:
   pull_request:
@@ -31,12 +31,17 @@ jobs:
         run: |
           os_filter="al2023-ami-*-x86_64"
           owners="137112412989"
-
+          
           ami_id=$(aws ec2 describe-images \
             --filters "Name=name,Values=$os_filter" "Name=state,Values=available" \
             --owners $owners \
             --query "Images | sort_by(@, &CreationDate)[-1].ImageId" \
             --output text)
+
+          if [ -z "$ami_id" ]; then
+            echo "Failed to find valid AMI ID"
+            exit 1
+          fi
 
           echo "ami_id=$ami_id" >> "$GITHUB_ENV"
 
@@ -47,8 +52,8 @@ jobs:
         run: |
           cd terraform
           terraform apply -auto-approve -var="ami_id=${{ env.ami_id }}"
-
-      - name: Fetch EC2 Instances Public IPs
+        
+      - name: Fetch EC2 Instance Public IPs
         id: get-ec2-ips
         run: |
           LDAP_IP=$(aws ec2 describe-instances \
@@ -61,13 +66,39 @@ jobs:
             --query "Reservations[*].Instances[*].PublicIpAddress" \
             --output text)
 
+          if [[ -z "$LDAP_IP" || -z "$CLIENT_IP" ]]; then
+            echo "Error: Could not find running instances"
+            exit 1
+          fi
+          
           echo "LDAP_IP=$LDAP_IP" >> $GITHUB_ENV
           echo "CLIENT_IP=$CLIENT_IP" >> $GITHUB_ENV
-
-      - name: Wait for EC2 instances to be ready
+          
+      - name: Wait for EC2 to be ready
         run: sleep 50
 
-      - name: Output EC2 Instances Public IPs
+      - name: Deploy LDAP Server
         run: |
-          echo "LDAP Server running at http://${{ env.LDAP_IP }}"
-          echo "Client running at ${env.CLIENT_IP}:2222"
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" > ec2-key.pem
+          chmod 600 ec2-key.pem
+          
+          ssh -o StrictHostKeyChecking=no -i ec2-key.pem ec2-user@$LDAP_IP << 'EOSSH'
+          if [ -d "/home/ec2-user/LDAPServer" ]; then
+            rm -rf /home/ec2-user/LDAPServer
+          fi
+          git clone https://github.com/anishapant21/LDAPServer.git /home/ec2-user/LDAPServer
+          EOSSH
+          
+          scp -o StrictHostKeyChecking=no -i ec2-key.pem .env ec2-user@$LDAP_IP:/home/ec2-user/LDAPServer/src/.env
+          
+          ssh -o StrictHostKeyChecking=no -i ec2-key.pem ec2-user@$LDAP_IP << 'EOSSH'
+          cd /home/ec2-user/LDAPServer/src
+          npm install
+          pkill -f "node server.js" || true
+          nohup sudo node server.js > server.log 2>&1 &
+          EOSSH
+
+      - name: Output EC2 Instance Public IPs
+        run: |
+          echo "LDAP Server running at ldap://$LDAP_IP"
+          echo "Client running at $CLIENT_IP:2222"
