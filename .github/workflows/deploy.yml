@@ -30,18 +30,13 @@ jobs:
         id: fetch_ami
         run: |
           os_filter="al2023-ami-*-x86_64"
-          owners="137112412989" # Amazon Linux owner ID
-          
+          owners="137112412989"
+
           ami_id=$(aws ec2 describe-images \
             --filters "Name=name,Values=$os_filter" "Name=state,Values=available" \
             --owners $owners \
             --query "Images | sort_by(@, &CreationDate)[-1].ImageId" \
             --output text)
-
-          if [ -z "$ami_id" ]; then
-            echo "Failed to find valid AMI ID"
-            exit 1
-          fi
 
           echo "ami_id=$ami_id" >> "$GITHUB_ENV"
 
@@ -52,83 +47,27 @@ jobs:
         run: |
           cd terraform
           terraform apply -auto-approve -var="ami_id=${{ env.ami_id }}"
-        
-      - name: Fetch EC2 Instance Public IP
-        id: get-ec2-ip
+
+      - name: Fetch EC2 Instances Public IPs
+        id: get-ec2-ips
         run: |
-          # Get the most recent instance with the LDAPServer tag
-          IP=$(aws ec2 describe-instances \
+          LDAP_IP=$(aws ec2 describe-instances \
             --filters "Name=tag:Name,Values=LDAPServer" "Name=instance-state-name,Values=running" \
-            --query "Reservations[*].Instances[*].[LaunchTime,PublicIpAddress]" \
-            --output text | sort -r | head -n 1 | awk '{print $2}')
-          
-          # Check if we got a valid IP
-          if [[ -z "$IP" ]]; then
-            echo "Error: Could not find running instance with tag LDAPServer"
-            exit 1
-          fi
-          
-          # Set the environment variable correctly
-          echo "EC2_IP=${IP}" >> $GITHUB_ENV
-          echo "Found IP: ${IP}"
-          
-      - name: Wait for EC2 to be ready
-        run: sleep 50 # Ensure system is ready
-        
-      - name: Create .env file locally
+            --query "Reservations[*].Instances[*].PublicIpAddress" \
+            --output text)
+
+          CLIENT_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=LDAPClient" "Name=instance-state-name,Values=running" \
+            --query "Reservations[*].Instances[*].PublicIpAddress" \
+            --output text)
+
+          echo "LDAP_IP=$LDAP_IP" >> $GITHUB_ENV
+          echo "CLIENT_IP=$CLIENT_IP" >> $GITHUB_ENV
+
+      - name: Wait for EC2 instances to be ready
+        run: sleep 50
+
+      - name: Output EC2 Instances Public IPs
         run: |
-          cat > .env << EOF
-          DB_TYPE=${{ vars.DB_TYPE }}
-          MONGO_URI=${{ secrets.MONGO_URI }}
-          MONGO_DATABASE=${{ vars.MONGO_DATABASE }}
-          LDAP_BASE_DN=${{ vars.LDAP_BASE_DN }}
-          LDAP_PORT=${{ vars.LDAP_PORT }}
-          LDAP_CERT_CONTENT="${{ secrets.LDAP_CERT_CONTENT }}"
-          LDAP_KEY_CONTENT="${{ secrets.LDAP_KEY_CONTENT }}"
-          LDAP_URL=${{ secrets.LDAP_URL }}
-          EOF
-          
-          echo "Created .env file"
-          
-      - name: Deploy app to EC2
-        run: |
-          echo "${{ secrets.EC2_PRIVATE_KEY }}" > ec2-key.pem
-          chmod 600 ec2-key.pem
-          
-          # First, clone the repository and set up the directory
-          ssh -o StrictHostKeyChecking=no -i ec2-key.pem ec2-user@${{ env.EC2_IP }} << 'EOSSH'
-          # Clone the repository
-          if [ -d "/home/ec2-user/LDAPServer" ]; then
-            rm -rf /home/ec2-user/LDAPServer
-          fi
-          git clone https://github.com/anishapant21/LDAPServer.git /home/ec2-user/LDAPServer
-          EOSSH
-          
-          # Now copy the .env file to the server - place it in the src directory
-          scp -o StrictHostKeyChecking=no -i ec2-key.pem .env ec2-user@${{ env.EC2_IP }}:/home/ec2-user/LDAPServer/src/.env
-          
-          # Finally, install dependencies and start the server
-          ssh -o StrictHostKeyChecking=no -i ec2-key.pem ec2-user@${{ env.EC2_IP }} << 'EOSSH'
-          # Install dependencies and start the Node.js server
-          cd /home/ec2-user/LDAPServer/src
-          npm install
-          
-          # Kill any existing node process
-          pkill -f "node server.js" || true
-          
-          # Start the server (already in the src directory)
-          nohup sudo node server.js > server.log 2>&1 &
-          
-          # Verify the server has started
-          sleep 5
-          if pgrep -f "node server.js" > /dev/null; then
-            echo "Server started successfully"
-            ps aux | grep "node server.js" | grep -v grep
-          else
-            echo "Server failed to start"
-            tail -n 20 server.log 
-          fi
-          EOSSH
-          
-      - name: Output EC2 Instance Public IP
-        run: echo "LDAP Server running at http://${{ env.EC2_IP }}"
+          echo "LDAP Server running at http://${{ env.LDAP_IP }}"
+          echo "Client running at ${env.CLIENT_IP}:2222"
