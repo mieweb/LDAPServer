@@ -6,21 +6,21 @@ resource "aws_security_group" "ldap_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Change later to GitHub Actions IPs
+    cidr_blocks = ["0.0.0.0/0"]
   }
   
   ingress {
     from_port   = 636
     to_port     = 636
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Allow LDAP connections
+    cidr_blocks = ["0.0.0.0/0"]
   }
   
   ingress {
     from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Allow API access
+    cidr_blocks = ["0.0.0.0/0"]
   }
   
   egress {
@@ -32,7 +32,7 @@ resource "aws_security_group" "ldap_sg" {
 }
 
 resource "aws_instance" "ldap_server" {
-  ami             = var.ami_id  # Use the fetched AMI ID
+  ami             = var.ami_id
   instance_type   = var.instance_type
   key_name        = var.key_name
   security_groups = [aws_security_group.ldap_sg.name]
