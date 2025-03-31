@@ -9,6 +9,7 @@ const NotificationService = require("./services/notificationService");
 const { NOTIFICATION_ACTIONS } = require("./constants/constants");
 const { extractCredentials } = require("./utils/utils");
 const { createLdapEntry } = require("./utils/ldapUtils");
+const { setupGracefulShutdown } = require("./utils/shutdownUtils");
 
 const db = new DatabaseService(dbConfig);
 
@@ -22,7 +23,7 @@ async function authenticateWithLDAP(username, password) {
     try {
       const client = ldap.createClient({
         url: process.env.LDAP_URL,
-        timeout: 5000, 
+        timeout: 5000,
         connectTimeout: 5000,
       });
 
@@ -84,7 +85,7 @@ app.post("/update-app-id", async (req, res) => {
     await db.updateUserAppId(username, appId);
 
     // Get the updated user
-    const updatedUser = await db.findUserDetails(username);
+    const updatedUser = await db.findUserByUsername(username);
 
     // Return the updated user data
     return res
@@ -99,6 +100,10 @@ app.post("/update-app-id", async (req, res) => {
 // Main server function
 async function startLDAPServer() {
   try {
+    // Initialize database connection pool
+    await db.initialize();
+    console.log(`Database connection pool initialized (${dbConfig.type})`);
+
     const certContent = process.env.LDAP_CERT_CONTENT;
     const keyContent = process.env.LDAP_KEY_CONTENT;
 
@@ -120,7 +125,7 @@ async function startLDAPServer() {
 
       try {
         // Find user with appId
-        const user = await db.findUserWithAppId(username);
+        const user = await db.findUserByUsername(username);
 
         if (!user) {
           return next(new ldap.InvalidCredentialsError("User not found"));
@@ -181,7 +186,7 @@ async function startLDAPServer() {
     async function handleUserSearch(username, res) {
       console.log("[USER] Searching for:", username);
 
-      const user = await db.findUserDetails(username);
+      const user = await db.findUserByUsername(username);
 
       if (!user) {
         res.end();
@@ -275,6 +280,8 @@ async function startLDAPServer() {
       console.log("API Server listening on port 3000");
       console.log(`Using database type: ${dbConfig.type}`);
     });
+
+    setupGracefulShutdown({ db });
   } catch (error) {
     console.error("Failed to start LDAP server:", error);
     process.exit(1);
