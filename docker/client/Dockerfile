@@ -1,15 +1,9 @@
 # Use an official Debian base image
 FROM debian:latest
 
-# Reinitialize dpkg info database to avoid corruption
-RUN rm -rf /var/lib/dpkg/info/* && dpkg --configure -a 
-
-# Copy environment variables
-COPY ldap_env.sh /tmp/ldap_env.sh
-RUN chmod +x /tmp/ldap_env.sh && . /tmp/ldap_env.sh
-
-# Accept the CA certificate as a build argument
-ARG LDAP_CA_CERT
+# Copy environment file
+COPY .env /.env
+RUN chmod +x /.env
 
 # Install necessary packages
 RUN apt-get update && \
@@ -27,7 +21,8 @@ RUN apt-get update && \
     procps \
     traceroute \
     tcpdump \
-    openssl && \
+    openssl \
+    gettext && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -54,28 +49,34 @@ RUN echo "session required pam_mkhomedir.so skel=/etc/skel umask=0077" >> /etc/p
 # Set up directory to store certificates
 RUN mkdir -p /certificates
 
-# Configure LDAP client
-RUN . /tmp/ldap_env.sh && \ 
-    echo "BASE    $LDAP_BASE" > /etc/ldap/ldap.conf && \
-    echo "URI     $LDAP_URI" >> /etc/ldap/ldap.conf && \
-    echo "BINDDN  $LDAP_BASE" >> /etc/ldap/ldap.conf && \
-    echo "TLS_CACERT $LDAP_CERT" >> /etc/ldap/ldap.conf && \
-    echo "TLS_REQCERT allow" >> /etc/ldap/ldap.conf
+# Copy the SSSD config template
+COPY sssd.conf.template /etc/sssd/sssd.conf.template
 
-# Copy the CA certificate content from the environment variable
-RUN echo "$LDAP_CA_CERT" > /certificates/ca-cert.pem && \
-    chmod 644 /certificates/ca-cert.pem
-
-# Configure SSSD
-COPY sssd.conf /etc/sssd/sssd.conf
-RUN chmod 600 /etc/sssd/sssd.conf
+# Create a startup script that will be used at container start
+RUN echo '#!/bin/bash' > /start.sh && \
+    echo 'set -a' >> /start.sh && \
+    echo '. /.env' >> /start.sh && \
+    echo 'set +a' >> /start.sh && \
+    echo 'echo "BASE $LDAP_BASE" > /etc/ldap/ldap.conf' >> /start.sh && \
+    echo 'echo "URI $LDAP_URI" >> /etc/ldap/ldap.conf' >> /start.sh && \
+    echo 'echo "BINDDN $LDAP_BASE" >> /etc/ldap/ldap.conf' >> /start.sh && \
+    echo 'echo "TLS_CACERT $LDAP_CERT" >> /etc/ldap/ldap.conf' >> /start.sh && \
+    echo 'echo "TLS_REQCERT allow" >> /etc/ldap/ldap.conf' >> /start.sh && \
+    echo 'echo "$LDAP_CA_CERT" > /certificates/ca-cert.pem' >> /start.sh && \
+    echo 'chmod 644 /certificates/ca-cert.pem' >> /start.sh && \
+    echo 'cat /etc/sssd/sssd.conf.template | sed "s|\${LDAP_URI}|$LDAP_URI|g" | sed "s|\${LDAP_BASE}|$LDAP_BASE|g" > /etc/sssd/sssd.conf' >> /start.sh && \
+    echo 'chmod 600 /etc/sssd/sssd.conf' >> /start.sh && \
+    echo 'service ssh start' >> /start.sh && \
+    echo '/usr/sbin/sssd -i -d 9' >> /start.sh && \
+    echo 'tail -f /dev/null' >> /start.sh && \
+    chmod +x /start.sh
 
 # Set proper permissions for LDAP directories
 RUN chown -R openldap:openldap /etc/ldap/slapd.d && \
     chmod -R 750 /etc/ldap/slapd.d
 
 # Expose port for SSH
-EXPOSE $SSH_PORT
+EXPOSE 2222
 
-# Start services
-CMD service ssh start && /usr/sbin/sssd -i -d 9 && tail -f /dev/null
+# Start services using the embedded startup script
+CMD ["/start.sh"]

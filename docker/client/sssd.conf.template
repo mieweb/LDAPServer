@@ -7,10 +7,9 @@ services = nss, pam
 debug_level = 9
 id_provider = ldap
 auth_provider = ldap
-# ldap_uri = ldaps://host.docker.internal:636
-ldap_uri = ldaps://54.159.200.186:636
+ldap_uri = ${LDAP_URI}
 ldap_enforce_password_policy = false
-ldap_search_base = dc=mieweb,dc=com
+ldap_search_base = ${LDAP_BASE}
 
 ldap_connection_expire_timeout = 30
 ldap_connection_expire_offset = 0
@@ -40,15 +39,3 @@ pam_verbosity = 3
 pam_id_timeout = 30
 pam_pwd_response_prompt = Password: 
 pam_pwd_response_timeout = 30
-
-
-
-
-# ldap_group_object_class = groupOfNames
-# ldap_group_object_class = posixGroup
-# ldap_group_member = memberUid
-# ldap_group_name = cn
-# ldap_group_search_base = ou=groups,dc=mieweb,dc=com
-# ldap_group_gid_number = gidNumber
-
-
