@@ -24,7 +24,7 @@ async function connect(config) {
   return createPool(config);
 }
 
-// Close the pool (use this when shutting down the app)
+// Close the pool (when shutting down the app)
 async function close() {
   if (pool) {
     await pool.end();
@@ -33,7 +33,6 @@ async function close() {
   }
 }
 
-// User operations - now handling connection internally
 async function findUserByUsername(username) {
   const connection = await pool.getConnection();
   try {
@@ -59,7 +58,6 @@ async function updateUserAppId(username, appId) {
   }
 }
 
-// Group operations - now handling connection internally
 async function findGroupsByMemberUid(username) {
   const connection = await pool.getConnection();
   try {
@@ -69,7 +67,6 @@ async function findGroupsByMemberUid(username) {
       "WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))",
       [username]
     );
-    // Handle JSON data from MySQL to ensure it's in the right format
     return rows.map(row => {
       if (row.member_uids && typeof row.member_uids === 'string') {
         try {
@@ -81,7 +78,7 @@ async function findGroupsByMemberUid(username) {
       return row;
     });
   } finally {
-    connection.release(); // Release connection back to pool
+    connection.release();
   }
 }
 

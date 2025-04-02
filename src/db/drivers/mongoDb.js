@@ -11,7 +11,7 @@ async function connect(config) {
     client = new MongoClient(config.uri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      maxPoolSize: 10, // Limit the number of connections in the pool
+      maxPoolSize: 10,
     });
     await client.connect();
     db = client.db(config.database);
@@ -32,7 +32,6 @@ async function close() {
   }
 }
 
-// User operations - no need to pass connection anymore
 async function findUserByUsername(username) {
   console.log("looking for user", username);
   return await db.collection("users").findOne({ username });
@@ -45,7 +44,6 @@ async function updateUserAppId(username, appId) {
   );
 }
 
-// Group operations - no need to pass connection anymore
 async function findGroupsByMemberUid(username) {
   return await db.collection("groups").find({ member_uids: username }).toArray();
 }
