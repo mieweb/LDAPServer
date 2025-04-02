@@ -104,10 +104,6 @@ docker exec -it ldap_client /bin/bash
 Query the LDAP server using the `ldapsearch` command:
 
 ```bash
-ldapsearch -x -H ldap://host.docker.internal:389 -b "dc=mieweb,dc=com" "(uid=ann)"
-```
-
-```bash
 ldapsearch -x -H ldaps://host.docker.internal:636 -b "dc=mieweb,dc=com" "(uid=ann)"
 ```
 
@@ -209,3 +205,8 @@ sequenceDiagram
     NotifSvc-->>CustomLDAP: Send approval response
     CustomLDAP-->>Client: Allow SSH login
 ```
+
+## Demo Video
+
+Watch the demo video:
+[LDAP Server Demo](https://youtu.be/qsE1BWpmsME?si=MRnwFHu6LCd-2fhk)
