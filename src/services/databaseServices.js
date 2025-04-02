@@ -1,13 +1,13 @@
 // services/databaseService.js
 const mysqlDriver = require('../db/drivers/mysql');
-const mongodbDriver = require('../db/drivers/mongoDb')
+const mongodbDriver = require('../db/drivers/mongoDb');
 
 class DatabaseService {
   constructor(dbConfig) {
     this.dbConfig = dbConfig;
     this.dbType = dbConfig.type;
-    this.connection = null;
     this.driver = this._getDriver();
+    this.initialized = false;
   }
 
   _getDriver() {
@@ -21,64 +21,37 @@ class DatabaseService {
     }
   }
 
-  async getConnection() {
-    if (!this.connection) {
-      this.connection = await this.driver.connect(this.dbConfig);
+  // Initialize the database connection pool
+  async initialize() {
+    if (!this.initialized) {
+      await this.driver.connect(this.dbConfig);
+      this.initialized = true;
     }
-    return this.connection;
   }
 
-  async closeConnection() {
-    if (this.connection) {
-      await this.driver.close(this.connection);
-      this.connection = null;
-    }
-  }
-  
-  // Helper method to execute a function with a connection
-  async _withConnection(callback) {
-    const connection = await this.getConnection();
-    try {
-      return await callback(connection);
-    } finally {
-      // For MySQL, close after each operation
-      // For MongoDB, keep the connection open
-      if (this.dbType === 'mysql') {
-        await this.closeConnection();
-      }
+  // Shutdown the database connection pool
+  async shutdown() {
+    if (this.initialized) {
+      await this.driver.close();
+      this.initialized = false;
     }
   }
 
   // User operations
   async findUserByUsername(username) {
-    return this._withConnection(conn => 
-      this.driver.findUserByUsername(conn, username)
-    );
-  }
-
-  async findUserWithAppId(username) {
-    return this._withConnection(conn => 
-      this.driver.findUserWithAppId(conn, username)
-    );
-  }
-
-  async findUserDetails(username) {
-    return this._withConnection(conn => 
-      this.driver.findUserDetails(conn, username)
-    );
+    await this.initialize();
+    return this.driver.findUserByUsername(username);
   }
 
   async updateUserAppId(username, appId) {
-    return this._withConnection(conn => 
-      this.driver.updateUserAppId(conn, username, appId)
-    );
+    await this.initialize();
+    return this.driver.updateUserAppId(username, appId);
   }
 
   // Group operations
   async findGroupsByMemberUid(username) {
-    return this._withConnection(conn => 
-      this.driver.findGroupsByMemberUid(conn, username)
-    );
+    await this.initialize();
+    return this.driver.findGroupsByMemberUid(username);
   }
 }
 
