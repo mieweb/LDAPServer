@@ -1,6 +1,5 @@
 require("dotenv").config();
 const ldap = require("ldapjs");
-const express = require("express");
 
 const dbConfig = require("./config/dbconfig");
 const DatabaseService = require("./services/databaseServices");
@@ -12,10 +11,6 @@ const { createLdapEntry } = require("./utils/ldapUtils");
 const { setupGracefulShutdown } = require("./utils/shutdownUtils");
 
 const db = new DatabaseService(dbConfig);
-
-// Initialize Express app
-const app = express();
-app.use(express.json());
 
 async function authenticateWithLDAP(username, password) {
   console.log("Authenticating with LDAP:", username, password);
@@ -64,40 +59,6 @@ async function authenticateWithLDAP(username, password) {
   });
 }
 
-app.post("/update-app-id", async (req, res) => {
-  const { username, appId } = req.body;
-
-  if (!username || !appId) {
-    return res.status(400).json({ message: "Username and appId are required" });
-  }
-
-  console.log("Updating appId for user:", username, appId);
-
-  try {
-    // Check if the user exists
-    const user = await db.findUserByUsername(username);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Update the appId
-    await db.updateUserAppId(username, appId);
-
-    // Get the updated user
-    const updatedUser = await db.findUserByUsername(username);
-
-    // Return the updated user data
-    return res
-      .status(200)
-      .json({ message: "AppId linked successfully", user: updatedUser });
-  } catch (error) {
-    console.error("Error linking appId:", error);
-    return res.status(500).json({ message: "Error linking appId" });
-  }
-});
-
-// Main server function
 async function startLDAPServer() {
   try {
     // Initialize database connection pool
@@ -124,7 +85,6 @@ async function startLDAPServer() {
       console.log("Authenticating user:", username);
 
       try {
-        // Find user with appId
         const user = await db.findUserByUsername(username);
 
         if (!user) {
@@ -143,42 +103,32 @@ async function startLDAPServer() {
         }
 
         console.log("User authenticated:", username);
-        // Handle notification if user has appId
-        if (user.appId) {
-          try {
-            console.log("Sending notification to appId:", user.appId);
-            const response =
-              await NotificationService.sendAuthenticationNotification(
-                user.appId
-              );
+        try {
+          console.log("Sending notification to User", username)
+          const response = await NotificationService.sendAuthenticationNotification(username);
 
-            if (response.action === NOTIFICATION_ACTIONS.APPROVE) {
-              console.log("Notification approved for user:", username);
-              res.end();
-            } else if (response.action === NOTIFICATION_ACTIONS.TIMEOUT) {
-              console.log("Notification timeout for user:", username);
-              return next(
-                new ldap.UnavailableError("Authentication timeout (30 seconds)")
-              );
-            } else {
-              console.log("Notification rejected for user:", username);
-              return next(
-                new ldap.InvalidCredentialsError(
-                  "Authentication rejected by user"
-                )
-              );
-            }
-          } catch (notificationError) {
-            console.error("Notification error:", notificationError);
-            return next(new ldap.OperationsError("Notification failed"));
+          if (response.action === NOTIFICATION_ACTIONS.APPROVE) {
+            console.log("Notification approved for user:", username);
+            res.end();
+          } else if (response.action === NOTIFICATION_ACTIONS.TIMEOUT) {
+            console.log("Notification timeout for user:", username);
+            return next(
+              new ldap.UnavailableError("Authentication timeout (30 seconds)")
+            );
+          } else {
+            console.log("Notification rejected for user:", username);
+            return next(
+              new ldap.InvalidCredentialsError(
+                "Authentication rejected by user"
+              )
+            );
           }
-        } else {
-          // If authentication succeeded and no appId for notification
-          console.log("Authentication successful (no notification needed)");
-          res.end();
+        } catch (notificationError) {
+          console.error("Notification error:", notificationError);
+          return next(new ldap.OperationsError("Notification failed"));
         }
       } catch (error) {
-        console.error("Database error:", error);
+        console.error("Authentication error:", error);
         return next(new ldap.OperationsError("Authentication failed"));
       }
     });
@@ -187,14 +137,8 @@ async function startLDAPServer() {
       console.log("[USER] Searching for:", username);
 
       const user = await db.findUserByUsername(username);
-
-      if (!user) {
-        res.end();
-        return;
-      }
-
+      if (!user) return res.end();
       const entry = createLdapEntry(user);
-
       res.send(entry);
       res.end();
     }
@@ -274,11 +218,6 @@ async function startLDAPServer() {
       console.log(
         `Secure LDAP Authentication Server listening on port ${PORT}`
       );
-    });
-
-    app.listen(3000, "0.0.0.0", () => {
-      console.log("API Server listening on port 3000");
-      console.log(`Using database type: ${dbConfig.type}`);
     });
 
     setupGracefulShutdown({ db });

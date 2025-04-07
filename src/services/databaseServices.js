@@ -43,11 +43,6 @@ class DatabaseService {
     return this.driver.findUserByUsername(username);
   }
 
-  async updateUserAppId(username, appId) {
-    await this.initialize();
-    return this.driver.updateUserAppId(username, appId);
-  }
-
   // Group operations
   async findGroupsByMemberUid(username) {
     await this.initialize();

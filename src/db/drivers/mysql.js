@@ -46,18 +46,6 @@ async function findUserByUsername(username) {
   }
 }
 
-async function updateUserAppId(username, appId) {
-  const connection = await pool.getConnection();
-  try {
-    await connection.execute(
-      "UPDATE users SET appId = ? WHERE username = ?",
-      [appId, username]
-    );
-  } finally {
-    connection.release(); // Release connection back to pool
-  }
-}
-
 async function findGroupsByMemberUid(username) {
   const connection = await pool.getConnection();
   try {
@@ -86,6 +74,5 @@ module.exports = {
   connect,
   close,
   findUserByUsername,
-  updateUserAppId,
   findGroupsByMemberUid
 };
