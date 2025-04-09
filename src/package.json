@@ -12,6 +12,7 @@
         "express": "^4.21.2",
         "ldapjs": "git+https://github.com/anishapant21/node-ldapjs.git#fixes/attributes",
         "mongodb": "^6.14.2",
-        "mysql2": "^3.2.0"
+        "mysql2": "^3.2.0",
+        "winston": "^3.17.0"
     }
 }
