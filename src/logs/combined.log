@@ -1,0 +1,13 @@
+{"level":"info","message":"Database connection pool initialized (mongodb)"}
+{"level":"info","message":"Secure LDAP Authentication Server listening on port 636"}
+{"clientIP":"127.0.0.1","err":{"code":"ECONNREFUSED"},"level":"error","message":"LDAP connection error:"}
+{"clientIP":"127.0.0.1","level":"error","message":"InvalidCredentials","username":"ann"}
+{"clientIP":"127.0.0.1","err":{"code":"ECONNREFUSED"},"level":"error","message":"LDAP client error:"}
+{"level":"info","message":"Database connection pool initialized (mongodb)"}
+{"level":"info","message":"Secure LDAP Authentication Server listening on port 636"}
+{"clientIP":"127.0.0.1","err":{"code":"ECONNREFUSED"},"level":"error","message":"LDAP connection error:"}
+{"clientIP":"127.0.0.1","level":"error","message":"InvalidCredentials","username":"ann"}
+{"clientIP":"127.0.0.1","err":{"code":"ECONNREFUSED"},"level":"error","message":"LDAP client error:"}
+{"level":"info","message":"Database connection pool initialized (mongodb)"}
+{"level":"info","message":"Secure LDAP Authentication Server listening on port 636"}
+{"clientIP":"127.0.0.1","level":"error","message":"InvalidCredentials","username":"ann"}

@@ -1,0 +1,7 @@
+{"clientIP":"127.0.0.1","err":{"code":"ECONNREFUSED"},"level":"error","message":"LDAP connection error:"}
+{"clientIP":"127.0.0.1","level":"error","message":"InvalidCredentials","username":"ann"}
+{"clientIP":"127.0.0.1","err":{"code":"ECONNREFUSED"},"level":"error","message":"LDAP client error:"}
+{"clientIP":"127.0.0.1","err":{"code":"ECONNREFUSED"},"level":"error","message":"LDAP connection error:"}
+{"clientIP":"127.0.0.1","level":"error","message":"InvalidCredentials","username":"ann"}
+{"clientIP":"127.0.0.1","err":{"code":"ECONNREFUSED"},"level":"error","message":"LDAP client error:"}
+{"clientIP":"127.0.0.1","level":"error","message":"InvalidCredentials","username":"ann"}
