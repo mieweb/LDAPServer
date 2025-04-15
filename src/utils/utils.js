@@ -6,4 +6,12 @@ function extractCredentials(req) {
   return { username, password };
 }
 
-module.exports = { extractCredentials };
+const getUsernameFromFilter = (filterStr) => {
+  // Handles: (uid=*), (&(uid=ann)(...)), (|(uid=ann)(...))
+  const uidPattern = /\((?:&|\||!)?(?:.*?\(uid=([^)&]+)\)|uid=([^)&]+))/i;
+  const match = filterStr.match(uidPattern);
+  return match?.[1] || match?.[2] || null;
+};
+
+module.exports = { extractCredentials, getUsernameFromFilter };
+

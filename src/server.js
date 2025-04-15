@@ -1,17 +1,15 @@
-const dotenv = require("dotenv").config();
 const ldap = require("ldapjs");
-const winston = require("winston");
 
 const dbConfig = require("./config/dbconfig");
 const DatabaseService = require("./services/databaseServices");
 const NotificationService = require("./services/notificationService");
-const { NOTIFICATION_ACTIONS } = require("./constants/constants");
-const { extractCredentials } = require("./utils/utils");
-const { createLdapEntry } = require("./utils/ldapUtils");
-const { setupGracefulShutdown } = require("./utils/shutdownUtils");
-
-// Logger setup
 const logger = require("./utils/logger");
+
+const { NOTIFICATION_ACTIONS } = require("./constants/constants");
+const { handleUserSearch } = require("./handlers/userSearchHandler");
+const { handleGroupSearch } = require("./handlers/groupSearchHandler");
+const { extractCredentials, getUsernameFromFilter } = require("./utils/utils");
+const { setupGracefulShutdown } = require("./utils/shutdownUtils");
 
 const db = new DatabaseService(dbConfig);
 
@@ -72,58 +70,6 @@ async function authenticateWithLDAP(username, password, req) {
     }
   });
 }
-
-async function handleUserSearch(username, res) {
-  logger.debug("[USER SEARCH] Searching for:", { username });
-
-  const user = await db.findUserByUsername(username);
-  if (!user) return res.end();
-
-  const entry = createLdapEntry(user);
-  res.send(entry);
-  res.end();
-}
-
-const handleGroupSearch = async (filterStr, res) => {
-  const memberUidMatch = filterStr.match(/memberUid=([^)&]+)/i);
-
-  try {
-    if (memberUidMatch) {
-      // Search groups by memberUid
-      const username = memberUidMatch[1];
-
-      // Using driver to find groups
-      const groups = await db.findGroupsByMemberUid(username);
-
-      logger.debug("[GROUP SEARCH] Found groups", { groupsCount: groups.length });
-
-      groups.forEach((group) => {
-        logger.debug("[GROUP] Sending group", { group });
-        res.send({
-          dn: `cn=${group.name},ou=groups,dc=mieweb,dc=com`,
-          attributes: {
-            objectClass: ["posixGroup"],
-            cn: group.name,
-            gidNumber: group.gid.toString(),
-            memberUid: group.member_uids,
-          },
-        });
-      });
-    }
-
-    res.end();
-  } catch (error) {
-    logger.error("[GROUP SEARCH] Error:", { error });
-    res.end();
-  }
-};
-
-const getUsernameFromFilter = (filterStr) => {
-  // Handles: (uid=*), (&(uid=ann)(...)), (|(uid=ann)(...))
-  const uidPattern = /\((?:&|\||!)?(?:.*?\(uid=([^)&]+)\)|uid=([^)&]+))/i;
-  const match = filterStr.match(uidPattern);
-  return match?.[1] || match?.[2] || null;
-};
 
 async function startLDAPServer() {
   try {
@@ -189,9 +135,9 @@ async function startLDAPServer() {
         const username = getUsernameFromFilter(filterStr);
 
         if (username) {
-          await handleUserSearch(username, res);
+          await handleUserSearch(username, res, db);
         } else if (/(objectClass=posixGroup)|(memberUid=)/i.test(filterStr)) {
-          await handleGroupSearch(filterStr, res);
+          await handleGroupSearch(filterStr, res, db);
         } else {
           res.end();
         }
@@ -213,4 +159,10 @@ async function startLDAPServer() {
   }
 }
 
-startLDAPServer();
+if (require.main === module) {
+  startLDAPServer();
+}
+
+module.exports = {
+  authenticateWithLDAP,
+};
