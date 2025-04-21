@@ -165,4 +165,6 @@ if (require.main === module) {
 
 module.exports = {
   authenticateWithLDAP,
+  startLDAPServer,
+  db
 };
