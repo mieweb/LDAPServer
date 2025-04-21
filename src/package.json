@@ -4,7 +4,9 @@
     "main": "src/server.js",
     "scripts": {
         "start": "node server.js",
-        "test": "jest"
+        "test": "jest",
+        "test:coverage": "jest --coverage"
+    
     },
     "dependencies": {
         "@ldapjs/controls": "git+https://github.com/anishapant21/controls.git#fixes/password-policy-crash",
