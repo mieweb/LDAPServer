@@ -13,7 +13,6 @@ function createLdapEntry(user) {
       homeDirectory: user.home_directory,
       loginShell: "/bin/bash",
       shadowLastChange: "0",
-      userpassword: `{CRYPT}${user.password}`,
     },
   };
 
