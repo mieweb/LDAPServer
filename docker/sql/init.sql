@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS users (
   uid_number INT UNIQUE,
   gid_number INT,
   home_directory VARCHAR(200),
-  appId VARCHAR(100) NULL UNIQUE,
   FOREIGN KEY (gid_number) REFERENCES `groups`(gid)
 );
 

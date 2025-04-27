@@ -37,13 +37,6 @@ async function findUserByUsername(username) {
   return await db.collection("users").findOne({ username });
 }
 
-async function updateUserAppId(username, appId) {
-  await db.collection("users").updateOne(
-    { username },
-    { $set: { appId } }
-  );
-}
-
 async function findGroupsByMemberUid(username) {
   return await db.collection("groups").find({ member_uids: username }).toArray();
 }
@@ -52,6 +45,5 @@ module.exports = {
   connect,
   close,
   findUserByUsername,
-  updateUserAppId,
   findGroupsByMemberUid,
 };
