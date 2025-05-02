@@ -21,6 +21,7 @@ INSERT INTO `groups` (gid, name, description, member_uids) VALUES
 -- 3. Create users table with foreign key (password removed)
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  password VARCHAR(255) NOT NULL,
   username VARCHAR(50) UNIQUE NOT NULL,
   full_name VARCHAR(100),
   email VARCHAR(100),
@@ -31,12 +32,12 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- 4. Now insert users (gid_number matches existing groups)
-INSERT INTO users (username, full_name, email, uid_number, gid_number, home_directory) VALUES
-  ('ann', 'Ann', 'ann@mieweb.com', 1001, 1001, '/home/ann'),
-  ('abrol', 'Abrol', 'abrol@mieweb.com', 1002, 1002, '/home/abrol'),
-  ('evan', 'Evan Pant', 'evan@mieweb.com', 1003, 1003, '/home/evan'),
-  ('hrits', 'Hrits Pant', 'hrits@mieweb.com', 1004, 1004, '/home/hrits'),
-  ('chris', 'Chris Evans', 'chris@mieweb.com', 1005, 1005, '/home/chris');
+INSERT INTO users (username, password, full_name, email, uid_number, gid_number, home_directory) VALUES
+  ('ann', 'maya', 'Ann', 'ann@mieweb.com', 1001, 1001, '/home/ann'),
+  ('abrol','abrol', 'Abrol', 'abrol@mieweb.com', 1002, 1002, '/home/abrol'),
+  ('evan', 'evan', 'Evan Pant', 'evan@mieweb.com', 1003, 1003, '/home/evan'),
+  ('hrits', 'maya','Hrits Pant', 'hrits@mieweb.com', 1004, 1004, '/home/hrits'),
+  ('chris', 'chris','Chris Evans', 'chris@mieweb.com', 1005, 1005, '/home/chris');
 
 -- 5. Add secondary groups
 INSERT INTO `groups` (gid, name, description, member_uids) VALUES
