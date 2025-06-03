@@ -3,7 +3,7 @@
     "version": "1.0.0",
     "main": "src/server.js",
     "scripts": {
-        "start": "node server.js"
+        "start": "node index.js"
     },
     "dependencies": {
         "@ldapjs/controls": "git+https://github.com/anishapant21/controls.git#fixes/password-policy-crash",
