@@ -40,7 +40,8 @@ sequenceDiagram
 Ensure you have the following installed:
 
 - [Docker](https://www.docker.com/): For setting up the LDAP server and MySQL in containers.
-- [Node.js](https://nodejs.org/): JavaScript runtime for running the Node.js server.
+- [Node.js](https://nodejs.org/): JavaScript runtime for running the Node.js server. - v18.x or later
+
 
 ### Installation
 
