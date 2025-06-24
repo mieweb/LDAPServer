@@ -21,15 +21,17 @@ jobs:
           node-version: 18
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          cd src
+          npm install
 
       - name: Prepare build directory
         run: |
           mkdir build
-          cp -r * build/
+          cp -r src/* build/
 
       - name: Copy .env.example to build folder
-        run: cp .env.example build/
+        run: cp src/.env.example build/
 
       - name: Create tarball
         run: |
