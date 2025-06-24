@@ -1,0 +1,43 @@
+name: Build and Upload LDAP Server on Release
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: write
+
+jobs:
+  build-server:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Prepare build directory
+        run: |
+          mkdir build
+          cp -r * build/
+
+      - name: Copy .env.example to build folder
+        run: cp .env.example build/
+
+      - name: Create tarball
+        run: |
+          tar -czf ldap-server.tar.gz -C build .
+
+      - name: Upload tarball to GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ldap-server.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
