@@ -44,6 +44,8 @@ const handleUserSearch = async (username, res, db) => {
             return res.end();
         }
 
+        logger.info("[USER SEARCH] User found", { username, userId: user.id }); 
+
         const entry = createLdapEntry(user);
         res.send(entry);
     } catch (error) {
