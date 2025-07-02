@@ -8,7 +8,7 @@ function createLdapEntry(user) {
     attributes: {
       objectClass: ["top", "posixAccount", "inetOrgPerson", "shadowAccount"],
       uid: user.username,
-       uidNumber,
+      uidNumber,
       gidNumber,
       cn: user.full_name || user.username,
       gecos: user.full_name || user.username,
@@ -25,3 +25,4 @@ function createLdapEntry(user) {
 }
 
 module.exports = { createLdapEntry };
+

@@ -8,6 +8,7 @@ const DatabaseService = require('./services/databaseServices');
 const AuthService = require('./services/authService');
 const DBBackend = require('./authProviders/dbBackend');
 const LDAPBackend = require('./authProviders/ldapBackend');
+const resolveLDAPHosts = require('./utils/resolveLdapHosts');
 const NotificationService = require('./services/notificationService');
 const { AUTHENTICATION_BACKEND } = require('./constants/constants');
 const { handleUserSearch, handleGroupSearch } = require('./handlers/searchHandlers');
@@ -20,9 +21,14 @@ const db = new DatabaseService(dbConfig);
 async function startServer() {
   await db.initialize();
 
+  let ldapServerPool = [];
+  if (process.env.AUTH_BACKEND === AUTHENTICATION_BACKEND.LDAP) {
+    ldapServerPool = await resolveLDAPHosts();
+  }
+
   const backends = {
     [AUTHENTICATION_BACKEND.DATABASE]: new DBBackend(db),
-    [AUTHENTICATION_BACKEND.LDAP]: new LDAPBackend(),
+    [AUTHENTICATION_BACKEND.LDAP]: new LDAPBackend(ldapServerPool),
   };
 
   const selectedBackend = backends[process.env.AUTH_BACKEND] || backends[AUTHENTICATION_BACKEND.LDAP];
@@ -44,6 +50,7 @@ async function startServer() {
       // Authenticate the user using the selected backend
       const isAuthenticated = await authService.authenticate(username, password, req);
 
+      logger.debug(`User ${username} authenticated: ${isAuthenticated}`);
       if (!isAuthenticated) {
         return next(new ldap.InvalidCredentialsError('Invalid credentials')); // Reject if authentication fails
       }
