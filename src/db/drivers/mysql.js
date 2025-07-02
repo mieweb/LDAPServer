@@ -70,9 +70,15 @@ async function findGroupsByMemberUid(username) {
   }
 }
 
+async function getAllUsers() {
+    const [rows] = await this.pool.query('SELECT * FROM users');
+    return rows;
+}
+
 module.exports = {
   connect,
   close,
   findUserByUsername,
-  findGroupsByMemberUid
+  findGroupsByMemberUid,
+  getAllUsers
 };

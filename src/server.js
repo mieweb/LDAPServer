@@ -11,6 +11,7 @@ const LDAPBackend = require('./authProviders/ldapBackend');
 const NotificationService = require('./services/notificationService');
 const { AUTHENTICATION_BACKEND } = require('./constants/constants');
 const { handleUserSearch, handleGroupSearch } = require('./handlers/searchHandlers');
+const { createLdapEntry } = require('./utils/ldapUtils');
 
 
 // Initialize the database connection
@@ -76,10 +77,17 @@ async function startServer() {
       await handleUserSearch(username, res, db);
     } else if (/(objectClass=posixGroup)|(memberUid=)/i.test(filterStr)) {
       await handleGroupSearch(filterStr, res, db);
-    } else {
+    } else if (/objectClass=/i.test(filterStr)) {
+      const users = await db.getAllUsers();
+      for (const user of users) {
+        const entry = createLdapEntry(user);
+        res.send(entry);
+      }
       res.end();
     }
+
   });
+
 
   // Start the server and listen on port 636 (LDAP)
   const PORT = 636;
