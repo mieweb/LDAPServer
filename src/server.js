@@ -68,16 +68,16 @@ async function startServer() {
   });
 
   // Handle LDAP SEARCH requests (user/group lookup)
-  server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
-    const filterStr = req.filter.toString();
-    logger.debug("LDAP Search Request:", { filterStr });
+server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
+  const filterStr = req.filter.toString();
+  logger.debug("LDAP Search Request:", { filterStr });
 
-    const username = getUsernameFromFilter(filterStr);
+  const username = getUsernameFromFilter(filterStr);
+
+  if (username || /(objectClass=posixAccount)|(objectClass=inetOrgPerson)/i.test(filterStr)) {
     if (username) {
       await handleUserSearch(username, res, db);
-    } else if (/(objectClass=posixGroup)|(memberUid=)/i.test(filterStr)) {
-      await handleGroupSearch(filterStr, res, db);
-    } else if (/objectClass=/i.test(filterStr)) {
+    } else {
       const users = await db.getAllUsers();
       for (const user of users) {
         const entry = createLdapEntry(user);
@@ -85,8 +85,14 @@ async function startServer() {
       }
       res.end();
     }
+  } else if (/(objectClass=posixGroup)|(memberUid=)/i.test(filterStr)) {
+    await handleGroupSearch(filterStr, res, db);
+  } else {
+    logger.debug("LDAP Search Request: no match, ending");
+    res.end();
+  }
+});
 
-  });
 
 
   // Start the server and listen on port 636 (LDAP)
