@@ -41,9 +41,14 @@ async function findGroupsByMemberUid(username) {
   return await db.collection("groups").find({ member_uids: username }).toArray();
 }
 
+async function getAllUsers() {
+  return await db.collection('users').find({}).toArray();
+}
+
 module.exports = {
   connect,
   close,
   findUserByUsername,
   findGroupsByMemberUid,
+  getAllUsers
 };

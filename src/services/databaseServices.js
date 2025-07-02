@@ -48,6 +48,11 @@ class DatabaseService {
     await this.initialize();
     return this.driver.findGroupsByMemberUid(username);
   }
+
+  async getAllUsers() {
+  await this.initialize();
+  return this.driver.getAllUsers();
+}
 }
 
 module.exports = DatabaseService;
