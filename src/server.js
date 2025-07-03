@@ -1,7 +1,7 @@
 const ldap = require('ldapjs');
 const dotenv = require('dotenv').config();
 const logger = require('./utils/logger');
-const { extractCredentials, getUsernameFromFilter } = require('./utils/utils');
+const { extractCredentials, getUsernameFromFilter, isAllUsersRequest } = require('./utils/utils');
 const { setupGracefulShutdown } = require('./utils/shutdownUtils');
 const dbConfig = require('./config/dbConfig');
 const DatabaseService = require('./services/databaseServices');
@@ -71,39 +71,103 @@ async function startServer() {
   });
 
   // Handle LDAP SEARCH requests (user/group lookup)
-  server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
-    const filterStr = req.filter.toString();
-    const bindDN = req.connection.ldap.bindDN;
+server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
+  const filterStr = req.filter.toString();
+  const bindDN = req.connection.ldap.bindDN;
+  
+  // DETAILED DEBUGGING
+  logger.debug("\n🔍 =========================");
+  logger.debug("🔍 LDAP SEARCH REQUEST:");
+  logger.debug("🔍 Filter:", filterStr);
+  logger.debug("🔍 Filter Length:", filterStr.length);
+  logger.debug("🔍 Bind DN:", bindDN ? bindDN.toString() : 'anonymous');
+  logger.debug("🔍 Base Object:", req.baseObject.toString());
+  logger.debug("🔍 Scope:", req.scope);
+  logger.debug("🔍 Attributes:", req.attributes);
+  logger.debug("🔍 =========================\n");
+  
+  const username = getUsernameFromFilter(filterStr);
+  
+  // Handle specific user searches (only when we have a real username, not wildcard)
+  if (username) {
+    logger.debug(`📤 RETURNING SPECIFIC USER: ${username}`);
+    await handleUserSearch(username, res, db);
+    return;
+  }
+  
+  // Handle requests for ALL users (empty filter, wildcard, or user objectClass)
+  if (isAllUsersRequest(filterStr, req.attributes)) {
+    logger.debug("📤 RETURNING ALL USERS - detected user sync request:", filterStr);
     
-    logger.debug("LDAP Search Request:", { 
-      filterStr, 
-      bindDN: bindDN ? bindDN.toString() : 'anonymous',
-      scope: req.scope,
-      baseObject: req.baseObject.toString()
-    });
+    const users = await db.getAllUsers();
+    logger.debug(`📤 Found ${users.length} users in database`);
     
-    const username = getUsernameFromFilter(filterStr);
-    
-    if (username || /(objectClass=posixAccount)|(objectClass=inetOrgPerson)/i.test(filterStr)) {
-      if (username) {
-        await handleUserSearch(username, res, db);
-      } else {
-        const users = await db.getAllUsers();
-        logger.debug(`Returning ${users.length} users for sync`);
-        
-        for (const user of users) {
-          const entry = createLdapEntry(user);
-          res.send(entry);
-        }
-        res.end();
-      }
-    } else if (/(objectClass=posixGroup)|(memberUid=)/i.test(filterStr)) {
-      await handleGroupSearch(filterStr, res, db);
-    } else {
-      logger.debug("LDAP Search Request: no match, ending");
-      res.end();
+    for (const user of users) {
+      const entry = createLdapEntry(user);
+      logger.debug("📤 Sending user entry:", {
+        dn: entry.dn,
+        uid: entry.attributes.uid,
+        objectClass: entry.attributes.objectClass,
+        cn: entry.attributes.cn
+      });
+      res.send(entry);
     }
-  });
+    
+    logger.debug("✅ User search completed, ending response");
+    res.end();
+    return;
+  }
+  
+  // Handle group searches - multiple conditions
+  const isGroupSearch = 
+    /(objectClass=posixGroup)|(objectClass=groupOfNames)|(memberUid=)/i.test(filterStr) ||
+    (filterStr.length === 0 && (req.attributes.includes('member') || req.attributes.includes('uniqueMember') || req.attributes.includes('memberOf'))) ||
+    req.attributes.includes('gidNumber') ||
+    req.attributes.includes('memberUid');
+    
+  if (isGroupSearch) {
+    logger.debug("📤 RETURNING GROUPS FOR GROUP SEARCH:", filterStr);
+    logger.debug("📤 Group search triggered by:", {
+      hasGroupObjectClass: /(objectClass=posixGroup)|(objectClass=groupOfNames)/.test(filterStr),
+      hasMemberUid: /(memberUid=)/.test(filterStr),
+      isEmptyFilterWithGroupAttrs: filterStr.length === 0 && (req.attributes.includes('member') || req.attributes.includes('uniqueMember') || req.attributes.includes('memberOf')),
+      hasGidNumber: req.attributes.includes('gidNumber'),
+      hasMemberUidAttr: req.attributes.includes('memberUid')
+    });
+    await handleGroupSearch(filterStr, res, db);
+    return;
+  }
+  
+  // Handle generic objectClass search (return both users and groups)
+  if (/objectClass=/i.test(filterStr)) {
+    logger.debug("📤 GENERIC OBJECTCLASS SEARCH - RETURNING BOTH USERS AND GROUPS:", filterStr);
+    
+    // Return users first
+    const users = await db.getAllUsers();
+    logger.debug(`📤 Found ${users.length} users in database`);
+    
+    for (const user of users) {
+      const entry = createLdapEntry(user);
+      logger.debug("📤 Sending user entry:", {
+        dn: entry.dn,
+        uid: entry.attributes.uid,
+        objectClass: entry.attributes.objectClass,
+        cn: entry.attributes.cn
+      });
+      res.send(entry);
+    }
+    
+    // Then return groups
+    logger.debug("📤 Now returning groups...");
+    await handleGroupSearch(filterStr, res, db);
+    return;
+  }
+  
+  logger.debug("❌ No matching pattern found in filter, ending");
+  res.end();
+});
+
+
 
   // Start the server and listen on port 636 (LDAP)
   const PORT = 636;

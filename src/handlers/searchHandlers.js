@@ -2,35 +2,68 @@ const { createLdapEntry } = require("../utils/ldapUtils");
 const logger = require("../utils/logger");
 
 const handleGroupSearch = async (filterStr, res, db) => {
-    try {
-        const memberUidMatch = filterStr.match(/memberUid=([^)&]+)/i);
-
-        if (!memberUidMatch) {
-            logger.debug("[GROUP SEARCH] No memberUid found in filter");
-            return res.end();
-        }
-
-        const username = memberUidMatch[1];
-        const groups = await db.findGroupsByMemberUid(username);
-
-        logger.debug("[GROUP SEARCH] Found groups", { groupsCount: groups.length });
-
+  try {
+    logger.debug("[GROUP SEARCH] Starting group search with filter:", filterStr);
+    
+    // Check if this is a memberUid search for a specific user
+    const memberUidMatch = filterStr.match(/memberUid=([^)&]+)/i);
+    
+    if (memberUidMatch) {
+      // Search for groups containing a specific user
+      const username = memberUidMatch[1];
+      logger.debug("[GROUP SEARCH] Looking for groups containing user:", username);
+      
+      const groups = await db.findGroupsByMemberUid(username);
+      logger.debug("[GROUP SEARCH] Found groups for user", { username, groupsCount: groups.length });
+      
+      groups.forEach((group) => {
+        const groupEntry = {
+          dn: `cn=${group.name},ou=groups,${process.env.LDAP_BASE_DN}`,
+          attributes: {
+            objectClass: ["posixGroup"],
+            cn: group.name,
+            gidNumber: group.gid.toString(),
+            memberUid: Array.isArray(group.member_uids) ? group.member_uids : [group.member_uids],
+          },
+        };
+        logger.debug("[GROUP SEARCH] Sending group entry:", groupEntry);
+        res.send(groupEntry);
+      });
+    } else {
+      // Return all groups (for empty filter or general group searches)
+      logger.debug("[GROUP SEARCH] Returning all groups (empty filter or general search)");
+      
+      const groups = await db.getAllGroups();
+      logger.debug("[GROUP SEARCH] Found total groups", { groupsCount: groups.length });
+      
+      if (groups && groups.length > 0) {
         groups.forEach((group) => {
-            res.send({
-                dn: `cn=${group.name},ou=groups,dc=mieweb,dc=com`,
-                attributes: {
-                    objectClass: ["posixGroup"],
-                    cn: group.name,
-                    gidNumber: group.gid.toString(),
-                    memberUid: group.member_uids,
-                },
-            });
+          const groupEntry = {
+            dn: `cn=${group.name},ou=groups,${process.env.LDAP_BASE_DN}`,
+            attributes: {
+              objectClass: ["posixGroup"],
+              cn: group.name,
+              gidNumber: group.gid.toString(),
+              memberUid: Array.isArray(group.member_uids) ? group.member_uids : 
+                         (group.member_uids ? [group.member_uids] : []),
+            },
+          };
+          logger.debug("[GROUP SEARCH] Sending group entry:", groupEntry);
+          res.send(groupEntry);
         });
-    } catch (error) {
-        logger.error("[GROUP SEARCH] Error:", { error });
-    } finally {
-        res.end();
+      } else {
+        logger.debug("[GROUP SEARCH] No groups found in database");
+      }
     }
+  } catch (error) {
+    logger.error("[GROUP SEARCH] Error:", { 
+      error: error.message,
+      stack: error.stack,
+      filterStr: filterStr 
+    });
+  } finally {
+    res.end();
+  }
 };
 
 const handleUserSearch = async (username, res, db) => {
