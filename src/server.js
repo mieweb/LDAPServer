@@ -8,6 +8,7 @@ const DatabaseService = require('./services/databaseServices');
 const AuthService = require('./services/authService');
 const DBBackend = require('./authProviders/dbBackend');
 const LDAPBackend = require('./authProviders/ldapBackend');
+const ProxmoxBackend = require('./authProviders/proxmoxBackend');
 const NotificationService = require('./services/notificationService');
 const { AUTHENTICATION_BACKEND } = require('./constants/constants');
 const { handleUserSearch, handleGroupSearch } = require('./handlers/searchHandlers');
@@ -23,6 +24,7 @@ async function startServer() {
   const backends = {
     [AUTHENTICATION_BACKEND.DATABASE]: new DBBackend(db),
     [AUTHENTICATION_BACKEND.LDAP]: new LDAPBackend(),
+    [AUTHENTICATION_BACKEND.PROXMOX]: new ProxmoxBackend('test.cfg'),
   };
   
   const selectedBackend = backends[process.env.AUTH_BACKEND] || backends[AUTHENTICATION_BACKEND.LDAP];
