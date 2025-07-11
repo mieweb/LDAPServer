@@ -25,7 +25,8 @@ async function resolveLDAPHosts() {
               port: record.port,
               scheme: 'ldap:',
               priority: record.priority,
-              weight: record.weight
+              weight: record.weight,
+              hostname: record.name
             });
           }
         } catch (err) {

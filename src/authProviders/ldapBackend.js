@@ -17,12 +17,11 @@ class LDAPBackend extends AuthProvider {
 
   async authenticate(username, password, req) {
     for (const server of this.serverPool) {
-      if (this.failedServers.get(server.ip)) {
+      if (this.failedServers.get(server.hostname)) {
         continue;
       }
 
-      const url = `${server.scheme}//${server.ip}:${server.port}`;
-  
+      const url = `${server.scheme}//${server.hostname}:${server.port}`;
       logger.debug(`Trying LDAP server: ${url} for user: ${username}`);
 
       const success = await this.tryBind(url, username, password, server);
@@ -30,7 +29,7 @@ class LDAPBackend extends AuthProvider {
       if (success) {
         return true;
       } else {
-        this.failedServers.set(server.ip, Date.now());
+        this.failedServers.set(server.hostname, Date.now());
       }
     }
 
@@ -78,13 +77,12 @@ class LDAPBackend extends AuthProvider {
         attributes: ['dn']
       };
 
-      // FIRST bind with your service account so we can search
       client.bind(process.env.LDAP_BIND_DN, process.env.LDAP_BIND_PASSWORD, (err) => {
         if (err) {
           logger.error("Service bind failed", err);
           return reject(new Error("Service bind failed: " + err));
         }
-       logger.debug("Service bind successful, searching for user...");
+        logger.debug("Service bind successful, searching for user...");
 
         let foundDN = null;
         client.search('dc=mieweb,dc=com', opts, (err, res) => {
@@ -116,4 +114,3 @@ class LDAPBackend extends AuthProvider {
 }
 
 module.exports = LDAPBackend;
-
