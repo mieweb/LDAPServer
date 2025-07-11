@@ -8,7 +8,7 @@ function createLdapEntry(user) {
     attributes: {
       objectClass: ["top", "posixAccount", "inetOrgPerson", "shadowAccount"],
       uid: user.username,
-       uidNumber,
+      uidNumber,
       gidNumber,
       cn: user.full_name || user.username,
       gecos: user.full_name || user.username,
@@ -17,7 +17,7 @@ function createLdapEntry(user) {
       homeDirectory: user.home_directory,
       loginShell: "/bin/bash",
       shadowLastChange: "0",
-      userpassword: `{CRYPT}${user.password}`,
+      userpassword: user?.password,
     },
   };
 

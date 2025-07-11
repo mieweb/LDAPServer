@@ -1,6 +1,6 @@
 const AuthProvider = require('./authProviderInterface');
 const ldap = require('ldapjs');
-const logger = require('../utils/logger');
+const logger = require('../../../utils/logger');
 
 class LDAPBackend extends AuthProvider {
   async authenticate(username, password, req) {

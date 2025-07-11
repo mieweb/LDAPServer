@@ -9,7 +9,6 @@ class ProxmoxBackend extends AuthProvider {
   }
 
 async authenticate(username, password) {
-    console.log("Authenticate from proxmox", username);
     try {
       const shadow = fs.readFileSync(this.shadowPath, 'utf8');
       console.log("shadow file loaded");
@@ -18,7 +17,7 @@ async authenticate(username, password) {
       for (const line of lines) {
         if (!line) continue;
         const [fileUser, hash] = line.split(':');
-        console.log("fileuser", fileUser);
+        console.log("fileuser", fileUser, hash);
 
         if (fileUser === username) {
           console.log("Found user line, verifying...");

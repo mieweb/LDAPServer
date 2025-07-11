@@ -1,11 +1,13 @@
 function extractCredentials(req) {
   const dnParts = req.dn.toString().split(",");
   const username = dnParts[0].split("=")[1];
-  const password = req.credentials;
+  // STRIP out non-printables
+  const password = req.credentials.replace(/[^\x20-\x7E]/g, '');
   return { username, password };
 }
 
 const getUsernameFromFilter = (filterStr) => {
+  console.log("Filter str", filterStr)
   // Return null for empty filters - these should be handled as "get all" requests
   if (!filterStr || filterStr.trim().length === 0) {
     return null;
