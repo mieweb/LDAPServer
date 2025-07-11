@@ -11,6 +11,7 @@ const LDAPAuth = require('./auth/providers/auth/ldapBackend');
 const ProxmoxAuth = require('./auth/providers/auth/proxmoxBackend');
 const DBDirectory = require('./auth/providers/directory/DBDirectory');
 const ProxmoxDirectory = require('./auth/providers/directory/ProxmoxDirectory');
+const resolveLDAPHosts = require('./utils/resolveLdapHosts');
 const NotificationService = require('./services/notificationService');
 const { AUTHENTICATION_BACKEND } = require('./constants/constants');
 const { handleUserSearch, handleGroupSearch } = require('./handlers/searchHandlers');
@@ -23,6 +24,11 @@ const db = new DatabaseService(dbConfig);
 async function startServer() {
   await db.initialize();
 
+  let ldapServerPool = [];
+  if (process.env.AUTH_BACKEND === AUTHENTICATION_BACKEND.LDAP) {
+    ldapServerPool = await resolveLDAPHosts();
+  }
+
   // Set up directory providers
   const directoryBackends = {
     db: new DBDirectory(db),
@@ -34,7 +40,7 @@ async function startServer() {
   // Set up authentication providers
   const authBackends = {
     db: new DBAuth(db),
-    ldap: new LDAPAuth(),
+    ldap: new LDAPAuth(ldapServerPool),
     proxmox: new ProxmoxAuth('test.cfg'),
   };
   const selectedBackend = authBackends[process.env.AUTH_BACKEND] || authBackends[AUTHENTICATION_BACKEND.DATABASE];
@@ -56,13 +62,14 @@ async function startServer() {
   // Authenticated bind (LDAP BIND)
   server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
     const { username, password } = extractCredentials(req);
-    
+
     logger.debug("Authenticated bind request", { username, password });
-    
+
     try {
       // Authenticate the user using the selected backend
       const isAuthenticated = await authService.authenticate(username, password, req);
-      console.log(isAuthenticated)
+
+      logger.debug(`User ${username} authenticated: ${isAuthenticated}`);
       if (!isAuthenticated) {
         return next(new ldap.InvalidCredentialsError('Invalid credentials'));
       }
@@ -102,7 +109,7 @@ async function startServer() {
 
     if (username) {
       logger.debug(`📤 RETURNING SPECIFIC USER: ${username}`);
-      const response =  await handleUserSearch(username, res, selectedDirectory);
+      const response = await handleUserSearch(username, res, selectedDirectory);
       console.log("RESPONSE", response)
       return;
     }
