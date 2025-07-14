@@ -6,7 +6,6 @@ const handleUserSearch = async (username, res, directory) => {
     logger.debug("[USER SEARCH] Searching for:", { username });
 
     const user = await directory.findUser(username);
-    console.log("USER FROM DIRECTORY")
 
     if (!user) {
       logger.debug("[USER SEARCH] No user found");
@@ -20,7 +19,6 @@ const handleUserSearch = async (username, res, directory) => {
     logger.debug("[USER SEARCH] LDAP entry created", { entry });
 
     res.send(entry);
-    console.log("response sent back")
   } catch (error) {
     logger.error("[USER SEARCH] Error:", { error });
   } finally {

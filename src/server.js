@@ -32,20 +32,18 @@ async function startServer() {
   // Set up directory providers
   const directoryBackends = {
     db: new DBDirectory(db),
-    proxmox: new ProxmoxDirectory('user.cfg'),
+    proxmox: new ProxmoxDirectory(process.env.PROXMOX_USER_CFG),
   };
   const selectedDirectory = directoryBackends[process.env.DIRECTORY_BACKEND] || directoryBackends['db'];
-  console.log("selected directory", selectedDirectory)
 
   // Set up authentication providers
   const authBackends = {
     db: new DBAuth(db),
     ldap: new LDAPAuth(ldapServerPool),
-    proxmox: new ProxmoxAuth('test.cfg'),
+    proxmox: new ProxmoxAuth(process.env.PROXMOX_SHADOW_CFG),
   };
   const selectedBackend = authBackends[process.env.AUTH_BACKEND] || authBackends[AUTHENTICATION_BACKEND.DATABASE];
   const authService = new AuthService(selectedBackend);
-  console.log("authservice", authService)
 
   // Create the LDAP server
   const server = ldap.createServer({
@@ -61,13 +59,9 @@ async function startServer() {
 
   // Authenticated bind (LDAP BIND)
   server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
-     console.log("🚀 BIND RAW", {
-    dn: req.dn && req.dn.toString(),
-    credentials: req.credentials
-  });
     const { username, password } = extractCredentials(req);
 
-    logger.debug("Authenticated bind request", { username, password });
+    logger.debug("Authenticated bind request", { username });
 
     try {
       // Authenticate the user using the selected backend
@@ -97,36 +91,24 @@ async function startServer() {
   // LDAP SEARCH
   server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
     const filterStr = req.filter.toString();
-    const bindDN = req.connection.ldap.bindDN;
-
-    logger.debug("\n🔍 =========================");
-    logger.debug("🔍 LDAP SEARCH REQUEST:");
-    logger.debug("🔍 Filter:", filterStr);
-    logger.debug("🔍 Bind DN:", bindDN ? bindDN.toString() : 'anonymous');
-    logger.debug("🔍 Base Object:", req.baseObject.toString());
-    logger.debug("🔍 Scope:", req.scope);
-    logger.debug("🔍 Attributes:", req.attributes);
-    logger.debug("🔍 =========================\n");
 
     const username = getUsernameFromFilter(filterStr);
-    console.log("getUsernameFromFilter:", username);
 
     if (username) {
-      logger.debug(`📤 RETURNING SPECIFIC USER: ${username}`);
-      const response = await handleUserSearch(username, res, selectedDirectory);
-      console.log("RESPONSE", response)
+      logger.debug(`RETURNING SPECIFIC USER: ${username}`);
+      await handleUserSearch(username, res, selectedDirectory);
       return;
     }
 
     if (isAllUsersRequest(filterStr, req.attributes)) {
-      logger.debug("📤 RETURNING ALL USERS - detected user sync request:", filterStr);
+      logger.debug("RETURNING ALL USERS - detected user sync request:", filterStr);
 
       const users = await selectedDirectory.getAllUsers();
-      logger.debug(`📤 Found ${users.length} users`);
+      logger.debug(`Found ${users.length} users`);
 
       for (const user of users) {
         const entry = createLdapEntry(user);
-        logger.debug("📤 Sending user entry:", {
+        logger.debug("Sending user entry:", {
           dn: entry.dn,
           uid: entry.attributes.uid,
           objectClass: entry.attributes.objectClass,
@@ -135,7 +117,7 @@ async function startServer() {
         res.send(entry);
       }
 
-      logger.debug("✅ User search completed, ending response");
+      logger.debug("User search completed, ending response");
       res.end();
       return;
     }
@@ -147,13 +129,13 @@ async function startServer() {
       req.attributes.includes('memberUid');
 
     if (isGroupSearch) {
-      logger.debug("📤 RETURNING GROUPS FOR GROUP SEARCH:", filterStr);
+      logger.debug("RETURNING GROUPS FOR GROUP SEARCH:", filterStr);
       await handleGroupSearch(filterStr, res, selectedDirectory);
       return;
     }
 
     if (/objectClass=/i.test(filterStr)) {
-      logger.debug("📤 GENERIC OBJECTCLASS SEARCH - RETURNING BOTH USERS AND GROUPS:", filterStr);
+      logger.debug("GENERIC OBJECTCLASS SEARCH - RETURNING BOTH USERS AND GROUPS:", filterStr);
 
       const users = await selectedDirectory.getAllUsers();
       for (const user of users) {
@@ -165,7 +147,7 @@ async function startServer() {
       return;
     }
 
-    logger.debug("❌ No matching pattern found in filter, ending");
+    logger.debug("No matching pattern found in filter, ending");
     res.end();
   });
 
