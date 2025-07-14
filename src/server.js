@@ -61,6 +61,10 @@ async function startServer() {
 
   // Authenticated bind (LDAP BIND)
   server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
+     console.log("🚀 BIND RAW", {
+    dn: req.dn && req.dn.toString(),
+    credentials: req.credentials
+  });
     const { username, password } = extractCredentials(req);
 
     logger.debug("Authenticated bind request", { username, password });
