@@ -22,47 +22,49 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
   }
 
   parseConfig(content) {
-    const lines = content.split('\n');
-    const users = [];
-    const groups = [];
+  const lines = content.split('\n');
+  const users = [];
+  const groups = [];
+  let uidBase = 1000;
 
-    for (const line of lines) {
-      if (line.startsWith('user:')) {
-        // Format: user:username@realm:1:0:First:Last:Email
-        const [_, rest] = line.split('user:');
-        const [usernameWithRealm, , , , firstName, lastName, email] = rest.split(':');
+  for (const line of lines) {
+    if (line.startsWith('user:')) {
+      const [_, rest] = line.split('user:');
+      const [usernameWithRealm, , , , firstName, lastName, email] = rest.split(':');
 
-        const cleanUsername = usernameWithRealm.split('@')[0];
+      const cleanUsername = usernameWithRealm.split('@')[0];
 
-        users.push({
-          username: cleanUsername,
-          full_name: `${firstName || ''} ${lastName || ''}`.trim() || cleanUsername,
-          surname: lastName || "Unknown",
-          mail: email || `${cleanUsername}@mieweb.com`,
-          uid_number: 1000,
-          gid_number: 1000,
-          home_directory: `/home/${cleanUsername}`,
-          password: undefined // no shadow password here
-        });
-      }
+      users.push({
+        username: cleanUsername,
+        full_name: `${firstName || ''} ${lastName || ''}`.trim() || cleanUsername,
+        surname: lastName || "Unknown",
+        mail: email || `${cleanUsername}@mieweb.com`,
+        uid_number: uidBase,
+        gid_number: uidBase, // use same for group, or assign another
+        home_directory: `/home/${cleanUsername}`,
+        password: undefined
+      });
 
-      if (line.startsWith('group:')) {
-        const [_, groupName, members] = line.split(':');
-        if (groupName === 'administrators' || groupName === 'interns') {
-          const memberUids = members ? members.split(',').map(u => u.split('@')[0]) : [];
-          groups.push({
-            name: groupName,
-            memberUids,
-            dn: `cn=${groupName},${process.env.LDAP_BASE_DN}`,
-            objectClass: ["posixGroup"],
-          });
-        }
-      }
+      uidBase++; // increment so each user gets a unique UID/GID
     }
 
-    this.users = users;
-    this.groups = groups;
+    if (line.startsWith('group:')) {
+      const [_, groupName, members] = line.split(':');
+      if (groupName === 'administrators' || groupName === 'interns') {
+        const memberUids = members ? members.split(',').map(u => u.split('@')[0]) : [];
+        groups.push({
+          name: groupName,
+          memberUids,
+          dn: `cn=${groupName},${process.env.LDAP_BASE_DN}`,
+          objectClass: ["posixGroup"],
+        });
+      }
+    }
   }
+
+  this.users = users;
+  this.groups = groups;
+}
 
 
   async findUser(username) {
