@@ -1,63 +1,60 @@
-const { createLdapEntry } = require("../utils/ldapUtils");
-const logger = require("../utils/logger");
+const logger = require('../utils/logger');
+const { createLdapEntry, createLdapGroupEntry } = require('../utils/ldapUtils');
 
-const handleUserSearch = async (username, res, directory) => {
+async function handleUserSearch(username, res, selectedDirectory) {
   try {
-    logger.debug("[USER SEARCH] Searching for:", { username });
-
-    const user = await directory.findUser(username);
-
-    if (!user) {
-      logger.debug("[USER SEARCH] No user found");
-      return res.end();
+    logger.debug(`[handleUserSearch] Searching for user: ${username}`);
+    
+    const user = await selectedDirectory.findUser(username);
+    
+    if (user) {
+      const entry = createLdapEntry(user);
+      logger.debug("Sending user entry:", {
+        dn: entry.dn,
+        uid: entry.attributes.uid,
+        uidNumber: entry.attributes.uidNumber,
+        gidNumber: entry.attributes.gidNumber
+      });
+      res.send(entry);
+    } else {
+      logger.debug(`[handleUserSearch] User ${username} not found`);
     }
-
-    logger.info("[USER SEARCH] User found", { username });
-    logger.debug("[USER SEARCH] User object", { user });
-
-    const entry = createLdapEntry(user);
-    logger.debug("[USER SEARCH] LDAP entry created", { entry });
-
-    res.send(entry);
+    
+    res.end();
   } catch (error) {
-    logger.error("[USER SEARCH] Error:", { error });
-  } finally {
+    logger.error(`[handleUserSearch] Error searching for user ${username}:`, error);
     res.end();
   }
-};
+}
 
-const handleGroupSearch = async (filterStr, res, directory) => {
+async function handleGroupSearch(filterStr, res, selectedDirectory) {
   try {
-    logger.debug("[GROUP SEARCH] Starting group search with filter:", filterStr);
-
-    const groups = await directory.findGroups(filterStr);
-    logger.debug("[GROUP SEARCH] Found groups", { groupsCount: groups.length });
-
-    groups.forEach((group) => {
-      const groupEntry = {
-        dn: group.dn,
-        attributes: {
-          objectClass: group.objectClass || ["posixGroup"],
-          cn: group.name,
-          gidNumber: group.gid ? group.gid.toString() : undefined,
-          memberUid: Array.isArray(group.memberUids) ? group.memberUids : [],
-        },
-      };
-      logger.debug("[GROUP SEARCH] Sending group entry:", groupEntry);
-      res.send(groupEntry);
-    });
+    logger.debug(`[handleGroupSearch] Group search with filter: ${filterStr}`);
+    
+    const groups = await selectedDirectory.findGroups(filterStr);
+    
+    logger.debug(`[handleGroupSearch] Found ${groups.length} groups`);
+    
+    for (const group of groups) {
+      const entry = createLdapGroupEntry(group);
+      logger.debug("Sending group entry:", {
+        dn: entry.dn,
+        cn: entry.attributes.cn,
+        gidNumber: entry.attributes.gidNumber,
+        memberUids: entry.attributes.memberUid?.length || 0
+      });
+      res.send(entry);
+    }
+    
+    logger.debug("[handleGroupSearch] Group search completed, ending response");
+    res.end();
   } catch (error) {
-    logger.error("[GROUP SEARCH] Error:", {
-      error: error.message,
-      stack: error.stack,
-      filterStr
-    });
-  } finally {
+    logger.error("[handleGroupSearch] Error in group search:", error);
     res.end();
   }
-};
+}
 
 module.exports = {
   handleUserSearch,
-  handleGroupSearch,
+  handleGroupSearch
 };
