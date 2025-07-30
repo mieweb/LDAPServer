@@ -1,4 +1,4 @@
-const mysql = require("mysql2/promise");
+const mysql = require('mysql2/promise');
 
 // Create a connection pool at startup
 let pool;
@@ -7,6 +7,7 @@ function createPool(config) {
   if (!pool) {
     pool = mysql.createPool({
       host: config.host,
+      port: config.port,
       user: config.user,
       password: config.password,
       database: config.database,
@@ -33,77 +34,95 @@ async function close() {
   }
 }
 
-async function findUserByUsername(username) {
-  const connection = await pool.getConnection();
+async function executeQuery(sql, params = []) {
+  if (!pool) throw new Error('Pool not initialized. Call connect() first.');
+  const conn = await pool.getConnection();
   try {
-    const [rows] = await connection.execute(
-      "SELECT * FROM users WHERE username = ?",
-      [username]
-    );
-    return rows[0] || null;
+    const [rows] = await conn.execute(sql, params);
+    console.log(`SQL: ${sql}\nParams: ${JSON.stringify(params)}\nReturned rows: ${rows.length}`);
+    return rows;
   } finally {
-    connection.release(); // Release connection back to pool
+    conn.release();
   }
+}
+
+async function findUserByUsername(username) {
+  const sql = `
+    SELECT u.user_id, u.username, u.first_name, u.last_name, u.email, r.id AS gidNumber, u.realm
+    FROM users u
+    LEFT JOIN realms r ON r.realm = u.realm
+    WHERE u.username = ?
+    LIMIT 1
+  `;
+  const rows = await executeQuery(sql, [username]);
+  console.log('findUserByUsername result:', rows);
+  return rows[0] || null;
 }
 
 async function findGroupsByMemberUid(username) {
-  const connection = await pool.getConnection();
-  try {
-    const [rows] = await connection.execute(
-      "SELECT g.name, g.gid, g.member_uids " +
-      "FROM `groups` g " +
-      "WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))",
-      [username]
-    );
-    return rows.map(row => {
-      if (row.member_uids && typeof row.member_uids === 'string') {
-        try {
-          row.member_uids = JSON.parse(row.member_uids);
-        } catch (e) {
-          // error
-        }
-      }
-      return row;
+  const sql = `
+    SELECT r.realm AS name, r.id AS gid
+    FROM user_realms ur
+    JOIN users u ON u.user_id = ur.user_id
+    JOIN realms r ON r.realm = ur.realm
+    WHERE u.username = ?
+    GROUP BY r.id, r.realm
+    ORDER BY r.realm
+  `;
+  const groups = await executeQuery(sql, [username]);
+  console.log('findGroupsByMemberUid groups:', groups);
+
+  const out = [];
+  for (const g of groups) {
+    const membersSql = `
+      SELECT u.username AS memberUid
+      FROM user_realms ur
+      JOIN users u ON u.user_id = ur.user_id
+      WHERE ur.realm = ?
+      ORDER BY u.username
+    `;
+    const members = await executeQuery(membersSql, [g.name]);
+    console.log(`Members for group ${g.name}:`, members);
+    out.push({
+      name: g.name,
+      gid: g.gid,
+      member_uids: members.map(m => m.memberUid)
     });
-  } finally {
-    connection.release();
   }
+  return out;
 }
 
 async function getAllUsers() {
-    const [rows] = await this.pool.query('SELECT * FROM users');
-    return rows;
+  const sql = `
+    SELECT u.user_id, u.username, u.first_name, u.last_name, u.email, r.id AS gidNumber, u.realm
+    FROM users u
+    LEFT JOIN realms r ON r.realm = u.realm
+    ORDER BY u.username
+  `;
+  const rows = await executeQuery(sql);
+  return rows;
 }
 
 async function getAllGroups() {
-  try {
-    const query = `
-      SELECT 
-        g.id,
-        g.name,
-        g.gid,
-        GROUP_CONCAT(u.username) as member_uids
-      FROM groups g
-      LEFT JOIN user_groups ug ON g.id = ug.group_id
-      LEFT JOIN users u ON ug.user_id = u.id
-      GROUP BY g.id, g.name, g.gid
-      ORDER BY g.name
-    `;
+  const sql = `
+    SELECT r.id, r.realm AS name,
+           COALESCE(GROUP_CONCAT(u.username ORDER BY u.username SEPARATOR ','), '') AS member_uids
+    FROM realms r
+    LEFT JOIN user_realms ur ON ur.realm = r.realm
+    LEFT JOIN users u ON u.user_id = ur.user_id
+    GROUP BY r.id, r.realm
+    ORDER BY r.realm
+  `;
+  const rows = await executeQuery(sql);
+  console.log('getAllGroups result count:', rows.length);
 
-    const groups = await this.executeQuery(query);
-
-    return groups.map(group => ({
-      id: group.id,
-      name: group.name,
-      gid: group.gid,
-      member_uids: group.member_uids ? group.member_uids.split(',') : []
-    }));
-  } catch (error) {
-    logger.error('Error getting all groups from MySQL:', error);
-    throw error;
-  }
+  return rows.map(g => ({
+    id: g.id,
+    name: g.name,
+    gid: g.id,
+    member_uids: g.member_uids ? g.member_uids.split(',').filter(Boolean) : []
+  }));
 }
-
 
 module.exports = {
   connect,
@@ -111,5 +130,6 @@ module.exports = {
   findUserByUsername,
   findGroupsByMemberUid,
   getAllUsers,
-  getAllGroups
+  getAllGroups,
+  executeQuery
 };
