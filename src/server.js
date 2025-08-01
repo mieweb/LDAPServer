@@ -1,19 +1,21 @@
 const ldap = require('ldapjs');
 const dotenv = require('dotenv').config();
 const logger = require('./utils/logger');
-const { extractCredentials, getUsernameFromFilter } = require('./utils/utils');
+const { extractCredentials, getUsernameFromFilter, isAllUsersRequest } = require('./utils/utils');
 const { setupGracefulShutdown } = require('./utils/shutdownUtils');
 const dbConfig = require('./config/dbConfig');
 const DatabaseService = require('./services/databaseServices');
 const AuthService = require('./services/authService');
-const DBBackend = require('./authProviders/dbBackend');
-const LDAPBackend = require('./authProviders/ldapBackend');
+const DBAuth = require('./auth/providers/auth/dbBackend');
+const LDAPAuth = require('./auth/providers/auth/ldapBackend');
+const ProxmoxAuth = require('./auth/providers/auth/proxmoxBackend');
+const DBDirectory = require('./auth/providers/directory/DBDirectory');
+const ProxmoxDirectory = require('./auth/providers/directory/ProxmoxDirectory');
 const resolveLDAPHosts = require('./utils/resolveLdapHosts');
 const NotificationService = require('./services/notificationService');
 const { AUTHENTICATION_BACKEND } = require('./constants/constants');
 const { handleUserSearch, handleGroupSearch } = require('./handlers/searchHandlers');
 const { createLdapEntry } = require('./utils/ldapUtils');
-
 
 // Initialize the database connection
 const db = new DatabaseService(dbConfig);
@@ -27,13 +29,20 @@ async function startServer() {
     ldapServerPool = await resolveLDAPHosts();
   }
 
-  const backends = {
-    [AUTHENTICATION_BACKEND.DATABASE]: new DBBackend(db),
-    [AUTHENTICATION_BACKEND.LDAP]: new LDAPBackend(ldapServerPool),
+  // Set up directory providers
+  const directoryBackends = {
+    db: new DBDirectory(db),
+    proxmox: new ProxmoxDirectory(process.env.PROXMOX_USER_CFG),
   };
+  const selectedDirectory = directoryBackends[process.env.DIRECTORY_BACKEND] || directoryBackends['db'];
 
-  const selectedBackend = backends[process.env.AUTH_BACKEND] || backends[AUTHENTICATION_BACKEND.LDAP];
-
+  // Set up authentication providers
+  const authBackends = {
+    db: new DBAuth(db),
+    ldap: new LDAPAuth(ldapServerPool),
+    proxmox: new ProxmoxAuth(process.env.PROXMOX_SHADOW_CFG),
+  };
+  const selectedBackend = authBackends[process.env.AUTH_BACKEND] || authBackends[AUTHENTICATION_BACKEND.DATABASE];
   const authService = new AuthService(selectedBackend);
 
   // Create the LDAP server
@@ -42,10 +51,17 @@ async function startServer() {
     key: process.env.LDAP_KEY_CONTENT,
   });
 
-  // Handle LDAP BIND (authentication) requests
-  server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
-    const { username, password } = extractCredentials(req); // Extract username and password from request
+  // Anonymous bind support
+  server.bind('', (req, res, next) => {
+    logger.debug("Anonymous bind request - allowing for search operations");
+    res.end();
+  });
 
+  // Authenticated bind (LDAP BIND)
+  server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
+    const { username, password } = extractCredentials(req);
+
+    logger.debug("Authenticated bind request", { username });
 
     try {
       // Authenticate the user using the selected backend
@@ -53,12 +69,11 @@ async function startServer() {
 
       logger.debug(`User ${username} authenticated: ${isAuthenticated}`);
       if (!isAuthenticated) {
-        return next(new ldap.InvalidCredentialsError('Invalid credentials')); // Reject if authentication fails
+        return next(new ldap.InvalidCredentialsError('Invalid credentials'));
       }
 
       if (process.env.ENABLE_NOTIFICATION === 'true') {
         const response = await NotificationService.sendAuthenticationNotification(username);
-
         if (response.action === "APPROVE") {
           res.end();
         } else {
@@ -67,50 +82,93 @@ async function startServer() {
       } else {
         res.end();
       }
-
     } catch (error) {
       logger.error("Bind error", { error });
-      return next(new ldap.OperationsError('Authentication error')); // Handle errors gracefully
+      return next(new ldap.OperationsError('Authentication error'));
     }
   });
 
-  // Handle LDAP SEARCH requests (user/group lookup)
-server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
-  const filterStr = req.filter.toString();
-  logger.debug("LDAP Search Request:", { filterStr });
+  // LDAP SEARCH
+  server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
+    const filterStr = req.filter.toString();
+    
+    logger.debug(`LDAP Search - Filter: ${filterStr}, Attributes: ${req.attributes}`);
 
-  const username = getUsernameFromFilter(filterStr);
+    const username = getUsernameFromFilter(filterStr);
 
-  if (username || /(objectClass=posixAccount)|(objectClass=inetOrgPerson)/i.test(filterStr)) {
     if (username) {
-      await handleUserSearch(username, res, db);
-    } else {
-      const users = await db.getAllUsers();
+      logger.debug(`RETURNING SPECIFIC USER: ${username}`);
+      await handleUserSearch(username, res, selectedDirectory);
+      return;
+    }
+
+    if (isAllUsersRequest(filterStr, req.attributes)) {
+      logger.debug("RETURNING ALL USERS - detected user sync request:", filterStr);
+
+      const users = await selectedDirectory.getAllUsers();
+      logger.debug(`Found ${users.length} users`);
+
+      for (const user of users) {
+        const entry = createLdapEntry(user);
+        logger.debug("Sending user entry:", {
+          dn: entry.dn,
+          uid: entry.attributes.uid,
+          objectClass: entry.attributes.objectClass,
+          cn: entry.attributes.cn,
+          uidNumber: entry.attributes.uidNumber,
+          gidNumber: entry.attributes.gidNumber
+        });
+        res.send(entry);
+      }
+
+      logger.debug("User search completed, ending response");
+      res.end();
+      return;
+    }
+
+    // Enhanced group search detection
+    const isGroupSearch =
+      /(objectClass=posixGroup)|(objectClass=groupOfNames)|(memberUid=)/i.test(filterStr) ||
+      /gidNumber=/i.test(filterStr) ||
+      (filterStr.length === 0 && (req.attributes.includes('member') || req.attributes.includes('uniqueMember') || req.attributes.includes('memberOf'))) ||
+      req.attributes.includes('gidNumber') ||
+      req.attributes.includes('memberUid') ||
+      req.attributes.includes('cn') && req.attributes.length === 1; // Common group-only attribute requests
+
+    if (isGroupSearch) {
+      logger.debug("RETURNING GROUPS FOR GROUP SEARCH:", filterStr);
+      await handleGroupSearch(filterStr, res, selectedDirectory);
+      return;
+    }
+
+    // Handle mixed searches (both users and groups)
+    if (/objectClass=/i.test(filterStr) || filterStr.length === 0) {
+      logger.debug("GENERIC OBJECTCLASS SEARCH - RETURNING BOTH USERS AND GROUPS:", filterStr);
+
+      // Return users first
+      const users = await selectedDirectory.getAllUsers();
       for (const user of users) {
         const entry = createLdapEntry(user);
         res.send(entry);
       }
-      res.end();
+
+      // Then return groups
+      await handleGroupSearch(filterStr, res, selectedDirectory);
+      return;
     }
-  } else if (/(objectClass=posixGroup)|(memberUid=)/i.test(filterStr)) {
-    await handleGroupSearch(filterStr, res, db);
-  } else {
-    logger.debug("LDAP Search Request: no match, ending");
+
+    logger.debug("No matching pattern found in filter, ending");
     res.end();
-  }
-});
+  });
 
-
-
-  // Start the server and listen on port 636 (LDAP)
+  // Start the LDAP server
   const PORT = 636;
   server.listen(PORT, "0.0.0.0", () => {
     logger.info(`LDAP Server listening on port ${PORT}`);
   });
 
-  // Handle graceful shutdown of resources
+  // Graceful shutdown
   setupGracefulShutdown({ db });
 }
 
-// Export the server start function
 module.exports = startServer;

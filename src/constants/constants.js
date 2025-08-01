@@ -6,6 +6,7 @@ module.exports = {
   },
   AUTHENTICATION_BACKEND: {
     DATABASE: "db",
-    LDAP: "ldap"
+    LDAP: "ldap",
+    PROXMOX:"proxmox"
   }
 };
