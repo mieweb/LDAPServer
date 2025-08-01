@@ -91,6 +91,8 @@ async function startServer() {
   // LDAP SEARCH
   server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
     const filterStr = req.filter.toString();
+    
+    logger.debug(`LDAP Search - Filter: ${filterStr}, Attributes: ${req.attributes}`);
 
     const username = getUsernameFromFilter(filterStr);
 
@@ -112,7 +114,9 @@ async function startServer() {
           dn: entry.dn,
           uid: entry.attributes.uid,
           objectClass: entry.attributes.objectClass,
-          cn: entry.attributes.cn
+          cn: entry.attributes.cn,
+          uidNumber: entry.attributes.uidNumber,
+          gidNumber: entry.attributes.gidNumber
         });
         res.send(entry);
       }
@@ -122,11 +126,14 @@ async function startServer() {
       return;
     }
 
+    // Enhanced group search detection
     const isGroupSearch =
       /(objectClass=posixGroup)|(objectClass=groupOfNames)|(memberUid=)/i.test(filterStr) ||
+      /gidNumber=/i.test(filterStr) ||
       (filterStr.length === 0 && (req.attributes.includes('member') || req.attributes.includes('uniqueMember') || req.attributes.includes('memberOf'))) ||
       req.attributes.includes('gidNumber') ||
-      req.attributes.includes('memberUid');
+      req.attributes.includes('memberUid') ||
+      req.attributes.includes('cn') && req.attributes.length === 1; // Common group-only attribute requests
 
     if (isGroupSearch) {
       logger.debug("RETURNING GROUPS FOR GROUP SEARCH:", filterStr);
@@ -134,15 +141,18 @@ async function startServer() {
       return;
     }
 
-    if (/objectClass=/i.test(filterStr)) {
+    // Handle mixed searches (both users and groups)
+    if (/objectClass=/i.test(filterStr) || filterStr.length === 0) {
       logger.debug("GENERIC OBJECTCLASS SEARCH - RETURNING BOTH USERS AND GROUPS:", filterStr);
 
+      // Return users first
       const users = await selectedDirectory.getAllUsers();
       for (const user of users) {
         const entry = createLdapEntry(user);
         res.send(entry);
       }
 
+      // Then return groups
       await handleGroupSearch(filterStr, res, selectedDirectory);
       return;
     }
