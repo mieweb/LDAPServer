@@ -83,7 +83,7 @@ async function startServer() {
         res.end();
       }
     } catch (error) {
-      logger.error("Bind error", { error });
+      logger.error("Bind error", { message: error?.message });
       return next(new ldap.OperationsError('Authentication error'));
     }
   });
@@ -92,7 +92,7 @@ async function startServer() {
   server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
     const filterStr = req.filter.toString();
     
-    logger.debug(`LDAP Search - Filter: ${filterStr}, Attributes: ${req.attributes}`);
+    logger.debug("LDAP Search received", { attributes: req.attributes.length });
 
     const username = getUsernameFromFilter(filterStr);
 
@@ -110,14 +110,9 @@ async function startServer() {
 
       for (const user of users) {
         const entry = createLdapEntry(user);
-        logger.debug("Sending user entry:", {
-          dn: entry.dn,
-          uid: entry.attributes.uid,
-          objectClass: entry.attributes.objectClass,
-          cn: entry.attributes.cn,
-          uidNumber: entry.attributes.uidNumber,
-          gidNumber: entry.attributes.gidNumber
-        });
+
+        logger.debug("Sending user entry", { uid: entry.attributes?.uid });
+
         res.send(entry);
       }
 

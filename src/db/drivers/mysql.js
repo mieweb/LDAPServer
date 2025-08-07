@@ -1,6 +1,6 @@
 const mysql = require('mysql2/promise');
+const logger = require('../../utils/logger');
 
-// Create a connection pool at startup
 let pool;
 
 function createPool(config) {
@@ -12,25 +12,32 @@ function createPool(config) {
       password: config.password,
       database: config.database,
       waitForConnections: true,
-      connectionLimit: 10, // Maximum number of connections in the pool
-      queueLimit: 0 // No limit on the number of waiting requests
+      connectionLimit: 10,
+      queueLimit: 0
     });
-    console.log("MySQL Connection Pool Created");
+    logger.info("MySQL connection pool created");
   }
   return pool;
 }
 
-// Initialize the connection pool
 async function connect(config) {
-  return createPool(config);
+  try {
+    return createPool(config);
+  } catch (err) {
+    logger.error("Error creating MySQL pool", { error: err.message });
+    throw err;
+  }
 }
 
-// Close the pool (when shutting down the app)
 async function close() {
   if (pool) {
-    await pool.end();
-    pool = null;
-    console.log("MySQL Connection Pool Closed");
+    try {
+      await pool.end();
+      logger.info("MySQL connection pool closed");
+      pool = null;
+    } catch (err) {
+      logger.error("Error closing MySQL pool", { error: err.message });
+    }
   }
 }
 
@@ -39,14 +46,20 @@ async function executeQuery(sql, params = []) {
   const conn = await pool.getConnection();
   try {
     const [rows] = await conn.execute(sql, params);
-    console.log(`SQL: ${sql}\nParams: ${JSON.stringify(params)}\nReturned rows: ${rows.length}`);
     return rows;
+  } catch (err) {
+    logger.error("Database query failed", {
+      error: err.message,
+      queryContext: sql.slice(0, 50) + '...', // don't log full user-generated queries
+    });
+    throw err;
   } finally {
     conn.release();
   }
 }
 
 async function findUserByUsername(username) {
+  logger.debug(`Looking up user: ${username}`);
   const sql = `
     SELECT u.user_id, u.username, u.first_name, u.last_name, u.email, r.id AS gidNumber, u.realm
     FROM users u
@@ -55,11 +68,11 @@ async function findUserByUsername(username) {
     LIMIT 1
   `;
   const rows = await executeQuery(sql, [username]);
-  console.log('findUserByUsername result:', rows);
   return rows[0] || null;
 }
 
 async function findGroupsByMemberUid(username) {
+  logger.debug(`Fetching groups for user: ${username}`);
   const sql = `
     SELECT r.realm AS name, r.id AS gid
     FROM user_realms ur
@@ -70,7 +83,6 @@ async function findGroupsByMemberUid(username) {
     ORDER BY r.realm
   `;
   const groups = await executeQuery(sql, [username]);
-  console.log('findGroupsByMemberUid groups:', groups);
 
   const out = [];
   for (const g of groups) {
@@ -82,7 +94,6 @@ async function findGroupsByMemberUid(username) {
       ORDER BY u.username
     `;
     const members = await executeQuery(membersSql, [g.name]);
-    console.log(`Members for group ${g.name}:`, members);
     out.push({
       name: g.name,
       gid: g.gid,
@@ -93,17 +104,18 @@ async function findGroupsByMemberUid(username) {
 }
 
 async function getAllUsers() {
+  logger.debug("Fetching all users");
   const sql = `
     SELECT u.user_id, u.username, u.first_name, u.last_name, u.email, r.id AS gidNumber, u.realm
     FROM users u
     LEFT JOIN realms r ON r.realm = u.realm
     ORDER BY u.username
   `;
-  const rows = await executeQuery(sql);
-  return rows;
+  return await executeQuery(sql);
 }
 
 async function getAllGroups() {
+  logger.debug("Fetching all groups");
   const sql = `
     SELECT r.id, r.realm AS name,
            COALESCE(GROUP_CONCAT(u.username ORDER BY u.username SEPARATOR ','), '') AS member_uids
@@ -114,8 +126,6 @@ async function getAllGroups() {
     ORDER BY r.realm
   `;
   const rows = await executeQuery(sql);
-  console.log('getAllGroups result count:', rows.length);
-
   return rows.map(g => ({
     id: g.id,
     name: g.name,

@@ -12,28 +12,23 @@ class LDAPBackend extends AuthProvider {
     setInterval(() => {
       this.failedServers.clear();
       logger.debug("Resetting failed LDAP servers for retry.");
-    }, 5 * 60 * 1000); // every 5 minutes
+    }, 5 * 60 * 1000);
   }
 
   async authenticate(username, password, req) {
     for (const server of this.serverPool) {
-      if (this.failedServers.get(server.hostname)) {
-        continue;
-      }
+      if (this.failedServers.get(server.hostname)) continue;
 
       const url = `${server.scheme}//${server.hostname}:${server.port}`;
-      logger.debug(`Trying LDAP server: ${url} for user: ${username}`);
+      logger.debug("Attempting LDAP authentication via server", { host: server.hostname });
 
       const success = await this.tryBind(url, username, password, server);
 
-      if (success) {
-        return true;
-      } else {
-        this.failedServers.set(server.hostname, Date.now());
-      }
+      if (success) return true;
+
+      this.failedServers.set(server.hostname, Date.now());
     }
 
-    // if all tried and failed, clear the failed list for next time
     this.failedServers.clear();
     return false;
   }
@@ -45,11 +40,12 @@ class LDAPBackend extends AuthProvider {
       this.searchUserDN(client, username)
         .then((foundDN) => {
           if (!foundDN) {
-            logger.error("No DN found for user", { username });
+            logger.warn("No DN found for user");
             client.unbind();
             return resolve(false);
           }
-          logger.debug(`Found user DN: ${foundDN}, attempting bind with user password...`);
+
+          logger.debug("User DN found, attempting user bind...");
           return this.attemptBind(client, foundDN, password);
         })
         .then((success) => {
@@ -57,13 +53,13 @@ class LDAPBackend extends AuthProvider {
           resolve(success);
         })
         .catch((err) => {
-          logger.error("LDAP bind or search error", { url, username, err });
+          logger.error("LDAP bind or search error", { error: err.message });
           client.unbind();
           resolve(false);
         });
 
       client.on("error", (err) => {
-        logger.error("LDAP client connection error", { url, err });
+        logger.error("LDAP client connection error", { error: err.message });
         resolve(false);
       });
     });
@@ -79,19 +75,20 @@ class LDAPBackend extends AuthProvider {
 
       client.bind(process.env.LDAP_BIND_DN, process.env.LDAP_BIND_PASSWORD, (err) => {
         if (err) {
-          logger.error("Service bind failed", err);
-          return reject(new Error("Service bind failed: " + err));
+          logger.error("LDAP service bind failed", { error: err.message });
+          return reject(new Error("Service bind failed"));
         }
-        logger.debug("Service bind successful, searching for user...");
+
+        logger.debug("LDAP service bind successful");
 
         let foundDN = null;
         client.search('dc=mieweb,dc=com', opts, (err, res) => {
           if (err) return reject(err);
 
           res.on('searchEntry', (entry) => {
-            console.log("Found entry DN:", entry.objectName);
             foundDN = entry.dn.toString();
           });
+
           res.on('error', (err) => reject(err));
           res.on('end', () => resolve(foundDN));
         });
@@ -103,10 +100,11 @@ class LDAPBackend extends AuthProvider {
     return new Promise((resolve) => {
       client.bind(dn, password, (err) => {
         if (err) {
-          logger.error("LDAP user bind failed", { dn, err });
+          logger.warn("LDAP user bind failed");
           return resolve(false);
         }
-        logger.info("LDAP user bind success", { dn });
+
+        logger.info("LDAP user bind succeeded");
         return resolve(true);
       });
     });
