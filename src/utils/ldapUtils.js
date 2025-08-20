@@ -1,15 +1,35 @@
 const logger = require("./logger");
 
+// Ensure we return a numeric string or undefined
+function pickObsUid(user) {
+  const v = user?.ldap_uid_number; // set by the DB layer you just updated
+  if (v === undefined || v === null) return undefined;
+  const s = String(v).trim();
+  if (s === "") return undefined;
+
+  // uidNumber in LDAP must be an integer
+  const n = Number(s);
+  if (!Number.isFinite(n) || !Number.isInteger(n)) {
+    logger.warn("Invalid ldap_uid_number (not an integer). Falling back.", { value: s, user: user?.username });
+    return undefined;
+  }
+  return String(n);
+}
 
 function createLdapEntry(user) {
-  // // Temp-Fix: Webchart schema doesn't have these right now
-  const uidNumber = user.user_id !== undefined && user.user_id !== null
-    ? (parseInt(user.user_id) + 10000).toString()
-    : "10000";
-  const gidNumber = user.gidNumber !== undefined && user.gidNumber !== null
-    ? (parseInt(user.gidNumber) + 10000).toString()
-    : "10000";
+  // 1) Prefer observation-mapped UID (ldap_uid_number)
+  // 2) Fallback: old behavior (user_id + 10000)
+  const obsUid = pickObsUid(user);
+  const uidNumber =
+    obsUid ??
+    (user.user_id !== undefined && user.user_id !== null
+      ? String(parseInt(user.user_id, 10) + 10000)
+      : "10000");
 
+  const gidNumber =
+    (user.gidNumber !== undefined && user.gidNumber !== null
+      ? String(parseInt(user.gidNumber, 10) + 10000)
+      : "10000");
 
   const entry = {
     dn: `uid=${user.username},${process.env.LDAP_BASE_DN}`,
@@ -27,6 +47,16 @@ function createLdapEntry(user) {
       shadowLastChange: "1",
     },
   };
+
+  logger.debug("Created LDAP user entry", {
+    dn: entry.dn,
+    uid: entry.attributes.uid,
+    uidNumber: entry.attributes.uidNumber,
+    gidNumber: entry.attributes.gidNumber,
+    uidSource: obsUid ? "observation" : "fallback",
+  });
+
+  console.log("entry", entry)
 
   return entry;
 }
@@ -51,7 +81,7 @@ function createLdapGroupEntry(group) {
     entry.attributes.member = group.members;
   }
 
-  logger.debug("Created LDAP group entry:", {
+  logger.debug("Created LDAP group entry", {
     dn: entry.dn,
     cn: entry.attributes.cn,
     gidNumber: entry.attributes.gidNumber,
@@ -62,4 +92,3 @@ function createLdapGroupEntry(group) {
 }
 
 module.exports = { createLdapEntry, createLdapGroupEntry };
-

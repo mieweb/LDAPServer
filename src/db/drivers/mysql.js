@@ -3,6 +3,39 @@ const logger = require('../../utils/logger');
 
 let pool;
 
+// cache for the obs_code lookup
+let cachedObsCode = null;
+let cachedObsName = null;
+
+async function getLdapUidObsCode() {
+  const obsName = process.env.LDAP_UID_OBS_NAME || 'LDAP UID Number';
+  if (cachedObsCode !== null && cachedObsName === obsName) return cachedObsCode;
+
+  const sql = `
+    SELECT obs_code
+    FROM observation_codes
+    WHERE obs_name = ?
+    LIMIT 1
+  `;
+  try {
+    const rows = await executeQuery(sql, [obsName]);
+    if (!rows[0]) {
+      logger.warn(`Observation code not found for name "${obsName}". ldap_uid_number will be NULL.`);
+      cachedObsCode = null;
+    } else {
+      cachedObsCode = rows[0].obs_code;
+      logger.info(`Using obs_code=${cachedObsCode} for "${obsName}"`);
+    }
+    cachedObsName = obsName;
+    return cachedObsCode;
+  } catch (err) {
+    logger.error("Failed to resolve LDAP UID observation code", { error: err.message });
+    cachedObsCode = null;
+    cachedObsName = obsName;
+    return null;
+  }
+}
+
 function createPool(config) {
   if (!pool) {
     pool = mysql.createPool({
@@ -50,7 +83,7 @@ async function executeQuery(sql, params = []) {
   } catch (err) {
     logger.error("Database query failed", {
       error: err.message,
-      queryContext: sql.slice(0, 50) + '...', // don't log full user-generated queries
+      queryContext: sql.slice(0, 50) + '...',
     });
     throw err;
   } finally {
@@ -58,16 +91,63 @@ async function executeQuery(sql, params = []) {
   }
 }
 
+function latestUidSubquery(obsCode) {
+  if (obsCode === null) return ''; // no-op
+  // Pick the latest by create_datetime; if tied, pick largest obs_id
+  return `
+    LEFT JOIN (
+      SELECT o1.user_id, o1.obs_result AS ldap_uid_number
+      FROM observations o1
+      JOIN (
+        SELECT user_id,
+               MAX(create_datetime) AS max_dt
+        FROM observations
+        WHERE obs_code = ?
+        GROUP BY user_id
+      ) mx
+        ON mx.user_id = o1.user_id
+       AND mx.max_dt = o1.create_datetime
+      WHERE o1.obs_code = ?
+      -- tie-breaker if multiple rows share the same timestamp
+      AND o1.obs_id = (
+        SELECT MAX(o2.obs_id)
+        FROM observations o2
+        WHERE o2.user_id = o1.user_id
+          AND o2.obs_code = o1.obs_code
+          AND o2.create_datetime = o1.create_datetime
+      )
+    ) uid ON uid.user_id = u.user_id
+  `;
+}
+
 async function findUserByUsername(username) {
   logger.debug(`Looking up user: ${username}`);
+  const obsCode = await getLdapUidObsCode();
+
   const sql = `
-    SELECT u.user_id, u.username, u.first_name, u.last_name, u.email, r.id AS gidNumber, u.realm
+    SELECT
+      u.user_id,
+      u.username,
+      u.first_name,
+      u.last_name,
+      u.email,
+      r.id AS gidNumber,
+      u.realm,
+      ${obsCode !== null ? 'uid.ldap_uid_number' : 'NULL AS ldap_uid_number'}
     FROM users u
     LEFT JOIN realms r ON r.realm = u.realm
+    ${obsCode !== null ? latestUidSubquery(obsCode) : ''}
     WHERE u.username = ?
     LIMIT 1
   `;
-  const rows = await executeQuery(sql, [username]);
+
+  const params = [];
+  if (obsCode !== null) {
+    params.push(obsCode, obsCode); // for the subquery
+  }
+  params.push(username);
+
+  const rows = await executeQuery(sql, params);
   return rows[0] || null;
 }
 
@@ -105,13 +185,30 @@ async function findGroupsByMemberUid(username) {
 
 async function getAllUsers() {
   logger.debug("Fetching all users");
+  const obsCode = await getLdapUidObsCode();
+
   const sql = `
-    SELECT u.user_id, u.username, u.first_name, u.last_name, u.email, r.id AS gidNumber, u.realm
+    SELECT
+      u.user_id,
+      u.username,
+      u.first_name,
+      u.last_name,
+      u.email,
+      r.id AS gidNumber,
+      u.realm,
+      ${obsCode !== null ? 'uid.ldap_uid_number' : 'NULL AS ldap_uid_number'}
     FROM users u
     LEFT JOIN realms r ON r.realm = u.realm
+    ${obsCode !== null ? latestUidSubquery(obsCode) : ''}
     ORDER BY u.username
   `;
-  return await executeQuery(sql);
+
+  const params = [];
+  if (obsCode !== null) {
+    params.push(obsCode, obsCode);
+  }
+
+  return await executeQuery(sql, params);
 }
 
 async function getAllGroups() {

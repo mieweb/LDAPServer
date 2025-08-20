@@ -6,6 +6,7 @@ const dbConfigs = {
   mysql: {
     type: 'mysql',
     host: process.env.MYSQL_HOST || "mysql",
+    port: process.env.MYSQL_PORT || "33306",
     user: process.env.MYSQL_USER || "root",
     password: process.env.MYSQL_PASSWORD || "rootpassword",
     database: process.env.MYSQL_DATABASE || "ldap_user_db",
