@@ -1,6 +1,8 @@
 # LDAPServer
 
-This project implements an LDAP gateway server using `ldapjs` that connects to a database to manage and authenticate users. It is designed to support applications that require LDAP authentication but can store extended user information in databases(MySQL, MongoDB), making it compatible with legacy systems.
+This project implements an LDAP gateway server using ldapjs that integrates with multiple backends to manage and authenticate users. It is designed for applications that require LDAP authentication but store user information in other systems, making it compatible with both modern and legacy environments.
+
+## 🖼️ Architecture Overview
 
 ```mermaid
 sequenceDiagram
@@ -8,7 +10,7 @@ sequenceDiagram
     participant Client as Client (SSHD)
     participant SSSD as SSSD
     participant LDAP as LDAPServer
-    participant DB as Database (MySQL/MongoDB)
+    participant DB as Directory (MySQL/MongoDB/Proxmox)
     User->>Client: SSH login request (ann)
     Client->>SSSD: Authenticate user (ann)
     SSSD->>LDAP: Fetch user info
@@ -21,11 +23,11 @@ sequenceDiagram
     SSSD-->>Client: Authentication success/failure
     Client-->>User: Login allowed/denied
 
-
-
 ```
 
-## Technologies Used
+---
+
+## ⚙️ Technologies Used
 
 - **Node.js**: The main runtime environment for the application.
 - **ldapjs**: A library for creating and managing LDAP servers in Node.js.
@@ -33,119 +35,154 @@ sequenceDiagram
 - **dotenv**: Manages environment variables securely.
 - **Docker**: For containerizing the MySQL and LDAP services.
 
-## Getting Started
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
-Ensure you have the following installed:
+* [Docker](https://www.docker.com/)
+* [Node.js](https://nodejs.org/) (v18.x+)
 
-- [Docker](https://www.docker.com/): For setting up the LDAP server and MySQL in containers.
-- [Node.js](https://nodejs.org/): JavaScript runtime for running the Node.js server. - v18.x or later
-
+---
 
 ### Installation
 
-1. **Clone the Repository**:
-
-   ```bash
-   git clone https://github.com/anishapant21/LDAP-SQL-Auth.git
-   cd LDAP-SQL-Auth
-   ```
-
-### Environment Variables Setup
-
-The required environment variables are listed in `.env.example`. You need to create a `.env` file and populate it with your own values.
-
-```sh
+```bash
+git clone https://github.com/mieweb/LDAPServer.git
+cd LDAPServer
 cp .env.example .env
 ```
 
-Then, edit the `.env` file with appropriate values:
+Edit `.env` with appropriate values (see [Configuration](#-configuration)).
 
-- `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`: MySQL connection details.
-- `LDAP_BASE_DN`: Base DN for the LDAP directory.
-- `LDAP_PORT`: The port on which the LDAP server listens (default: 389).
-- `NOTIFICATION_URL`: Base URL for the server handling notification to the authenticator app.
-- `LDAP_CERT_CONTENT`, `LDAP_KEY_CONTENT` : TLS certificates.
+---
 
 ### Usage
 
-#### Starting the Server and Containers
-
-To start both the Docker containers (MySQL and LDAP client) and the Node.js server locally, use the provided `launch.sh` script.
-
-1. Ensure the `launch.sh` script is executable. You can make it executable using the following command:
-
-   ```bash
-   chmod +x launch.sh
-   ```
-
-2. Run the `launch.sh` script:
-
-   ```bash
-   ./launch.sh
-   ```
-
-   This script will:
-
-   - Start the Docker containers (`mysql` and `ldap_client`) using Docker Compose.
-   - Install the Node.js dependencies.
-   - Start the Node.js server locally.
-
-#### Access the Client Bash
-
-To interact with the LDAP client container, enter it using:
+Start everything locally:
 
 ```bash
-docker exec -it ldap_client /bin/bash
+chmod +x launch.sh
+./launch.sh
 ```
 
-#### Perform an LDAP Search
+This will:
 
-Query the LDAP server using the `ldapsearch` command:
+* Spin up MySQL + LDAP client in Docker
+* Start LDAP server
 
-```bash
-ldapsearch -x -H ldaps://host.docker.internal:636 -b "dc=mieweb,dc=com" "(uid=ann)"
-```
-
-#### Authentication
-
-To authenticate via SSH using the LDAP credentials, run:
-
-```bash
-ssh ann@localhost -p 2222
-```
-
-### Stopping the Server
-
-To stop the LDAP server and associated containers, run:
+To stop:
 
 ```bash
 ./shutdown.sh
 ```
 
-This will stop and clean up Docker containers, networks, and the Node.js server.
+---
 
-## Project Structure
+### Testing
+
+LDAP search:
+
+```bash
+ldapsearch -x -H ldaps://host.docker.internal:636 -b "dc=mieweb,dc=com" "(uid=ann)"
+ldapsearch -x -H ldaps://host.docker.internal:636 -b "dc=mieweb,dc=com" "(objectClass=posixAccount)"
+```
+
+SSH authentication:
+
+```bash
+ssh ann@localhost -p 2222
+```
+
+---
+
+## 🔑 Backends
+
+The LDAP server separates **authentication** from **directory lookups**.
+
+### Authentication Backends (`AUTH_BACKEND`)
+
+* **`db`** → Passwords validated against DB.
+* **`ldap`** → Passwords validated against external AD/LDAP.
+
+### Directory Backends (`DIRECTORY_BACKEND`)
+
+* **`mysql`** -> MySQL as directory source
+
+* **`mongo`** → MongoDB as directory source.
+
+* **`proxmox`** → users discovered through Proxmox configuration files
+
+---
+
+## 📖 WebChart Integration
+
+The LDAP server includes a dedicated integration with the WebChart MySQL schema, allowing users managed in WebChart to be exposed through LDAP in a standards-compliant way.
+
+### Schema Mapping
+
+* **User Mapping** → WebChart users are mapped into LDAP `posixAccount` objects.
+* **UID Number (`uidNumber`)** →
+
+  * Primary source: The value is derived from the WebChart **Observation Code** named *“LDAP UID Number”*.
+  * If multiple observation entries exist, the **latest value** is always selected.
+  * Fallback: If no observation code is present, the `uidNumber` defaults to `users.user_id + 10000`.
+* **GID Number (`gidNumber`)** → Derived from the `realms.id` field in WebChart.
+
+---
+
+## 🔧 Configuration
+
+Example `.env` for WebChart + AD auth:
+
+```ini
+# Directory backend: db (WebChart SQL)
+DIRECTORY_BACKEND=db
+
+# Authentication backend: db or ldap
+AUTH_BACKEND=ldap
+
+# MySQL (WebChart)
+MYSQL_HOST=
+MYSQL_PORT=
+MYSQL_USER=
+MYSQL_PASSWORD=
+MYSQL_DATABASE=
+
+# AD / LDAP auth
+AD_DOMAIN=
+LDAP_BIND_DN=
+LDAP_BIND_PASSWORD=
+
+# Optional: Observation Code override
+LDAP_UID_OBS_NAME=
+```
+
+---
+
+## 📂 Project Structure
 
 ```plaintext
 /LDAP
 ├── docker/
 │   ├── client/
-│   │   ├── Dockerfile         # Dockerfile for the Linux client setup
-│   │   ├── sssd.conf          # SSSD configuration for client
+│   │   ├── Dockerfile
+│   │   ├── sssd.conf
 │   ├── sql/
-│   │   └── init.sql           # MySQL initialization script for user data
-│   ├── docker-compose.yml     # Docker Compose configuration
-├── launch.sh                  # Shell script to start Docker containers and Node.js server
-├── shutdown.sh                # Shell script to stop and clean up services
+│   │   └── init.sql
+│   ├── docker-compose.yml
+├── launch.sh
+├── shutdown.sh
 ├── src/
-│   ├── server.js              # Main Node.js application (LDAP server)
-│   ├── package.json           # Dependencies for Node.js
-│   ├── package-lock.json      # Lock file for Node.js dependencies
-│   └── .env.example           # Environment variables configuration file
-└── README.md                  # Documentation (this file)
+│   ├── server.js
+│   ├── package.json
+│   ├── package-lock.json
+│   └── .env.example
+└── README.md
 ```
+
+---
 
 ## Elaborative
 
@@ -207,7 +244,6 @@ sequenceDiagram
     CustomLDAP-->>Client: Allow SSH login
 ```
 
-## Demo Video
+## 📺 Demo
 
-Watch the demo video:
-[LDAP Server Demo](https://youtu.be/qsE1BWpmsME?si=MRnwFHu6LCd-2fhk)
+🎥 [LDAP Server Demo](https://youtu.be/qsE1BWpmsME?si=MRnwFHu6LCd-2fhk)
