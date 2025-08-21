@@ -2,7 +2,7 @@ const logger = require("./logger");
 
 // Ensure we return a numeric string or undefined
 function pickObsUid(user) {
-  const v = user?.ldap_uid_number; // set by the DB layer you just updated
+  const v = user?.ldap_uid_number;
   if (v === undefined || v === null) return undefined;
   const s = String(v).trim();
   if (s === "") return undefined;

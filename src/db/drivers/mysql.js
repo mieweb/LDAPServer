@@ -92,7 +92,7 @@ async function executeQuery(sql, params = []) {
 }
 
 function latestUidSubquery(obsCode) {
-  if (obsCode === null) return ''; // no-op
+  if (obsCode === null) return ''; 
   // Pick the latest by create_datetime; if tied, pick largest obs_id
   return `
     LEFT JOIN (
