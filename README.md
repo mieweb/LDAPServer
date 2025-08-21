@@ -161,26 +161,44 @@ LDAP_UID_OBS_NAME=
 
 ---
 
-## 📂 Project Structure
+## Proxmox Integration
 
-```plaintext
-/LDAP
-├── docker/
-│   ├── client/
-│   │   ├── Dockerfile
-│   │   ├── sssd.conf
-│   ├── sql/
-│   │   └── init.sql
-│   ├── docker-compose.yml
-├── launch.sh
-├── shutdown.sh
-├── src/
-│   ├── server.js
-│   ├── package.json
-│   ├── package-lock.json
-│   └── .env.example
-└── README.md
+In addition to database backends (WebChart/MySQL, MongoDB), the LDAP server also integrates directly with **Proxmox environments**. This enables centralized authentication for containers and VMs while leveraging existing Proxmox user and group configuration.
+
+### Features
+
+* **Direct File Access** → Reads from `user.cfg` and `shadow.cfg` to reflect Proxmox users into LDAP.
+* **Containerized Deployment** → LDAP server runs as a container inside Proxmox.
+* **Centralized Authentication** → Single LDAP authority for all Proxmox containers.
+* **MFA Support** → Optional multi-factor authentication through the [MIE Authenticator App](https://github.com/mieweb/mieweb_auth_app).
+* **Automation** → The [`pown.sh`](https://github.com/anishapant21/pown.sh) script configures LDAP clients on containers automatically (packages, services, sudo setup).
+
+### Configuration
+
+To enable Proxmox integration, configure the following in your `.env`:
+
+```sh
+# Proxmox Integration
+DIRECTORY_BACKEND=proxmox
+AUTH_BACKEND=proxmox
+PROXMOX_USER_CFG=<path-to-user.cfg>
+PROXMOX_SHADOW_CFG=<path-to-shadow.cfg>
 ```
+
+### Authentication Flow
+
+1. User connects via SSH to a container.
+2. The container forwards authentication to the LDAP server.
+3. The LDAP server validates the credentials against Proxmox config.
+4. If MFA is enabled, a push notification is sent to the user’s device.
+5. On approval, access is granted.
+
+### Resources
+
+* [LDAPServer](https://github.com/mieweb/LDAPServer)
+* [pown.sh](https://github.com/anishapant21/pown.sh) – Automated Proxmox LDAP client setup
+* [MIE Auth App](https://github.com/mieweb/mieweb_auth_app) – MFA mobile application
+* [Full Proxmox Integration Documentation](https://docs.google.com/document/d/1_6iutppKego9Kg_FGuDg5OwbXJUqZ0a2Fj7ajgNLU8k/edit?usp=sharing)
 
 ---
 
