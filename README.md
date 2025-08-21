@@ -1,6 +1,6 @@
 # LDAPServer
 
-This project implements an LDAP gateway server using ldapjs that integrates with multiple backends to manage and authenticate users. It is designed for applications that require LDAP authentication but store user information in other systems, making it compatible with both modern and legacy environments.
+This project implements an LDAP gateway server using [ldapjs](https://github.com/ldapjs/node-ldapjs) that integrates with multiple backends to manage and authenticate users. It is designed for applications that require LDAP authentication but store user information in other systems, making it compatible with both modern and legacy environments.
 
 ## 🖼️ Architecture Overview
 
@@ -50,7 +50,7 @@ sequenceDiagram
 
 ```bash
 git clone https://github.com/mieweb/LDAPServer.git
-cd LDAPServer
+cd LDAPServer/src
 cp .env.example .env
 ```
 
@@ -101,18 +101,18 @@ ssh ann@localhost -p 2222
 
 The LDAP server separates **authentication** from **directory lookups**.
 
+### Directory Backends (`DIRECTORY_BACKEND`)
+
+* **`mysql`** -> MySQL as directory source
+* **`mongodb`** → MongoDB as directory source.
+* **`proxmox`** → users discovered through Proxmox configuration files
+
 ### Authentication Backends (`AUTH_BACKEND`)
 
 * **`db`** → Passwords validated against DB.
 * **`ldap`** → Passwords validated against external AD/LDAP.
+* **`proxmox`** → Passwords validated against proxmox config files.
 
-### Directory Backends (`DIRECTORY_BACKEND`)
-
-* **`mysql`** -> MySQL as directory source
-
-* **`mongo`** → MongoDB as directory source.
-
-* **`proxmox`** → users discovered through Proxmox configuration files
 
 ---
 
