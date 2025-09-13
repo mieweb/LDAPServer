@@ -11,7 +11,7 @@
     },
     "dependencies": {
         "@ldapjs/controls": "git+https://github.com/anishapant21/controls.git#fixes/password-policy-crash",
-        "axios": "^1.7.9",
+        "axios": "^1.12.0",
         "dotenv": "^16.4.7",
         "express": "^4.21.2",
         "ldapjs": "git+https://github.com/anishapant21/node-ldapjs.git#fixes/attributes",
