@@ -8,14 +8,28 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
     this.configPath = configPath;
     this.users = [];
     this.groups = [];
-    this.loadConfig();
+    if (configPath) {
+      this.loadConfig();
+    } else {
+      logger.warn("[ProxmoxDirectory] No config path provided. Using empty user/group lists.");
+    }
   }
 
   loadConfig() {
     try {
+      if (!this.configPath) {
+        logger.warn("[ProxmoxDirectory] No config path provided");
+        return;
+      }
+      
+      if (!fs.existsSync(this.configPath)) {
+        logger.warn(`[ProxmoxDirectory] Config file does not exist: ${this.configPath}`);
+        return;
+      }
+      
       const data = fs.readFileSync(this.configPath, 'utf8');
       this.parseConfig(data);
-      logger.info("[ProxmoxDirectory] Loaded Proxmox user.cfg data");
+      logger.info(`[ProxmoxDirectory] Loaded Proxmox user.cfg data from ${this.configPath}`);
     } catch (err) {
       logger.error("[ProxmoxDirectory] Error reading config file:", { error: err });
     }
