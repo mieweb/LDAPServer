@@ -50,8 +50,8 @@ sequenceDiagram
 
 ```bash
 git clone https://github.com/mieweb/LDAPServer.git
-cd LDAPServer/src
-cp .env.example .env
+cd LDAPServer
+cp LDAPServer/src/.env.example LDAPServer/src/.env
 ```
 
 Edit `.env` with appropriate values (see [Configuration](#-configuration)).
@@ -63,7 +63,6 @@ Edit `.env` with appropriate values (see [Configuration](#-configuration)).
 Start everything locally:
 
 ```bash
-chmod +x launch.sh
 ./launch.sh
 ```
 
