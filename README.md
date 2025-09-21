@@ -84,8 +84,8 @@ To stop:
 LDAP search:
 
 ```bash
-ldapsearch -x -H ldaps://host.docker.internal:636 -b "dc=mieweb,dc=com" "(uid=ann)"
-ldapsearch -x -H ldaps://host.docker.internal:636 -b "dc=mieweb,dc=com" "(objectClass=posixAccount)"
+ldapsearch -x -H ldaps://localhost:636 -b "dc=mieweb,dc=com" "(uid=ann)"
+ldapsearch -x -H ldaps://localhost:636 -b "dc=mieweb,dc=com" "(objectClass=posixAccount)"
 ```
 
 SSH authentication:

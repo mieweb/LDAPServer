@@ -17,6 +17,19 @@ const { AUTHENTICATION_BACKEND } = require('./constants/constants');
 const { handleUserSearch, handleGroupSearch } = require('./handlers/searchHandlers');
 const { createLdapEntry } = require('./utils/ldapUtils');
 
+// Extract all environment variables at startup
+const config = {
+  authBackend: process.env.AUTH_BACKEND || AUTHENTICATION_BACKEND.DATABASE,
+  directoryBackend: process.env.DIRECTORY_BACKEND || 'db',
+  ldapBaseDn: process.env.LDAP_BASE_DN || '',
+  ldapPort: process.env.LDAP_PORT || null,
+  ldapCertContent: process.env.LDAP_CERT_CONTENT || null,
+  ldapKeyContent: process.env.LDAP_KEY_CONTENT || null,
+  proxmoxUserCfg: process.env.PROXMOX_USER_CFG || null,
+  proxmoxShadowCfg: process.env.PROXMOX_SHADOW_CFG || null,
+  enableNotification: process.env.ENABLE_NOTIFICATION === 'true'
+};
+
 // Initialize the database connection
 const db = new DatabaseService(dbConfig);
 
@@ -25,31 +38,39 @@ async function startServer() {
   await db.initialize();
 
   let ldapServerPool = [];
-  if (process.env.AUTH_BACKEND === AUTHENTICATION_BACKEND.LDAP) {
+  if (config.authBackend === AUTHENTICATION_BACKEND.LDAP) {
     ldapServerPool = await resolveLDAPHosts();
   }
 
   // Set up directory providers
   const directoryBackends = {
     db: new DBDirectory(db),
-    proxmox: new ProxmoxDirectory(process.env.PROXMOX_USER_CFG),
+    proxmox: new ProxmoxDirectory(config.proxmoxUserCfg),
   };
-  const selectedDirectory = directoryBackends[process.env.DIRECTORY_BACKEND] || directoryBackends['db'];
+  const selectedDirectory = directoryBackends[config.directoryBackend] || directoryBackends['db'];
 
   // Set up authentication providers
   const authBackends = {
     db: new DBAuth(db),
     ldap: new LDAPAuth(ldapServerPool),
-    proxmox: new ProxmoxAuth(process.env.PROXMOX_SHADOW_CFG),
+    proxmox: new ProxmoxAuth(config.proxmoxShadowCfg),
   };
-  const selectedBackend = authBackends[process.env.AUTH_BACKEND] || authBackends[AUTHENTICATION_BACKEND.DATABASE];
+  const selectedBackend = authBackends[config.authBackend] || authBackends[AUTHENTICATION_BACKEND.DATABASE];
   const authService = new AuthService(selectedBackend);
 
   // Create the LDAP server
-  const server = ldap.createServer({
-    certificate: process.env.LDAP_CERT_CONTENT,
-    key: process.env.LDAP_KEY_CONTENT,
-  });
+  const serverOptions = {};
+  
+  // Only add SSL/TLS options if certificates are provided
+  if (config.ldapCertContent && config.ldapKeyContent) {
+    serverOptions.certificate = config.ldapCertContent;
+    serverOptions.key = config.ldapKeyContent;
+    logger.info("LDAP server configured with SSL/TLS certificates");
+  } else {
+    logger.warn("LDAP server running without SSL/TLS certificates");
+  }
+  
+  const server = ldap.createServer(serverOptions);
 
   // Anonymous bind support
   server.bind('', (req, res, next) => {
@@ -58,7 +79,7 @@ async function startServer() {
   });
 
   // Authenticated bind (LDAP BIND)
-  server.bind(process.env.LDAP_BASE_DN, async (req, res, next) => {
+  server.bind(config.ldapBaseDn, async (req, res, next) => {
     const { username, password } = extractCredentials(req);
 
     logger.debug("Authenticated bind request", { username });
@@ -72,7 +93,7 @@ async function startServer() {
         return next(new ldap.InvalidCredentialsError('Invalid credentials'));
       }
 
-      if (process.env.ENABLE_NOTIFICATION === 'true') {
+      if (config.enableNotification) {
         const response = await NotificationService.sendAuthenticationNotification(username);
         if (response.action === "APPROVE") {
           res.end();
@@ -89,7 +110,7 @@ async function startServer() {
   });
 
   // LDAP SEARCH
-  server.search(process.env.LDAP_BASE_DN, async (req, res, next) => {
+  server.search(config.ldapBaseDn, async (req, res, next) => {
     const filterStr = req.filter.toString();
     
     logger.debug(`LDAP Search - Filter: ${filterStr}, Attributes: ${req.attributes}`);
@@ -161,10 +182,32 @@ async function startServer() {
     res.end();
   });
 
+  // Add error handling for the server
+  server.on('error', (err) => {
+    logger.error('LDAP Server error:', err);
+  });
+
+  server.on('clientError', (err, socket) => {
+    logger.error('LDAP Client connection error:', { 
+      error: err.message, 
+      remoteAddress: socket.remoteAddress,
+      remotePort: socket.remotePort 
+    });
+  });
+
   // Start the LDAP server
-  const PORT = 636;
+  // Use port 389 for plain LDAP if no SSL certificates are configured
+  const PORT = (config.ldapCertContent && config.ldapKeyContent) 
+    ? (config.ldapPort || 636) 
+    : (config.ldapPort || 389);
+    
   server.listen(PORT, "0.0.0.0", () => {
     logger.info(`LDAP Server listening on port ${PORT}`);
+    if (config.ldapCertContent && config.ldapKeyContent) {
+      logger.info("Server is running with SSL/TLS encryption - use ldaps:// connections");
+    } else {
+      logger.info("Server is running without SSL/TLS encryption - use ldap:// connections");
+    }
   });
 
   // Graceful shutdown
