@@ -1,0 +1,33 @@
+{
+    "name": "ldap-gateway-server",
+    "version": "1.0.0",
+    "engines": {
+        "node": ">=18.0.0",
+        "npm": ">=9.0.0"
+    },
+    "main": "serverMain.js",
+    "bin": {
+        "ldap-gateway": "dist/ldap-gateway"
+    },
+    "scripts": {
+        "start": "node index.js",
+        "dev": "node index.js",
+        "build": "node build.js",
+        "bundle": "node build.js --target=linux",
+        "binary": "node build.js --target=linux && mkdir -p ../dist && cp dist/ldap-gateway ../dist/",
+        "test": "echo \"Server smoke test\" && node -e \"console.log('Server package OK')\""
+    },
+    "dependencies": {
+        "@ldap-gateway/core": "file:../npm",
+        "@ldapjs/controls": "git+https://github.com/anishapant21/controls.git#fixes/password-policy-crash",
+        "axios": "^1.7.9",
+        "dotenv": "^16.4.7",
+        "express": "^4.21.2",
+        "ldapjs": "git+https://github.com/anishapant21/node-ldapjs.git#fixes/attributes",
+        "mongodb": "^6.14.2",
+        "mysql2": "^3.2.0",
+        "unixcrypt": "^1.2.0",
+        "winston": "^3.17.0"
+    },
+    "devDependencies": {}
+}

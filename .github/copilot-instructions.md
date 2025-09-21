@@ -1,13 +1,23 @@
-# AI Coding Guidelines for LDAPServer
+# AI Coding Guidelines for LDAP Gateway
 
 ## Architecture Overview
-This is an LDAP gateway server built with Node.js and ldapjs that bridges LDAP authentication to various backends (MySQL/MongoDB/Proxmox). It separates **directory lookups** (user/group info) from **authentication** (password validation).
+This is a **modular LDAP gateway** built with Node.js and ldapjs that bridges LDAP authentication to various backends (MySQL/MongoDB/Proxmox). It separates **directory lookups** (user/group info) from **authentication** (password validation) using a **reusable core + standalone server** architecture.
 
-Key components:
-- `src/server.js`: Main LDAP server with bind/search handlers
-- `src/auth/providers/`: Pluggable auth (`dbBackend.js`, `ldapBackend.js`, `proxmoxBackend.js`) and directory (`DBDirectory.js`, `ProxmoxDirectory.js`) providers
-- `src/services/`: `databaseServices.js` (unified DB access), `authService.js`, `notificationService.js` (MFA)
-- `src/handlers/searchHandlers.js`: LDAP search logic for users/groups
+### Modular Structure (v1.x)
+- **`npm/`** (@ldap-gateway/core): Reusable npm package with interfaces and utilities
+  - `src/LdapEngine.js`: Main LDAP server engine with plugin system
+  - `src/interfaces/`: AuthProvider and DirectoryProvider base classes
+  - `src/utils/`: Core utilities (ldapUtils, filterUtils, errorUtils)
+- **`server/`** (ldap-gateway-server): Standalone server implementation
+  - `serverMain.js`: Server entry point using LdapEngine
+  - `src/providers.js`: Provider factory for backend instantiation
+  - `src/auth/providers/`: Concrete auth/directory implementations
+- **`.github/workflows/`**: CI/CD for automated building and releases
+- **`nfpm/`**: Linux package configuration (.deb/.rpm)
+
+### Legacy Structure (archived in `.attic/legacy-src/`)
+- Old monolithic structure moved to preserve history
+- All functionality migrated to modular architecture
 
 
 
@@ -97,13 +107,12 @@ Key components:
 - **Deployment**: Use Terraform in `terraform/` for AWS EC2 with security group (ports 22, 636, 3000)
 
 ## Project-Specific Patterns
-- **Backend separation**: Always implement both auth and directory providers (see `authProviderInterface.js`, `DirectoryProviderInterface.js`)
+- **Backend separation**: Always implement both auth and directory providers (see `npm/src/interfaces/`)
 - **Environment config**: All settings via `.env` (e.g., `AUTH_BACKEND=db`, `DIRECTORY_BACKEND=mysql`)
-- **LDAP entry mapping**: Use `ldapUtils.js` to create entries with standard attributes (posixAccount, inetOrgPerson)
-- **Database queries**: Use connection pooling in drivers (`mysql.js`, `mongoDb.js`); groups store `member_uids` as JSON arrays
+- **LDAP entry mapping**: Use `@ldap-gateway/core` utilities to create entries with standard attributes (posixAccount, inetOrgPerson)
+- **Database queries**: Use connection pooling in drivers (`server/src/db/drivers/`); groups store `member_uids` as JSON arrays
 - **UID/GID mapping**: For WebChart, `uidNumber` from "LDAP UID Number" observation or `user_id + 10000`; `gidNumber` from `realms.id`
 - **Custom ldapjs**: Uses forked ldapjs (`@ldapjs/controls`, `ldapjs` in package.json) for specific fixes
-- **Logging**: Winston logger throughout; debug LDAP operations in `server.js` bind/search handlers
 - **Error handling**: Async/await with try/catch; release DB connections in `finally` blocks
 - **MFA integration**: Optional notification service sends push notifications via `NotificationService.sendAuthenticationNotification()`
 
@@ -112,5 +121,7 @@ Key components:
 - **Directory provider**: Implement `findUser()`, `getAllUsers()`, etc. (see `DBDirectory.js` delegating to `DatabaseService`)
 - **LDAP search**: Parse filters with `utils.js` functions like `getUsernameFromFilter()`; detect user/group requests
 - **Proxmox integration**: Reads `user.cfg`/`shadow.cfg` files directly for user data and auth
+
+Follow the provider pattern for new backends. Test with SSSD/LDAP clients. Use existing Docker setup for consistent environments.
 
 Follow the provider pattern for new backends. Test with SSSD/LDAP clients. Use existing Docker setup for consistent environments.

@@ -1,0 +1,26 @@
+{
+  "name": "ldap-gateway-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "npm",
+    "server"
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "build:core": "npm run build -w npm",
+    "build:server": "npm run build -w server",
+    "build:binary": "cd server && npm run binary",
+    "test": "npm run test --workspaces",
+    "test:core": "npm run test -w npm",
+    "test:server": "npm run test -w server",
+    "dev": "npm run dev -w server",
+    "start": "npm run start -w server"
+  },
+  "devDependencies": {},
+  "description": "LDAP Gateway - Monorepo with reusable core and standalone server"
+}
