@@ -1,5 +1,34 @@
+const { checkAndSetupEnvironment } = require('./utils/setupUtils');
+
+// Check for command line arguments
+function parseCommandLineArgs() {
+  const args = process.argv.slice(2);
+  return {
+    reconfig: args.includes('--reconfig') || args.includes('-r')
+  };
+}
+
+// Check for .env file and run setup if needed
+async function initializeServer() {
+  const { reconfig } = parseCommandLineArgs();
+  
+  if (reconfig) {
+    console.log('🔄 Reconfiguration requested via --reconfig flag');
+  }
+  
+  await checkAndSetupEnvironment(reconfig);
+  
+  // Now load environment variables after potential .env creation
+  const dotenv = require('dotenv').config();
+  
+  // Continue with existing server initialization
+  return startServer();
+}
+
 const ldap = require('ldapjs');
-const dotenv = require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
 const logger = require('./utils/logger');
 const { extractCredentials, getUsernameFromFilter, isAllUsersRequest } = require('./utils/utils');
 const { setupGracefulShutdown } = require('./utils/shutdownUtils');
@@ -21,14 +50,107 @@ const { createLdapEntry } = require('./utils/ldapUtils');
 const config = {
   authBackend: process.env.AUTH_BACKEND || AUTHENTICATION_BACKEND.DATABASE,
   directoryBackend: process.env.DIRECTORY_BACKEND || 'db',
-  ldapBaseDn: process.env.LDAP_BASE_DN || '',
+  commonName: process.env.LDAP_COMMON_NAME || 'localhost',
+  ldapBaseDn: process.env.LDAP_BASE_DN || (() => {
+    // Build LDAP_BASE_DN from LDAP_COMMON_NAME if not explicitly provided
+    const commonName = process.env.LDAP_COMMON_NAME || 'localhost';
+    if (commonName === 'localhost') {
+      return 'dc=localhost';
+    }
+    return commonName.split('.').map(part => `dc=${part}`).join(',');
+  })(),
   ldapPort: process.env.LDAP_PORT || null,
+  ldapCertPath: process.env.LDAP_CERT_PATH || null,
+  ldapKeyPath: process.env.LDAP_KEY_PATH || null,
   ldapCertContent: process.env.LDAP_CERT_CONTENT || null,
   ldapKeyContent: process.env.LDAP_KEY_CONTENT || null,
   proxmoxUserCfg: process.env.PROXMOX_USER_CFG || null,
   proxmoxShadowCfg: process.env.PROXMOX_SHADOW_CFG || null,
-  enableNotification: process.env.ENABLE_NOTIFICATION === 'true'
+  enableNotification: process.env.ENABLE_NOTIFICATION === 'true',
+  unencrypted: process.env.LDAP_UNENCRYPTED === 'true' || process.env.LDAP_UNENCRYPTED === '1'
 };
+
+// Function to create self-signed certificates
+function createCertificates() {
+  const certDir = path.join(process.cwd(), 'cert');
+  const certPath = path.join(certDir, 'server.crt');
+  const keyPath = path.join(certDir, 'server.key');
+
+  try {
+    // Create cert directory if it doesn't exist
+    if (!fs.existsSync(certDir)) {
+      fs.mkdirSync(certDir, { recursive: true });
+      logger.info(`Created certificate directory: ${certDir}`);
+    }
+
+    // Check if certificates already exist
+    if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+      logger.info('Certificates already exist, using existing ones');
+      return { certPath, keyPath };
+    }
+
+    logger.info('Creating self-signed certificates...');
+
+    // Use the configured common name directly
+    const commonName = config.commonName;
+
+    // Create self-signed certificate
+    const opensslCmd = `openssl req -x509 -newkey rsa:4096 -keyout "${keyPath}" -out "${certPath}" -days 3650 -nodes -subj "/C=US/ST=State/L=City/O=Organization/CN=${commonName}"`;
+    
+    execSync(opensslCmd, { stdio: 'pipe' });
+
+    if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+      logger.info('Self-signed certificates created successfully');
+      return { certPath, keyPath };
+    } else {
+      throw new Error('Certificate files were not created');
+    }
+  } catch (error) {
+    logger.error('Failed to create certificates:', error.message);
+    logger.error('Please ensure OpenSSL is installed and available in PATH');
+    process.exit(1);
+  }
+}
+
+// Function to load certificates
+function loadCertificates() {
+  // If unencrypted mode is explicitly enabled, return null
+  if (config.unencrypted) {
+    logger.warn('LDAP server configured for unencrypted mode - SSL/TLS disabled');
+    return { certContent: null, keyContent: null };
+  }
+
+  let certContent = config.ldapCertContent;
+  let keyContent = config.ldapKeyContent;
+
+  // If certificate content is not provided, try to load from paths
+  if (!certContent || !keyContent) {
+    let certPath = config.ldapCertPath;
+    let keyPath = config.ldapKeyPath;
+
+    // If paths are not provided, create certificates
+    if (!certPath || !keyPath) {
+      const createdCerts = createCertificates();
+      certPath = createdCerts.certPath;
+      keyPath = createdCerts.keyPath;
+    }
+
+    try {
+      if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
+        throw new Error(`Certificate files not found: ${certPath}, ${keyPath}`);
+      }
+
+      certContent = fs.readFileSync(certPath, 'utf8');
+      keyContent = fs.readFileSync(keyPath, 'utf8');
+      logger.info('Certificates loaded from files');
+    } catch (error) {
+      logger.error('Failed to load certificates:', error.message);
+      process.exit(1);
+    }
+  }
+
+  return { certContent, keyContent };
+}
 
 // Initialize the database connection
 const db = new DatabaseService(dbConfig);
@@ -36,6 +158,9 @@ const db = new DatabaseService(dbConfig);
 // Function to start the LDAP server
 async function startServer() {
   await db.initialize();
+
+  // Load certificates
+  const { certContent, keyContent } = loadCertificates();
 
   let ldapServerPool = [];
   if (config.authBackend === AUTHENTICATION_BACKEND.LDAP) {
@@ -62,9 +187,9 @@ async function startServer() {
   const serverOptions = {};
   
   // Only add SSL/TLS options if certificates are provided
-  if (config.ldapCertContent && config.ldapKeyContent) {
-    serverOptions.certificate = config.ldapCertContent;
-    serverOptions.key = config.ldapKeyContent;
+  if (certContent && keyContent) {
+    serverOptions.certificate = certContent;
+    serverOptions.key = keyContent;
     logger.info("LDAP server configured with SSL/TLS certificates");
   } else {
     logger.warn("LDAP server running without SSL/TLS certificates");
@@ -196,17 +321,18 @@ async function startServer() {
   });
 
   // Start the LDAP server
-  // Use port 389 for plain LDAP if no SSL certificates are configured
-  const PORT = (config.ldapCertContent && config.ldapKeyContent) 
+  // Use port 636 for LDAPS by default, 389 for plain LDAP only if explicitly unencrypted
+  const PORT = (certContent && keyContent) 
     ? (config.ldapPort || 636) 
     : (config.ldapPort || 389);
     
   server.listen(PORT, "0.0.0.0", () => {
     logger.info(`LDAP Server listening on port ${PORT}`);
-    if (config.ldapCertContent && config.ldapKeyContent) {
-      logger.info("Server is running with SSL/TLS encryption - use ldaps:// connections");
+    if (certContent && keyContent) {
+      // show fill daps://  path
+      logger.info(`Server is running with SSL/TLS encryption ldaps://${config.commonName}:${PORT} to connect securely`);
     } else {
-      logger.info("Server is running without SSL/TLS encryption - use ldap:// connections");
+      logger.warn(`\n*****\n*****\nServer is running without SSL/TLS encryption ldap://${config.commonName}:${PORT}\nNot good, so you should just be testing.\n*****\n*****\n`);
     }
   });
 
@@ -214,4 +340,5 @@ async function startServer() {
   setupGracefulShutdown({ db });
 }
 
-module.exports = startServer;
+// Export the initialization function instead of startServer directly
+module.exports = initializeServer;
