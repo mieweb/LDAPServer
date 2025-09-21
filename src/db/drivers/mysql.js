@@ -14,7 +14,8 @@ function createPool(config) {
       connectionLimit: 10, // Maximum number of connections in the pool
       queueLimit: 0 // No limit on the number of waiting requests
     });
-    console.log("MySQL Connection Pool Created");
+    // show connection success with details as a connection string
+    console.log(`MySQL Connection Pool Created: mysql://${config.user}@${config.host}/${config.database}`);
   }
   return pool;
 }
