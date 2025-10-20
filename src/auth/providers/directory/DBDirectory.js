@@ -26,6 +26,10 @@ class DBDirectory extends DirectoryProviderInterface {
   async getAllGroups() {
     return await this.db.getAllGroups();
   }
+
+  cleanup() {
+    // No cleanup needed for DB directory
+  }
 }
 
 module.exports = DBDirectory;

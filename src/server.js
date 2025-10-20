@@ -337,7 +337,7 @@ async function startServer() {
   });
 
   // Graceful shutdown
-  setupGracefulShutdown({ db });
+  setupGracefulShutdown({ db, directoryBackends });
 }
 
 // Export the initialization function instead of startServer directly
