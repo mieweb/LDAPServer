@@ -167,6 +167,7 @@ In addition to database backends (WebChart/MySQL, MongoDB), the LDAP server also
 ### Features
 
 * **Direct File Access** → Reads from `user.cfg` and `shadow.cfg` to reflect Proxmox users into LDAP.
+* **Auto-Reload** → Automatically detects changes to config files and reloads user/group data without restart.
 * **Containerized Deployment** → LDAP server runs as a container inside Proxmox.
 * **Centralized Authentication** → Single LDAP authority for all Proxmox containers.
 * **MFA Support** → Optional multi-factor authentication through the [MIE Authenticator App](https://github.com/mieweb/mieweb_auth_app).
