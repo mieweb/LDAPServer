@@ -1,0 +1,3 @@
+{"level":"info","message":"[ProxmoxDirectory] Loaded Proxmox user.cfg data from /tmp/demo_before.cfg"}
+{"level":"info","message":"[ProxmoxDirectory] Loaded Proxmox user.cfg data from /tmp/demo_after.cfg"}
+{"level":"warn","message":"[ProxmoxDirectory] No config path provided. Using empty user/group lists."}
