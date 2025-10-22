@@ -8,11 +8,84 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
     this.configPath = configPath;
     this.users = [];
     this.groups = [];
+    this.watcher = null;
+    this.reloadTimer = null;
+    this.DEBOUNCE_MS = 500;
+    
     if (configPath) {
       this.loadConfig();
+      this.setupFileWatcher();
     } else {
       logger.warn("[ProxmoxDirectory] No config path provided. Using empty user/group lists.");
     }
+  }
+
+  setupFileWatcher() {
+    if (!this.configPath) {
+      logger.debug("[ProxmoxDirectory] No config path to watch");
+      return;
+    }
+
+    if (!fs.existsSync(this.configPath)) {
+      logger.warn(`[ProxmoxDirectory] Cannot setup watcher - config file does not exist: ${this.configPath}`);
+      return;
+    }
+
+    try {
+      // Watch for file changes
+      this.watcher = fs.watch(this.configPath, (eventType, filename) => {
+        if (eventType === 'change' || eventType === 'rename') {
+          logger.info(`[ProxmoxDirectory] Config file ${eventType} detected: ${filename || this.configPath}`);
+          this.scheduleReload();
+        }
+      });
+
+      this.watcher.on('error', (error) => {
+        logger.error("[ProxmoxDirectory] File watcher error:", { error });
+        // Clean up failed watcher
+        if (this.watcher) {
+          try {
+            this.watcher.close();
+          } catch (e) {
+            // Ignore errors when closing
+          }
+          this.watcher = null;
+        }
+        
+        // Try to re-establish watcher after error
+        logger.info("[ProxmoxDirectory] Attempting to re-establish file watcher in 5 seconds...");
+        setTimeout(() => {
+          if (!this.watcher) { // Only if not already watching
+            this.setupFileWatcher();
+          }
+        }, 5000);
+      });
+
+      logger.info(`[ProxmoxDirectory] File watcher established on ${this.configPath}`);
+    } catch (err) {
+      logger.error("[ProxmoxDirectory] Failed to setup file watcher:", { error: err });
+    }
+  }
+
+  scheduleReload() {
+    // Clear existing timer to debounce rapid changes
+    if (this.reloadTimer) {
+      clearTimeout(this.reloadTimer);
+      logger.debug("[ProxmoxDirectory] Debouncing reload - clearing previous timer");
+    }
+
+    this.reloadTimer = setTimeout(() => {
+      logger.info("[ProxmoxDirectory] Debounce timer expired - reloading config file...");
+      
+      // Check if file still exists before reloading
+      if (fs.existsSync(this.configPath)) {
+        this.loadConfig();
+      } else {
+        logger.warn(`[ProxmoxDirectory] Config file no longer exists: ${this.configPath}`);
+      }
+      
+      this.reloadTimer = null;
+    }, this.DEBOUNCE_MS);
   }
 
   loadConfig() {
@@ -28,8 +101,13 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
       }
       
       const data = fs.readFileSync(this.configPath, 'utf8');
+      const previousUserCount = this.users.length;
+      const previousGroupCount = this.groups.length;
+      
       this.parseConfig(data);
-      logger.info(`[ProxmoxDirectory] Loaded Proxmox user.cfg data from ${this.configPath}`);
+      
+      logger.info(`[ProxmoxDirectory] Loaded Proxmox user.cfg data from ${this.configPath} ` +
+        `(users: ${previousUserCount} → ${this.users.length}, groups: ${previousGroupCount} → ${this.groups.length})`);
     } catch (err) {
       logger.error("[ProxmoxDirectory] Error reading config file:", { error: err });
     }
@@ -164,6 +242,32 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
 
   async getAllGroups() {
     return this.groups;
+  }
+
+  /**
+   * Clean up resources (file watcher and timers)
+   * Should be called during application shutdown
+   */
+  cleanup() {
+    logger.info("[ProxmoxDirectory] Cleaning up resources...");
+    
+    // Clear any pending reload timer
+    if (this.reloadTimer) {
+      clearTimeout(this.reloadTimer);
+      this.reloadTimer = null;
+      logger.debug("[ProxmoxDirectory] Cleared pending reload timer");
+    }
+
+    // Close file watcher
+    if (this.watcher) {
+      try {
+        this.watcher.close();
+        logger.info("[ProxmoxDirectory] File watcher closed successfully");
+      } catch (err) {
+        logger.error("[ProxmoxDirectory] Error closing file watcher:", { error: err });
+      }
+      this.watcher = null;
+    }
   }
 }
 
