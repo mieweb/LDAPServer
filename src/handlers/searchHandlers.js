@@ -9,12 +9,6 @@ async function handleUserSearch(username, res, selectedDirectory) {
     
     if (user) {
       const entry = createLdapEntry(user);
-      logger.debug("Sending user entry:", {
-        dn: entry.dn,
-        uid: entry.attributes.uid,
-        uidNumber: entry.attributes.uidNumber,
-        gidNumber: entry.attributes.gidNumber
-      });
       res.send(entry);
     } else {
       logger.debug(`[handleUserSearch] User ${username} not found`);
