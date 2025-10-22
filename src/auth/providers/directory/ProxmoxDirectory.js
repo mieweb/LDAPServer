@@ -1,4 +1,5 @@
 const fs = require('fs');
+const crypto = require('crypto');
 const DirectoryProviderInterface = require('./DirectoryProviderInterface');
 const logger = require('../../../utils/logger');
 
@@ -88,6 +89,24 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
     }, this.DEBOUNCE_MS);
   }
 
+  /**
+  * Generate a stable UID from a username using a hash function.
+  * This ensures the same username always gets the same UID regardless of
+  * the order in which users appear in the config file.
+  * 
+  * @param {string} username - The username to generate a UID for
+  * @returns {number} A stable UID in the range 2000-65533
+  */
+  generateStableUid(username) {
+    // Use SHA-256 hash of the username to generate a consistent number
+    const hash = crypto.createHash('sha256').update(username).digest('hex');
+    // Take first 8 characters of hex and convert to number
+    const hashNum = parseInt(hash.substring(0, 8), 16);
+    // Map to range 2000-65533 (avoiding reserved UIDs < 1000 and 65534-65535)
+    const uidRange = 65533 - 2000 + 1;
+    return 2000 + (hashNum % uidRange);
+  }
+
   loadConfig() {
     try {
       if (!this.configPath) {
@@ -117,7 +136,6 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
     const lines = content.split('\n');
     const users = [];
     const groups = [];
-    let uidBase = 1000;
     let gidBase = 2000; // Start group IDs from 2000
 
     for (const line of lines) {
@@ -125,30 +143,32 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
         const [_, rest] = line.split('user:');
         const [usernameWithRealm, , , , firstName, lastName, email] = rest.split(':');
         const cleanUsername = usernameWithRealm.split('@')[0];
-        
+
+        // Generate stable UID based on username hash
+        const stableUid = this.generateStableUid(cleanUsername);
+
         users.push({
           username: cleanUsername,
           full_name: `${firstName || ''} ${lastName || ''}`.trim() || cleanUsername,
           surname: lastName || "Unknown",
           mail: email || `${cleanUsername}@mieweb.com`,
-          uid_number: uidBase,
-          gid_number: uidBase, // User's primary group
+          uid_number: stableUid,
+          gid_number: stableUid, // User's primary group
           home_directory: `/home/${cleanUsername}`,
           password: undefined
         });
-        uidBase++;
       }
 
       if (line.startsWith('group:')) {
         const [_, groupName, members] = line.split(':');
         if (groupName === 'administrators' || groupName === 'interns') {
           const memberUids = members ? members.split(',').map(u => u.split('@')[0]) : [];
-          
+
           groups.push({
             name: groupName,
             memberUids,
             gid_number: gidBase,
-            gidNumber: gidBase, 
+            gidNumber: gidBase,
             dn: `cn=${groupName},${process.env.LDAP_BASE_DN}`,
             objectClass: ["posixGroup"],
           });
@@ -201,7 +221,7 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
       const username = memberUidMatch[1];
       logger.debug(`[findGroups] Detected memberUid match for: ${username}`);
       const matched = groups.filter(group => group.memberUids.includes(username));
-      logger.debug(`[findGroups] Returning ${matched.length} groups for memberUid:`, 
+      logger.debug(`[findGroups] Returning ${matched.length} groups for memberUid:`,
         matched.map(g => ({ name: g.name, gidNumber: g.gidNumber })));
       return matched;
     }
@@ -212,7 +232,7 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
       const cn = cnMatch[1];
       logger.debug(`[findGroups] Detected cn match for: ${cn}`);
       const matched = groups.filter(group => group.name === cn);
-      logger.debug(`[findGroups] Returning ${matched.length} groups for cn:`, 
+      logger.debug(`[findGroups] Returning ${matched.length} groups for cn:`,
         matched.map(g => ({ name: g.name, gidNumber: g.gidNumber })));
       return matched;
     }
