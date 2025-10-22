@@ -21,10 +21,13 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
   }
 
   setupFileWatcher() {
+    console.log("File watcher")
     if (!this.configPath) {
       logger.debug("[ProxmoxDirectory] No config path to watch");
       return;
     }
+
+  console.log(`[ProxmoxDirectory] Attempting to setup file watcher for: ${this.configPath}`);
 
     if (!fs.existsSync(this.configPath)) {
       logger.warn(`[ProxmoxDirectory] Cannot setup watcher - config file does not exist: ${this.configPath}`);
@@ -34,6 +37,7 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
     try {
       // Watch for file changes
       this.watcher = fs.watch(this.configPath, (eventType, filename) => {
+        console.log("File changed")
         if (eventType === 'change' || eventType === 'rename') {
           logger.info(`[ProxmoxDirectory] Config file ${eventType} detected: ${filename || this.configPath}`);
           this.scheduleReload();
@@ -61,8 +65,11 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
         }, 5000);
       });
 
+      console.log("File watcher established")
+
       logger.info(`[ProxmoxDirectory] File watcher established on ${this.configPath}`);
     } catch (err) {
+      console.log("Failed to setup file watcher")
       logger.error("[ProxmoxDirectory] Failed to setup file watcher:", { error: err });
     }
   }
@@ -91,6 +98,7 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
   loadConfig() {
     try {
       if (!this.configPath) {
+        console.log("[ProxmoxDirectory] No config path provided");
         logger.warn("[ProxmoxDirectory] No config path provided");
         return;
       }
@@ -106,6 +114,7 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
       
       this.parseConfig(data);
       
+      console.log("Loaded proxmox users from")
       logger.info(`[ProxmoxDirectory] Loaded Proxmox user.cfg data from ${this.configPath} ` +
         `(users: ${previousUserCount} → ${this.users.length}, groups: ${previousGroupCount} → ${this.groups.length})`);
     } catch (err) {

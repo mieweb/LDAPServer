@@ -40,6 +40,8 @@ const logger = winston.createLogger({
   ],
 });
 
+logger.silent = true;
+
 logger.securityEvent = function (message, meta) {
   this.log('security', message, meta);
 };
