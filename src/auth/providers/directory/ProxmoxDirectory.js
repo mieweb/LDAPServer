@@ -1,4 +1,5 @@
 const fs = require('fs');
+const crypto = require('crypto');
 const DirectoryProviderInterface = require('./DirectoryProviderInterface');
 const logger = require('../../../utils/logger');
 
@@ -13,6 +14,24 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
     } else {
       logger.warn("[ProxmoxDirectory] No config path provided. Using empty user/group lists.");
     }
+  }
+
+  /**
+   * Generate a stable UID from a username using a hash function.
+   * This ensures the same username always gets the same UID regardless of
+   * the order in which users appear in the config file.
+   * 
+   * @param {string} username - The username to generate a UID for
+   * @returns {number} A stable UID in the range 2000-65533
+   */
+  generateStableUid(username) {
+    // Use SHA-256 hash of the username to generate a consistent number
+    const hash = crypto.createHash('sha256').update(username).digest('hex');
+    // Take first 8 characters of hex and convert to number
+    const hashNum = parseInt(hash.substring(0, 8), 16);
+    // Map to range 2000-65533 (avoiding reserved UIDs < 1000 and 65534-65535)
+    const uidRange = 65533 - 2000 + 1;
+    return 2000 + (hashNum % uidRange);
   }
 
   loadConfig() {
@@ -39,7 +58,6 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
     const lines = content.split('\n');
     const users = [];
     const groups = [];
-    let uidBase = 1000;
     let gidBase = 2000; // Start group IDs from 2000
 
     for (const line of lines) {
@@ -48,17 +66,19 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
         const [usernameWithRealm, , , , firstName, lastName, email] = rest.split(':');
         const cleanUsername = usernameWithRealm.split('@')[0];
         
+        // Generate stable UID based on username hash
+        const stableUid = this.generateStableUid(cleanUsername);
+        
         users.push({
           username: cleanUsername,
           full_name: `${firstName || ''} ${lastName || ''}`.trim() || cleanUsername,
           surname: lastName || "Unknown",
           mail: email || `${cleanUsername}@mieweb.com`,
-          uid_number: uidBase,
-          gid_number: uidBase, // User's primary group
+          uid_number: stableUid,
+          gid_number: stableUid, // User's primary group
           home_directory: `/home/${cleanUsername}`,
           password: undefined
         });
-        uidBase++;
       }
 
       if (line.startsWith('group:')) {
