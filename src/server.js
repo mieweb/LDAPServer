@@ -337,7 +337,7 @@ async function startServer() {
   });
 
   // Graceful shutdown
-  setupGracefulShutdown({ db });
+  setupGracefulShutdown({ db, directoryProvider: selectedDirectory  });
 }
 
 // Export the initialization function instead of startServer directly

@@ -9,10 +9,60 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
     this.configPath = configPath;
     this.users = [];
     this.groups = [];
+    this.fileWatcher = null;
+    this.reloadTimeout = null;
+    
     if (configPath) {
       this.loadConfig();
+      this.setupFileWatcher();
     } else {
       logger.warn("[ProxmoxDirectory] No config path provided. Using empty user/group lists.");
+    }
+  }
+
+  /**
+   * Set up file watcher to automatically reload config when file changes
+   */
+  setupFileWatcher() {
+    if (!this.configPath || !fs.existsSync(this.configPath)) {
+      logger.warn("[ProxmoxDirectory] Cannot setup file watcher: invalid config path");
+      return;
+    }
+
+    try {
+      // Watch for changes to the config file
+      this.fileWatcher = fs.watch(this.configPath, (eventType, filename) => {
+        if (eventType === 'change' || eventType === 'rename') {
+          logger.info(`[ProxmoxDirectory] Config file changed, scheduling reload...`);
+          
+          // Debounce rapid file changes (e.g., multiple writes in quick succession)
+          if (this.reloadTimeout) {
+            clearTimeout(this.reloadTimeout);
+          }
+          
+          this.reloadTimeout = setTimeout(() => {
+            this.loadConfig();
+            logger.info("[ProxmoxDirectory] Config reloaded successfully");
+          }, 500); // Wait 500ms after last change before reloading
+        }
+      });
+
+      logger.info(`[ProxmoxDirectory] File watcher established for ${this.configPath}`);
+    } catch (err) {
+      logger.error("[ProxmoxDirectory] Error setting up file watcher:", { error: err });
+    }
+  }
+
+  /**
+   * Clean up file watcher when instance is destroyed
+   */
+  destroy() {
+    if (this.fileWatcher) {
+      this.fileWatcher.close();
+      logger.info("[ProxmoxDirectory] File watcher closed");
+    }
+    if (this.reloadTimeout) {
+      clearTimeout(this.reloadTimeout);
     }
   }
 
@@ -48,7 +98,7 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
       
       const data = fs.readFileSync(this.configPath, 'utf8');
       this.parseConfig(data);
-      logger.info(`[ProxmoxDirectory] Loaded Proxmox user.cfg data from ${this.configPath}`);
+      logger.info(`[ProxmoxDirectory] Loaded Proxmox user.cfg data from ${this.configPath} (${this.users.length} users, ${this.groups.length} groups)`);
     } catch (err) {
       logger.error("[ProxmoxDirectory] Error reading config file:", { error: err });
     }
