@@ -17,6 +17,7 @@ server/dist/
 *.tar.gz
 
 # Certificates
+logs/
 certs/
 *.key
 *.crt
