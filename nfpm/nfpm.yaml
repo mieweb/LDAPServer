@@ -1,0 +1,109 @@
+name: "ldap-gateway"
+arch: "amd64"
+platform: "linux"
+version: "v1.0.0"
+section: "default"
+priority: "extra"
+maintainer: "MieWeb <support@mieweb.com>"
+description: |
+  LDAP Gateway Server - A bridge between LDAP authentication and various backends
+  
+  The LDAP Gateway Server provides a flexible LDAP authentication service that can
+  bridge to multiple backend systems including MySQL databases, MongoDB, Proxmox,
+  and other LDAP servers. It supports SSL/TLS encryption, MFA integration, and
+  comprehensive logging.
+  
+  Features:
+  - Pluggable authentication backends (DB, LDAP, Proxmox)
+  - Directory service integration
+  - SSL/TLS encryption with automatic certificate generation
+  - Multi-factor authentication support
+  - Comprehensive audit logging
+  - POSIX account and group support
+  - Easy configuration via environment variables
+vendor: "MieWeb"
+homepage: "https://github.com/mieweb/LDAPServer"
+license: "MIT"
+
+depends:
+- nodejs (>= 18.0.0)
+
+provides:
+- ldap-gateway
+
+conflicts:
+- openldap
+- 389-ds
+
+replaces:
+- ldap-mysql-bridge
+
+contents:
+# Main application files
+- src: "./server/dist/**"
+  dst: "/opt/ldap-gateway/"
+  file_info:
+    mode: 0755
+
+# Configuration directory
+- src: "./server/dist/.env.example"
+  dst: "/etc/ldap-gateway/.env.example"
+  type: config
+  file_info:
+    mode: 0644
+
+# Systemd service file
+- src: "./nfpm/systemd/ldap-gateway.service"
+  dst: "/lib/systemd/system/ldap-gateway.service"
+  file_info:
+    mode: 0644
+
+# Log directory
+- dst: "/var/log/ldap-gateway"
+  type: dir
+  file_info:
+    mode: 0755
+    owner: ldap-gateway
+    group: ldap-gateway
+
+# Runtime directory
+- dst: "/var/run/ldap-gateway"
+  type: dir
+  file_info:
+    mode: 0755
+    owner: ldap-gateway
+    group: ldap-gateway
+
+# Certificate directory
+- dst: "/etc/ldap-gateway/certs"
+  type: dir
+  file_info:
+    mode: 0700
+    owner: ldap-gateway
+    group: ldap-gateway
+
+scripts:
+  preinstall: "./nfpm/scripts/preinstall.sh"
+  postinstall: "./nfpm/scripts/postinstall.sh"
+  preremove: "./nfpm/scripts/preremove.sh"
+  postremove: "./nfpm/scripts/postremove.sh"
+
+rpm:
+  summary: "LDAP Gateway Server for bridging LDAP authentication to various backends"
+  group: "System Environment/Daemons"
+  compression: gzip
+
+deb:
+  priority: "optional"
+  fields:
+    Bugs: "https://github.com/mieweb/LDAPServer/issues"
+
+overrides:
+  deb:
+    depends:
+    - nodejs (>= 18.0.0)
+    - systemd
+  rpm:
+    depends:
+    - nodejs >= 18.0.0
+    - systemd

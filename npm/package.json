@@ -1,0 +1,36 @@
+{
+  "name": "@ldap-gateway/core",
+  "version": "0.1.0",
+  "description": "Reusable LDAP gateway core with pluggable authentication and directory backends",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node build.js",
+    "test": "echo \"No tests yet\" && exit 0",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ldap",
+    "authentication",
+    "directory",
+    "gateway",
+    "ldapjs"
+  ],
+  "author": "MieWeb",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "peerDependencies": {
+    "ldapjs": "^3.0.0",
+    "@ldapjs/controls": "^1.0.0"
+  },
+  "dependencies": {
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {}
+}
