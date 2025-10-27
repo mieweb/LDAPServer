@@ -1,5 +1,6 @@
 const fs = require('fs');
 const crypto = require('crypto');
+const chokidar = require('chokidar');
 const DirectoryProviderInterface = require('./DirectoryProviderInterface');
 const logger = require('../../../utils/logger');
 
@@ -9,10 +10,97 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
     this.configPath = configPath;
     this.users = [];
     this.groups = [];
+    this.fileWatcher = null;
+    this.reloadTimeout = null;
+    
     if (configPath) {
       this.loadConfig();
+      this.setupFileWatcher();
     } else {
       logger.warn("[ProxmoxDirectory] No config path provided. Using empty user/group lists.");
+    }
+  }
+
+  /**
+   * Set up file watcher to automatically reload config when file changes
+   * Using chokidar for better reliability across different file systems
+   */
+  setupFileWatcher() {
+    if (!this.configPath || !fs.existsSync(this.configPath)) {
+      logger.warn("[ProxmoxDirectory] Cannot setup file watcher: invalid config path");
+      return;
+    }
+
+    try {
+      // Use chokidar for more reliable file watching
+      this.fileWatcher = chokidar.watch(this.configPath, {
+        persistent: true,
+        ignoreInitial: true,
+        awaitWriteFinish: {
+          stabilityThreshold: 500,
+          pollInterval: 100
+        },
+        // Important for mounted file systems like /mnt/pve
+        usePolling: true,
+        interval: 1000,
+        // Additional options for better reliability
+        atomic: true,
+        followSymlinks: false
+      });
+
+      this.fileWatcher.on('change', (path) => {
+        logger.info(`[ProxmoxDirectory] Config file changed: ${path}`);
+        this.scheduleReload();
+      });
+
+      this.fileWatcher.on('add', (path) => {
+        logger.info(`[ProxmoxDirectory] Config file added: ${path}`);
+        this.scheduleReload();
+      });
+
+      this.fileWatcher.on('unlink', (path) => {
+        logger.warn(`[ProxmoxDirectory] Config file removed: ${path}`);
+      });
+
+      this.fileWatcher.on('error', (error) => {
+        logger.error(`[ProxmoxDirectory] File watcher error:`, { error: error.message });
+      });
+
+      this.fileWatcher.on('ready', () => {
+        logger.info(`[ProxmoxDirectory] Chokidar file watcher ready and monitoring: ${this.configPath}`);
+      });
+
+      logger.info(`[ProxmoxDirectory] Setting up chokidar file watcher for ${this.configPath}`);
+    } catch (err) {
+      logger.error("[ProxmoxDirectory] Error setting up file watcher:", { error: err });
+    }
+  }
+
+  /**
+   * Schedule a config reload with debouncing
+   */
+  scheduleReload() {
+    // Debounce rapid file changes
+    if (this.reloadTimeout) {
+      clearTimeout(this.reloadTimeout);
+    }
+    
+    this.reloadTimeout = setTimeout(() => {
+      this.loadConfig();
+      logger.info("[ProxmoxDirectory] Config reloaded successfully after file change");
+    }, 500);
+  }
+
+  /**
+   * Clean up file watcher when instance is destroyed
+   */
+  async destroy() {
+    if (this.fileWatcher) {
+      await this.fileWatcher.close();
+      logger.info("[ProxmoxDirectory] File watcher closed");
+    }
+    if (this.reloadTimeout) {
+      clearTimeout(this.reloadTimeout);
     }
   }
 
@@ -48,7 +136,7 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
       
       const data = fs.readFileSync(this.configPath, 'utf8');
       this.parseConfig(data);
-      logger.info(`[ProxmoxDirectory] Loaded Proxmox user.cfg data from ${this.configPath}`);
+      logger.info(`[ProxmoxDirectory] Loaded Proxmox user.cfg data from ${this.configPath} (${this.users.length} users, ${this.groups.length} groups)`);
     } catch (err) {
       logger.error("[ProxmoxDirectory] Error reading config file:", { error: err });
     }

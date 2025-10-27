@@ -256,14 +256,6 @@ async function startServer() {
 
       for (const user of users) {
         const entry = createLdapEntry(user);
-        logger.debug("Sending user entry:", {
-          dn: entry.dn,
-          uid: entry.attributes.uid,
-          objectClass: entry.attributes.objectClass,
-          cn: entry.attributes.cn,
-          uidNumber: entry.attributes.uidNumber,
-          gidNumber: entry.attributes.gidNumber
-        });
         res.send(entry);
       }
 
@@ -337,7 +329,7 @@ async function startServer() {
   });
 
   // Graceful shutdown
-  setupGracefulShutdown({ db });
+  setupGracefulShutdown({ db, directoryProvider: selectedDirectory, authBackend:selectedBackend  });
 }
 
 // Export the initialization function instead of startServer directly
