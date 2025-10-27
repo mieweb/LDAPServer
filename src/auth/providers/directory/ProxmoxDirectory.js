@@ -1,5 +1,6 @@
 const fs = require('fs');
 const crypto = require('crypto');
+const chokidar = require('chokidar');
 const DirectoryProviderInterface = require('./DirectoryProviderInterface');
 const logger = require('../../../utils/logger');
 
@@ -22,6 +23,7 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
 
   /**
    * Set up file watcher to automatically reload config when file changes
+   * Using chokidar for better reliability across different file systems
    */
   setupFileWatcher() {
     if (!this.configPath || !fs.existsSync(this.configPath)) {
@@ -30,35 +32,71 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
     }
 
     try {
-      // Watch for changes to the config file
-      this.fileWatcher = fs.watch(this.configPath, (eventType, filename) => {
-        if (eventType === 'change' || eventType === 'rename') {
-          logger.info(`[ProxmoxDirectory] Config file changed, scheduling reload...`);
-          
-          // Debounce rapid file changes (e.g., multiple writes in quick succession)
-          if (this.reloadTimeout) {
-            clearTimeout(this.reloadTimeout);
-          }
-          
-          this.reloadTimeout = setTimeout(() => {
-            this.loadConfig();
-            logger.info("[ProxmoxDirectory] Config reloaded successfully");
-          }, 500); // Wait 500ms after last change before reloading
-        }
+      // Use chokidar for more reliable file watching
+      this.fileWatcher = chokidar.watch(this.configPath, {
+        persistent: true,
+        ignoreInitial: true,
+        awaitWriteFinish: {
+          stabilityThreshold: 500,
+          pollInterval: 100
+        },
+        // Important for mounted file systems like /mnt/pve
+        usePolling: true,
+        interval: 1000,
+        // Additional options for better reliability
+        atomic: true,
+        followSymlinks: false
       });
 
-      logger.info(`[ProxmoxDirectory] File watcher established for ${this.configPath}`);
+      this.fileWatcher.on('change', (path) => {
+        logger.info(`[ProxmoxDirectory] Config file changed: ${path}`);
+        this.scheduleReload();
+      });
+
+      this.fileWatcher.on('add', (path) => {
+        logger.info(`[ProxmoxDirectory] Config file added: ${path}`);
+        this.scheduleReload();
+      });
+
+      this.fileWatcher.on('unlink', (path) => {
+        logger.warn(`[ProxmoxDirectory] Config file removed: ${path}`);
+      });
+
+      this.fileWatcher.on('error', (error) => {
+        logger.error(`[ProxmoxDirectory] File watcher error:`, { error: error.message });
+      });
+
+      this.fileWatcher.on('ready', () => {
+        logger.info(`[ProxmoxDirectory] Chokidar file watcher ready and monitoring: ${this.configPath}`);
+      });
+
+      logger.info(`[ProxmoxDirectory] Setting up chokidar file watcher for ${this.configPath}`);
     } catch (err) {
       logger.error("[ProxmoxDirectory] Error setting up file watcher:", { error: err });
     }
   }
 
   /**
+   * Schedule a config reload with debouncing
+   */
+  scheduleReload() {
+    // Debounce rapid file changes
+    if (this.reloadTimeout) {
+      clearTimeout(this.reloadTimeout);
+    }
+    
+    this.reloadTimeout = setTimeout(() => {
+      this.loadConfig();
+      logger.info("[ProxmoxDirectory] Config reloaded successfully after file change");
+    }, 500);
+  }
+
+  /**
    * Clean up file watcher when instance is destroyed
    */
-  destroy() {
+  async destroy() {
     if (this.fileWatcher) {
-      this.fileWatcher.close();
+      await this.fileWatcher.close();
       logger.info("[ProxmoxDirectory] File watcher closed");
     }
     if (this.reloadTimeout) {
