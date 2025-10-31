@@ -108,7 +108,9 @@ This is a **modular LDAP gateway** built with Node.js and ldapjs that bridges LD
 
 ## Project-Specific Patterns
 - **Backend separation**: Always implement both auth and directory providers (see `npm/src/interfaces/`)
-- **Environment config**: All settings via `.env` (e.g., `AUTH_BACKEND=db`, `DIRECTORY_BACKEND=mysql`)
+- **Dynamic backend loading**: Backends can be loaded from `server/backends/*.js` at runtime without rebuilding (see `server/utils/backendLoader.js`)
+- **Provider factory**: Use `ProviderFactory` to instantiate backends; supports both compiled and dynamic providers
+- **Environment config**: All settings via `.env` (e.g., `AUTH_BACKEND=db`, `DIRECTORY_BACKEND=mysql`, `BACKEND_DIR=/custom/path`)
 - **LDAP entry mapping**: Use `@ldap-gateway/core` utilities to create entries with standard attributes (posixAccount, inetOrgPerson)
 - **Database queries**: Use connection pooling in drivers (`server/src/db/drivers/`); groups store `member_uids` as JSON arrays
 - **UID/GID mapping**: For WebChart, `uidNumber` from "LDAP UID Number" observation or `user_id + 10000`; `gidNumber` from `realms.id`
@@ -119,6 +121,7 @@ This is a **modular LDAP gateway** built with Node.js and ldapjs that bridges LD
 ## Examples
 - **Adding auth backend**: Extend `AuthProvider` class, implement `authenticate(username, password, req)` (see `dbBackend.js`)
 - **Directory provider**: Implement `findUser()`, `getAllUsers()`, etc. (see `DBDirectory.js` delegating to `DatabaseService`)
+- **Dynamic backend**: Create JS file in `server/backends/` exporting `{ name, type, provider }` (see `server/backends/template.js`)
 - **LDAP search**: Parse filters with `utils.js` functions like `getUsernameFromFilter()`; detect user/group requests
 - **Proxmox integration**: Reads `user.cfg`/`shadow.cfg` files directly for user data and auth
 

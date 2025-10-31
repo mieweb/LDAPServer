@@ -201,6 +201,46 @@ PROXMOX_USER_CFG=/etc/pve/user.cfg
 PROXMOX_SHADOW_CFG=/etc/pve/shadow.cfg
 ```
 
+### 🔌 Custom Backends (Dynamic Loading)
+
+**NEW:** Create your own backends without rebuilding! Place JavaScript files in `server/backends/` to add custom authentication or directory providers.
+
+#### Quick Example
+
+1. **Create a custom auth backend** (`server/backends/my-auth.js`):
+```javascript
+const { AuthProvider } = require('@ldap-gateway/core');
+
+class MyAuthBackend extends AuthProvider {
+  async authenticate(username, password) {
+    // Your custom authentication logic
+    return await myApiCall(username, password);
+  }
+}
+
+module.exports = {
+  name: 'my-auth',
+  type: 'auth',
+  provider: MyAuthBackend
+};
+```
+
+2. **Configure to use it**:
+```ini
+AUTH_BACKEND=my-auth
+```
+
+3. **Restart the server** - your backend loads automatically!
+
+#### Features
+- ✅ **No rebuild required** - just add JS files
+- ✅ **Hot reload support** - change files without restarting
+- ✅ **Full access to core interfaces** - use AuthProvider and DirectoryProvider
+- ✅ **Template included** - `server/backends/template.js` to get started
+- ✅ **Examples provided** - See `server/backends/*.example.js`
+
+📚 **Full documentation**: See [server/backends/README.md](server/backends/README.md) for complete guide with examples.
+
 ---
 
 ## 🧪 Testing

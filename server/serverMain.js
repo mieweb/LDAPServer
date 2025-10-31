@@ -1,5 +1,6 @@
 const { checkAndSetupEnvironment } = require('./utils/setupUtils');
 const configLoader = require('./config/configurationLoader');
+const { ProviderFactory } = require('./providers');
 
 // Check for command line arguments
 function parseCommandLineArgs() {
@@ -21,6 +22,17 @@ async function initializeServer() {
   
   // Load configuration using the centralized configuration loader
   const config = configLoader.loadConfig();
+  
+  // Initialize dynamic backend loading
+  const backendDir = process.env.BACKEND_DIR || null;
+  ProviderFactory.initialize(backendDir);
+  
+  // List available backends for debugging
+  if (config.logLevel === 'debug') {
+    const availableBackends = ProviderFactory.listAvailableBackends();
+    logger.debug('Available auth backends:', availableBackends.auth);
+    logger.debug('Available directory backends:', availableBackends.directory);
+  }
   
   // Continue with server initialization
   return startServer(config);
@@ -144,20 +156,39 @@ async function startServer(config) {
     ldapServerPool = await resolveLDAPHosts();
   }
 
-  // Set up directory providers
-  const directoryBackends = {
-    db: new DBDirectory(db),
-    proxmox: new ProxmoxDirectory(config.proxmoxUserCfg),
-  };
-  const selectedDirectory = directoryBackends[config.directoryBackend] || directoryBackends['db'];
+  // Set up directory providers using ProviderFactory
+  let selectedDirectory;
+  try {
+    selectedDirectory = ProviderFactory.createDirectoryProvider(config.directoryBackend, {
+      databaseService: db,
+      userCfgPath: config.proxmoxUserCfg
+    });
+    logger.info(`Directory provider initialized: ${config.directoryBackend}`);
+  } catch (error) {
+    logger.error(`Failed to initialize directory provider '${config.directoryBackend}':`, error.message);
+    logger.info('Falling back to db directory provider');
+    selectedDirectory = ProviderFactory.createDirectoryProvider('db', {
+      databaseService: db
+    });
+  }
 
-  // Set up authentication providers
-  const authBackends = {
-    db: new DBAuth(db),
-    ldap: new LDAPAuth(ldapServerPool),
-    proxmox: new ProxmoxAuth(config.proxmoxShadowCfg),
-  };
-  const selectedBackend = authBackends[config.authBackend] || authBackends[AUTHENTICATION_BACKEND.DATABASE];
+  // Set up authentication providers using ProviderFactory
+  let selectedBackend;
+  try {
+    selectedBackend = ProviderFactory.createAuthProvider(config.authBackend, {
+      databaseService: db,
+      ldapServerPool: ldapServerPool,
+      shadowCfgPath: config.proxmoxShadowCfg
+    });
+    logger.info(`Auth provider initialized: ${config.authBackend}`);
+  } catch (error) {
+    logger.error(`Failed to initialize auth provider '${config.authBackend}':`, error.message);
+    logger.info('Falling back to db auth provider');
+    selectedBackend = ProviderFactory.createAuthProvider('db', {
+      databaseService: db
+    });
+  }
+  
   const authService = new AuthService(selectedBackend);
 
   // Create the LDAP server

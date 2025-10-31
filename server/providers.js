@@ -1,4 +1,5 @@
 const { AuthProvider, DirectoryProvider } = require('@ldap-gateway/core');
+const backendLoader = require('./utils/backendLoader');
 
 // Import existing backends
 const DBAuth = require('./auth/providers/auth/dbBackend');
@@ -103,9 +104,25 @@ class ProxmoxDirectoryProvider extends DirectoryProvider {
 
 /**
  * Factory for creating provider instances
+ * Supports both compiled backends and dynamically loaded backends
  */
 class ProviderFactory {
+  /**
+   * Initialize the factory with dynamic backend support
+   * @param {string} backendDir - Optional custom directory for backends
+   */
+  static initialize(backendDir = null) {
+    backendLoader.initialize(backendDir);
+  }
+
   static createAuthProvider(type, options = {}) {
+    // First check for dynamically loaded backends
+    const DynamicBackend = backendLoader.getAuthBackend(type);
+    if (DynamicBackend) {
+      return new DynamicBackend(options);
+    }
+
+    // Fall back to compiled backends
     switch (type) {
       case 'db':
         return new DatabaseAuthProvider(options.databaseService);
@@ -119,6 +136,13 @@ class ProviderFactory {
   }
 
   static createDirectoryProvider(type, options = {}) {
+    // First check for dynamically loaded backends
+    const DynamicBackend = backendLoader.getDirectoryBackend(type);
+    if (DynamicBackend) {
+      return new DynamicBackend(options);
+    }
+
+    // Fall back to compiled backends
     switch (type) {
       case 'db':
         return new DatabaseDirectoryProvider(options.databaseService);
@@ -127,6 +151,30 @@ class ProviderFactory {
       default:
         throw new Error(`Unknown directory provider type: ${type}`);
     }
+  }
+
+  /**
+   * List all available backends (compiled + dynamic)
+   * @returns {Object} Object with auth and directory arrays
+   */
+  static listAvailableBackends() {
+    const dynamic = backendLoader.listBackends();
+    const compiled = {
+      auth: ['db', 'ldap', 'proxmox'],
+      directory: ['db', 'proxmox']
+    };
+
+    return {
+      auth: [...new Set([...compiled.auth, ...dynamic.auth])],
+      directory: [...new Set([...compiled.directory, ...dynamic.directory])]
+    };
+  }
+
+  /**
+   * Reload dynamic backends (useful for development)
+   */
+  static reloadBackends() {
+    backendLoader.reload();
   }
 }
 
