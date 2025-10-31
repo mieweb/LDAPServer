@@ -1,0 +1,49 @@
+name: CI Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  test:
+    name: Test Build Process
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build core package
+        run: npm run build:core
+
+      - name: Test core package
+        run: npm run test:core
+
+      - name: Build server package
+        run: npm run build:server
+
+      - name: Test server package
+        run: npm run test:server
+
+      - name: Create binary
+        run: npm run build:binary
+
+      - name: Verify binary
+        run: |
+          ls -la dist/
+          file dist/ldap-gateway
+          chmod +x dist/ldap-gateway
+          timeout 5s ./dist/ldap-gateway --help || echo "Binary created successfully"

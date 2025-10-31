@@ -1,0 +1,55 @@
+[Unit]
+Description=LDAP Gateway Server
+Documentation=https://github.com/mieweb/LDAPServer
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ldap-gateway
+Group=ldap-gateway
+
+# Working directory
+WorkingDirectory=/opt/ldap-gateway
+
+# Environment
+Environment=NODE_ENV=production
+EnvironmentFile=-/etc/ldap-gateway/.env
+
+# Start the server
+ExecStart=/opt/ldap-gateway/ldap-gateway
+ExecReload=/bin/kill -USR1 $MAINPID
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/log/ldap-gateway /var/run/ldap-gateway /etc/ldap-gateway
+
+# Capabilities
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ldap-gateway
+
+# Process management
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

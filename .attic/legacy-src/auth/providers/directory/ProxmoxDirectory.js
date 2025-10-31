@@ -146,6 +146,7 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
     const lines = content.split('\n');
     const users = [];
     const groups = [];
+    let uidBase = 1000;
     let gidBase = 2000; // Start group IDs from 2000
 
     for (const line of lines) {
@@ -154,19 +155,17 @@ class ProxmoxDirectory extends DirectoryProviderInterface {
         const [usernameWithRealm, , , , firstName, lastName, email] = rest.split(':');
         const cleanUsername = usernameWithRealm.split('@')[0];
         
-        // Generate stable UID based on username hash
-        const stableUid = this.generateStableUid(cleanUsername);
-        
         users.push({
           username: cleanUsername,
           full_name: `${firstName || ''} ${lastName || ''}`.trim() || cleanUsername,
           surname: lastName || "Unknown",
           mail: email || `${cleanUsername}@mieweb.com`,
-          uid_number: stableUid,
-          gid_number: stableUid, // User's primary group
+          uid_number: uidBase,
+          gid_number: uidBase, // User's primary group
           home_directory: `/home/${cleanUsername}`,
           password: undefined
         });
+        uidBase++;
       }
 
       if (line.startsWith('group:')) {

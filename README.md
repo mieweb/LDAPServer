@@ -1,58 +1,423 @@
-# LDAPServer
+# LDAP Gateway
 
-This project implements an LDAP gateway server using [ldapjs](https://github.com/ldapjs/node-ldapjs) that integrates with multiple backends to manage and authenticate users. It is designed for applications that require LDAP authentication but store user information in other systems, making it compatible with both modern and legacy environments.
+A modular LDAP gateway server that bridges LDAP authentication to various backends (MySQL/MongoDB/Proxmox). Built with Node.js and ldapjs, it separates **directory lookups** (user/group info) from **authentication** (password validation) for flexible integration with modern and legacy systems.
 
-## 🖼️ Architecture Overview
+## 🏗️ Architecture
+
+The project is structured as a **modular monorepo** with distinct responsibilities:
+
+```mermaid
+graph TB
+    subgraph "📦 @ldap-gateway/core (npm package)"
+        A[LdapEngine] --> B[AuthProvider Interface]
+        A --> C[DirectoryProvider Interface]  
+        A --> D[Utilities & Error Handling]
+    end
+    
+    subgraph "🚀 ldap-gateway-server (standalone)"
+        E[Server Implementation] --> F[Provider Factory]
+        E --> G[Configuration Loader]
+        F --> H[DB Backend]
+        F --> I[LDAP Backend]
+        F --> J[Proxmox Backend]
+    end
+    
+    subgraph "📋 Distribution"
+        K[Binary Executable]
+        L[.deb/.rpm packages]
+        M[Homebrew Formula]
+        N[Docker Images]
+    end
+    
+    A -.-> E
+    E --> K
+    E --> L
+    E --> M
+    E --> N
+
+    classDef coreStyle fill:#e1f5fe
+    classDef serverStyle fill:#f3e5f5  
+    classDef distStyle fill:#e8f5e8
+    
+    class A,B,C,D coreStyle
+    class E,F,G,H,I,J serverStyle
+    class K,L,M,N distStyle
+```
+
+### � Authentication Flow
 
 ```mermaid
 sequenceDiagram
-    participant User as ann (User)
-    participant Client as Client (SSHD)
-    participant SSSD as SSSD
-    participant LDAP as LDAPServer
-    participant DB as Directory (MySQL/MongoDB/Proxmox)
-    User->>Client: SSH login request (ann)
-    Client->>SSSD: Authenticate user (ann)
-    SSSD->>LDAP: Fetch user info
-    LDAP->>DB: Check if user exists
-    DB-->>LDAP: User exists
-    LDAP-->>SSSD: Return user info + group memberships
-    SSSD->>LDAP: Check user credentials
-    LDAP->>DB: Validate password
-    DB-->>LDAP: Password correct
-    SSSD-->>Client: Authentication success/failure
-    Client-->>User: Login allowed/denied
-
+    participant User as 👤 User
+    participant Client as 🖥️ SSH Client
+    participant SSSD as 🔐 SSSD
+    participant Gateway as 🌉 LDAP Gateway
+    participant Directory as 📁 Directory Backend
+    participant Auth as 🔑 Auth Backend
+    
+    User->>Client: SSH login attempt
+    Client->>SSSD: Authenticate user
+    SSSD->>Gateway: LDAP bind request
+    Gateway->>Directory: Fetch user info
+    Directory-->>Gateway: User details + groups
+    Gateway->>Auth: Validate credentials
+    Auth-->>Gateway: Auth result
+    Gateway-->>SSSD: LDAP response
+    SSSD-->>Client: Access granted/denied
+    Client-->>User: Login success/failure
 ```
 
 ---
 
-## ⚙️ Technologies Used
+## 🚀 Quick Start
 
-- **Node.js**: The main runtime environment for the application.
-- **ldapjs**: A library for creating and managing LDAP servers in Node.js.
-- **MySQL**: A relational database used to store extended user details.
-- **dotenv**: Manages environment variables securely.
-- **Docker**: For containerizing the MySQL and LDAP services.
+### Installation Options
 
----
+#### Option 1: Binary Release (Recommended)
+```bash
+# Download latest release
+curl -LO https://github.com/mieweb/LDAPServer/releases/latest/download/ldap-gateway-linux.tar.gz
+tar -xzf ldap-gateway-linux.tar.gz
+cd ldap-gateway-*
+sudo ./install.sh
+```
 
-## 🚀 Getting Started
+#### Option 2: Package Manager
 
-### Prerequisites
+**Ubuntu/Debian:**
+```bash
+curl -LO https://github.com/mieweb/LDAPServer/releases/latest/download/ldap-gateway_amd64.deb
+sudo dpkg -i ldap-gateway_amd64.deb
+```
 
-* [Docker](https://www.docker.com/)
-* [Node.js](https://nodejs.org/) (v18.x+)
+**RHEL/CentOS/Fedora:**
+```bash
+curl -LO https://github.com/mieweb/LDAPServer/releases/latest/download/ldap-gateway.rpm
+sudo rpm -i ldap-gateway.rpm
+```
 
----
+**macOS (Homebrew):**
+```bash
+brew tap mieweb/homebrew-tap
+brew install ldap-gateway
+```
 
-### Installation
-
+#### Option 3: Development Setup
 ```bash
 git clone https://github.com/mieweb/LDAPServer.git
 cd LDAPServer
-cp LDAPServer/src/.env.example LDAPServer/src/.env
+npm install
+cp server/.env.example server/.env
+# Edit .env with your configuration
+./launch.sh
 ```
+
+### Configuration
+
+Create or edit `/etc/ldap-gateway/.env`:
+
+```ini
+# Directory backend: where to find user/group information
+DIRECTORY_BACKEND=mysql  # mysql | mongodb | proxmox
+
+# Authentication backend: how to validate passwords  
+AUTH_BACKEND=ldap       # db | ldap | proxmox
+
+# MySQL (WebChart integration)
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=ldap_user
+MYSQL_PASSWORD=secure_password
+MYSQL_DATABASE=webchart
+
+# External LDAP/AD authentication
+LDAP_BIND_DN=CN=ldap-service,OU=Service Accounts,DC=company,DC=com
+LDAP_BIND_PASSWORD=ldap_service_password
+AD_DOMAIN=company.com
+
+# Server settings
+LDAP_PORT=636
+LDAP_BASE_DN=dc=company,dc=com
+```
+
+### Start Service
+
+```bash
+# Using systemd (installed packages)
+sudo systemctl enable ldap-gateway
+sudo systemctl start ldap-gateway
+
+# Or run directly  
+ldap-gateway
+
+# Development mode
+npm run dev
+```
+
+---
+
+## 🔧 Backend Configuration
+
+The LDAP gateway separates **directory lookups** from **authentication**, allowing flexible mixing:
+
+### Directory Backends (`DIRECTORY_BACKEND`)
+
+| Backend | Description | Use Case |
+|---------|-------------|----------|
+| `mysql` | MySQL/MariaDB with WebChart schema | Healthcare systems, EHR integration |
+| `mongodb` | MongoDB collections | Modern web applications |
+| `proxmox` | Proxmox user.cfg/shadow.cfg files | Virtualization environments |
+
+### Authentication Backends (`AUTH_BACKEND`) 
+
+| Backend | Description | Use Case |
+|---------|-------------|----------|
+| `db` | Database password hashes | Self-contained authentication |
+| `ldap` | External LDAP/Active Directory | Enterprise SSO integration |
+| `proxmox` | Proxmox shadow file | Proxmox container authentication |
+
+### Example Configurations
+
+#### WebChart + Active Directory
+```ini
+DIRECTORY_BACKEND=mysql    # User info from WebChart
+AUTH_BACKEND=ldap         # Passwords via AD
+MYSQL_HOST=webchart-db
+AD_DOMAIN=hospital.local
+```
+
+#### MongoDB Self-Contained
+```ini  
+DIRECTORY_BACKEND=mongodb  # User info from MongoDB
+AUTH_BACKEND=db           # Passwords in MongoDB
+MONGODB_URI=mongodb://localhost:27017/users
+```
+
+#### Proxmox Container Auth
+```ini
+DIRECTORY_BACKEND=proxmox  # Users from Proxmox config
+AUTH_BACKEND=proxmox      # Passwords from Proxmox
+PROXMOX_USER_CFG=/etc/pve/user.cfg
+PROXMOX_SHADOW_CFG=/etc/pve/shadow.cfg
+```
+
+### 🔌 Custom Backends (Dynamic Loading)
+
+**NEW:** Create your own backends without rebuilding! Place JavaScript files in `server/backends/` to add custom authentication or directory providers.
+
+#### Quick Example
+
+1. **Create a custom auth backend** (`server/backends/my-auth.js`):
+```javascript
+const { AuthProvider } = require('@ldap-gateway/core');
+
+class MyAuthBackend extends AuthProvider {
+  async authenticate(username, password) {
+    // Your custom authentication logic
+    return await myApiCall(username, password);
+  }
+}
+
+module.exports = {
+  name: 'my-auth',
+  type: 'auth',
+  provider: MyAuthBackend
+};
+```
+
+2. **Configure to use it**:
+```ini
+AUTH_BACKEND=my-auth
+```
+
+3. **Restart the server** - your backend loads automatically!
+
+#### Features
+- ✅ **No rebuild required** - just add JS files
+- ✅ **Hot reload support** - change files without restarting
+- ✅ **Full access to core interfaces** - use AuthProvider and DirectoryProvider
+- ✅ **Template included** - `server/backends/template.js` to get started
+- ✅ **Examples provided** - See `server/backends/*.example.js`
+
+📚 **Full documentation**: See [server/backends/README.md](server/backends/README.md) for complete guide with examples.
+
+---
+
+## 🧪 Testing
+
+### LDAP Queries
+```bash
+# Search for users
+ldapsearch -x -H ldaps://localhost:636 -b "dc=company,dc=com" "(uid=john)"
+
+# List all users  
+ldapsearch -x -H ldaps://localhost:636 -b "dc=company,dc=com" "(objectClass=posixAccount)"
+
+# List groups
+ldapsearch -x -H ldaps://localhost:636 -b "dc=company,dc=com" "(objectClass=posixGroup)"
+```
+
+### SSH Authentication
+```bash
+# Test SSH authentication through SSSD
+ssh john@ldap-client-host
+
+# Test with specific port
+ssh john@localhost -p 2222
+```
+
+### Health Check
+```bash
+# Check service status
+systemctl status ldap-gateway
+
+# View logs
+journalctl -u ldap-gateway -f
+
+# Test configuration
+ldap-gateway --config-test
+```
+
+---
+
+## 🏥 WebChart Integration
+
+Specialized support for [WebChart EHR](https://www.mieweb.com/) systems:
+
+### Schema Mapping
+- **Users** → `posixAccount` objects with healthcare-specific attributes
+- **UID Numbers** → Derived from "LDAP UID Number" observations or `user_id + 10000`
+- **Groups** → Based on WebChart realms and roles
+- **Security** → Integrates with WebChart permission system
+
+### Configuration
+```ini
+DIRECTORY_BACKEND=mysql
+MYSQL_DATABASE=webchart
+MYSQL_USER=readonly_user
+
+# Optional: Custom observation code for UID mapping
+LDAP_UID_OBS_NAME="Custom UID Field"
+```
+
+---
+
+## 🖥️ Proxmox Integration  
+
+Direct integration with Proxmox virtualization environments:
+
+### Features
+- **Container Authentication** → Centralized LDAP for all containers/VMs
+- **Configuration Syncing** → Reads directly from Proxmox user/shadow files
+- **MFA Support** → Optional push notifications via [MIE Authenticator](https://github.com/mieweb/mieweb_auth_app)
+- **Automated Setup** → Use [pown.sh](https://github.com/anishapant21/pown.sh) for container LDAP client configuration
+
+### Deployment
+```bash
+# Install in Proxmox container
+pct create 100 --template debian-12 --hostname ldap-gateway
+pct set 100 --mp0 /etc/pve,mp=/etc/pve:ro  # Mount Proxmox config
+pct start 100
+pct enter 100
+
+# Install LDAP Gateway
+curl -L https://github.com/mieweb/LDAPServer/releases/latest/download/ldap-gateway_amd64.deb
+dpkg -i ldap-gateway_amd64.deb
+
+# Configure for Proxmox
+cat > /etc/ldap-gateway/.env << EOF
+DIRECTORY_BACKEND=proxmox
+AUTH_BACKEND=proxmox
+PROXMOX_USER_CFG=/etc/pve/user.cfg
+PROXMOX_SHADOW_CFG=/etc/pve/shadow.cfg
+EOF
+
+systemctl enable --now ldap-gateway
+```
+
+---
+
+## 📦 Development
+
+### Architecture Overview
+```
+LDAPServer/
+├── npm/                    # @ldap-gateway/core package
+│   ├── src/               # Core interfaces and utilities  
+│   ├── dist/              # Built package
+│   └── package.json       # Core package definition
+├── server/                # ldap-gateway-server package
+│   ├── src/               # Server implementation
+│   ├── dist/              # Built server
+│   └── package.json       # Server package definition
+├── .github/workflows/     # CI/CD automation
+├── nfpm/                  # Package configuration
+├── docker/                # Development containers
+└── terraform/             # AWS deployment
+```
+
+### Building
+
+```bash
+# Install dependencies
+npm install
+
+# Build core package
+npm run build:core
+
+# Build server package  
+npm run build:server
+
+# Create binary
+npm run build:binary
+
+# Build packages (.deb/.rpm)
+nfpm package --packager deb
+```
+
+### Testing
+
+```bash  
+# Run all tests
+npm test
+
+# Test specific package
+npm run test:core
+npm run test:server
+
+# Integration testing with Docker
+./launch.sh  # Starts MySQL + test client
+./shutdown.sh  # Cleanup
+```
+
+### Contributing
+
+1. **Fork** and **clone** the repository
+2. **Create** a feature branch: `git checkout -b feature/my-feature`
+3. **Make** your changes with tests
+4. **Run** the test suite: `npm test`
+5. **Submit** a pull request
+
+---
+
+## 📚 Resources
+
+- 🎥 **[Demo Video](https://youtu.be/qsE1BWpmsME?si=MRnwFHu6LCd-2fhk)** - Complete setup walkthrough
+- 📖 **[API Documentation](./npm/README.md)** - Core package usage
+- 🔧 **[Server Configuration](./server/README.md)** - Server setup guide
+- 🏥 **[WebChart Integration](https://docs.google.com/document/d/1_6iutppKego9Kg_FGuDg5OwbXJUqZ0a2Fj7ajgNLU8k/edit)** - Healthcare deployment
+- 📱 **[MIE Authenticator](https://github.com/mieweb/mieweb_auth_app)** - MFA mobile app
+- 🛠️ **[pown.sh](https://github.com/anishapant21/pown.sh)** - Container automation
+
+---
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+<sub>Built with ❤️ by [MIEWeb](https://www.mieweb.com/) for healthcare and enterprise environments.</sub>
 
 Edit `.env` with appropriate values (see [Configuration](#-configuration)).
 
@@ -167,6 +532,7 @@ In addition to database backends (WebChart/MySQL, MongoDB), the LDAP server also
 ### Features
 
 * **Direct File Access** → Reads from `user.cfg` and `shadow.cfg` to reflect Proxmox users into LDAP.
+* **Auto-Reload** → Automatically detects changes to config files and reloads user/group data without restart.
 * **Containerized Deployment** → LDAP server runs as a container inside Proxmox.
 * **Centralized Authentication** → Single LDAP authority for all Proxmox containers.
 * **MFA Support** → Optional multi-factor authentication through the [MIE Authenticator App](https://github.com/mieweb/mieweb_auth_app).
