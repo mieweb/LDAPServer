@@ -323,8 +323,8 @@ async function startServer(config) {
   server.on('clientError', (err, socket) => {
     logger.error('LDAP Client connection error:', { 
       error: err.message, 
-      remoteAddress: socket.remoteAddress,
-      remotePort: socket.remotePort 
+      remoteAddress: socket?.remoteAddress,
+      remotePort: socket?.remotePort 
     });
   });
 
