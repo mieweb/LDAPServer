@@ -1,5 +1,6 @@
-const AuthProvider = require('./authProviderInterface');
+const { AuthProvider } = require('@ldap-gateway/core');
 const ldap = require('ldapjs');
+
 const logger = require('../../../utils/logger');
 
 class LDAPBackend extends AuthProvider {

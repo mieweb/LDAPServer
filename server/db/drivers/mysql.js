@@ -1,5 +1,5 @@
 const mysql = require("mysql2/promise");
-import logger from "../../utils/logger";
+const logger = require("../../utils/logger");
 
 // Create a connection pool at startup
 let pool;

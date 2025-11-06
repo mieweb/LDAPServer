@@ -1,4 +1,4 @@
-const AuthProvider = require('./authProviderInterface');
+const { AuthProvider } = require('@ldap-gateway/core');
 
 class DBBackend extends AuthProvider {
   constructor(dbService) {

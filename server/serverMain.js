@@ -1,5 +1,26 @@
-const { checkAndSetupEnvironment } = require('./utils/setupUtils');
+const ldap = require('ldapjs');
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+
 const configLoader = require('./config/configurationLoader');
+const dbConfig = require('./config/dbConfig');
+
+const { AUTHENTICATION_BACKEND } = require('./constants/constants');
+
+const DatabaseService = require('./services/databaseServices');
+const AuthService = require('./services/authService');
+const NotificationService = require('./services/notificationService');
+
+const { handleUserSearch, handleGroupSearch } = require('./handlers/searchHandlers');
+
+const logger = require('./utils/logger');
+const resolveLDAPHosts = require('./utils/resolveLdapHosts');
+const { createLdapEntry } = require('./utils/ldapUtils');
+const { extractCredentials, getUsernameFromFilter, isAllUsersRequest } = require('./utils/utils');
+const { setupGracefulShutdown } = require('./utils/shutdownUtils');
+const { checkAndSetupEnvironment } = require('./utils/setupUtils');
+
 const { ProviderFactory } = require('./providers');
 
 // Check for command line arguments
@@ -37,27 +58,6 @@ async function initializeServer() {
   // Continue with server initialization
   return startServer(config);
 }
-
-const ldap = require('ldapjs');
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
-const logger = require('./utils/logger');
-const { extractCredentials, getUsernameFromFilter, isAllUsersRequest } = require('./utils/utils');
-const { setupGracefulShutdown } = require('./utils/shutdownUtils');
-const dbConfig = require('./config/dbConfig');
-const DatabaseService = require('./services/databaseServices');
-const AuthService = require('./services/authService');
-const DBAuth = require('./auth/providers/auth/dbBackend');
-const LDAPAuth = require('./auth/providers/auth/ldapBackend');
-const ProxmoxAuth = require('./auth/providers/auth/proxmoxBackend');
-const DBDirectory = require('./auth/providers/directory/DBDirectory');
-const ProxmoxDirectory = require('./auth/providers/directory/ProxmoxDirectory');
-const resolveLDAPHosts = require('./utils/resolveLdapHosts');
-const NotificationService = require('./services/notificationService');
-const { AUTHENTICATION_BACKEND } = require('./constants/constants');
-const { handleUserSearch, handleGroupSearch } = require('./handlers/searchHandlers');
-const { createLdapEntry } = require('./utils/ldapUtils');
 
 // Function to create self-signed certificates
 function createCertificates(config) {

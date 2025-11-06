@@ -1,7 +1,8 @@
-const AuthProvider = require('./authProviderInterface');
 const fs = require('fs');
 const chokidar = require('chokidar');
 const unixcrypt = require('unixcrypt');
+const { AuthProvider } = require('@ldap-gateway/core');
+
 const logger = require('../../../utils/logger');
 
 class ProxmoxBackend extends AuthProvider {

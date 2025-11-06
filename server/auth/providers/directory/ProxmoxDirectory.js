@@ -1,9 +1,10 @@
 const fs = require('fs');
 const crypto = require('crypto');
-const DirectoryProviderInterface = require('./DirectoryProviderInterface');
+const { DirectoryProvider } = require('@ldap-gateway/core');
+
 const logger = require('../../../utils/logger');
 
-class ProxmoxDirectory extends DirectoryProviderInterface {
+class ProxmoxDirectory extends DirectoryProvider {
   constructor(configPath) {
     super();
     this.configPath = configPath;

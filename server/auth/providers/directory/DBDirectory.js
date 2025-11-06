@@ -1,6 +1,6 @@
-const DirectoryProviderInterface = require('./DirectoryProviderInterface');
+const { DirectoryProvider } = require('@ldap-gateway/core');
 
-class DBDirectory extends DirectoryProviderInterface {
+class DBDirectory extends DirectoryProvider {
   constructor(dbService) {
     super();
     this.db = dbService;
