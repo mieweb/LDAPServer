@@ -12,13 +12,21 @@ const ProxmoxDirectory = require('./auth/providers/directory/ProxmoxDirectory');
  * Wrapper for existing database authentication backend
  */
 class DatabaseAuthProvider extends AuthProvider {
-  constructor(databaseService) {
+  constructor() {
     super();
-    this.dbAuth = new DBAuth(databaseService);
+    this.dbAuth = new DBAuth();
+  }
+
+  async initialize() {
+    await this.dbAuth.initialize();
   }
 
   async authenticate(username, password, req) {
     return await this.dbAuth.authenticate(username, password, req);
+  }
+
+  async cleanup() {
+    await this.dbAuth.cleanup();
   }
 }
 
@@ -26,13 +34,21 @@ class DatabaseAuthProvider extends AuthProvider {
  * Wrapper for existing LDAP authentication backend
  */
 class LdapAuthProvider extends AuthProvider {
-  constructor(ldapServerPool) {
+  constructor() {
     super();
-    this.ldapAuth = new LDAPAuth(ldapServerPool);
+    this.ldapAuth = new LDAPAuth();
+  }
+
+  async initialize() {
+    await this.ldapAuth.initialize();
   }
 
   async authenticate(username, password, req) {
     return await this.ldapAuth.authenticate(username, password, req);
+  }
+
+  async cleanup() {
+    await this.ldapAuth.cleanup();
   }
 }
 
@@ -40,13 +56,21 @@ class LdapAuthProvider extends AuthProvider {
  * Wrapper for existing Proxmox authentication backend
  */
 class ProxmoxAuthProvider extends AuthProvider {
-  constructor(shadowCfgPath) {
+  constructor() {
     super();
-    this.proxmoxAuth = new ProxmoxAuth(shadowCfgPath);
+    this.proxmoxAuth = new ProxmoxAuth();
+  }
+
+  async initialize() {
+    await this.proxmoxAuth.initialize();
   }
 
   async authenticate(username, password, req) {
     return await this.proxmoxAuth.authenticate(username, password, req);
+  }
+
+  async cleanup() {
+    await this.proxmoxAuth.cleanup();
   }
 }
 
@@ -54,9 +78,13 @@ class ProxmoxAuthProvider extends AuthProvider {
  * Wrapper for existing database directory backend
  */
 class DatabaseDirectoryProvider extends DirectoryProvider {
-  constructor(databaseService) {
+  constructor() {
     super();
-    this.dbDirectory = new DBDirectory(databaseService);
+    this.dbDirectory = new DBDirectory();
+  }
+
+  async initialize() {
+    await this.dbDirectory.initialize();
   }
 
   async findUser(username) {
@@ -74,15 +102,25 @@ class DatabaseDirectoryProvider extends DirectoryProvider {
   async getAllGroups() {
     return await this.dbDirectory.getAllGroups();
   }
+
+  async cleanup() {
+    await this.dbDirectory.cleanup();
+  }
 }
 
 /**
  * Wrapper for existing Proxmox directory backend
  */
 class ProxmoxDirectoryProvider extends DirectoryProvider {
-  constructor(userCfgPath) {
+  constructor() {
     super();
-    this.proxmoxDirectory = new ProxmoxDirectory(userCfgPath);
+    this.proxmoxDirectory = new ProxmoxDirectory();
+  }
+
+  async initialize() {
+    if (this.proxmoxDirectory.initialize) {
+      await this.proxmoxDirectory.initialize();
+    }
   }
 
   async findUser(username) {
@@ -99,6 +137,12 @@ class ProxmoxDirectoryProvider extends DirectoryProvider {
 
   async getAllGroups() {
     return await this.proxmoxDirectory.getAllGroups();
+  }
+
+  async cleanup() {
+    if (this.proxmoxDirectory.cleanup) {
+      await this.proxmoxDirectory.cleanup();
+    }
   }
 }
 
@@ -122,14 +166,14 @@ class ProviderFactory {
       return new DynamicBackend(options);
     }
 
-    // Fall back to compiled backends
+    // Fall back to compiled backends - all self-configure
     switch (type) {
       case 'db':
-        return new DatabaseAuthProvider(options.databaseService);
+        return new DatabaseAuthProvider();
       case 'ldap':
-        return new LdapAuthProvider(options.ldapServerPool);
+        return new LdapAuthProvider();
       case 'proxmox':
-        return new ProxmoxAuthProvider(options.shadowCfgPath);
+        return new ProxmoxAuthProvider();
       default:
         throw new Error(`Unknown auth provider type: ${type}`);
     }
@@ -142,12 +186,12 @@ class ProviderFactory {
       return new DynamicBackend(options);
     }
 
-    // Fall back to compiled backends
+    // Fall back to compiled backends - all self-configure
     switch (type) {
       case 'db':
-        return new DatabaseDirectoryProvider(options.databaseService);
+        return new DatabaseDirectoryProvider();
       case 'proxmox':
-        return new ProxmoxDirectoryProvider(options.userCfgPath);
+        return new ProxmoxDirectoryProvider();
       default:
         throw new Error(`Unknown directory provider type: ${type}`);
     }

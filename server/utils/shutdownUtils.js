@@ -2,6 +2,8 @@
  * Utility functions for gracefully shutting down the application
  */
 
+const logger = require("./logger");
+
 /**
  * Sets up graceful shutdown handlers for the application
  * @param {Object} resources - Resources that need to be cleaned up (like database, directory providers, etc.)
@@ -9,13 +11,13 @@
 function setupGracefulShutdown(resources) {
   // Handle application termination
   process.on('SIGTERM', async () => {
-    console.log('SIGTERM received, shutting down gracefully');
+    logger.debug('SIGTERM received, shutting down gracefully');
     await gracefulShutdown(resources);
   });
 
   // Handle Ctrl+C
   process.on('SIGINT', async () => {
-    console.log('SIGINT received, shutting down gracefully');
+    logger.debug('SIGINT received, shutting down gracefully');
     await gracefulShutdown(resources);
   });
 
@@ -37,14 +39,14 @@ function setupGracefulShutdown(resources) {
  * @param {Object} resources - Resources that need to be cleaned up
  */
 async function gracefulShutdown(resources) {
-  const { db, directoryProvider, ldapServer } = resources;
+  const { directoryProvider, authProvider, ldapServer } = resources;
 
   try {
-    console.log('Starting graceful shutdown...');
+    logger.debug('Starting graceful shutdown...');
 
     // Close LDAP server first (stop accepting new connections)
     if (ldapServer) {
-      console.log('Closing LDAP server...');
+      logger.debug('Closing LDAP server...');
       try {
         await new Promise((resolve, reject) => {
           ldapServer.close((err) => {
@@ -52,35 +54,35 @@ async function gracefulShutdown(resources) {
             else resolve();
           });
         });
-        console.log('LDAP server closed');
+        logger.debug('LDAP server closed');
       } catch (err) {
         console.error('Error closing LDAP server:', err);
       }
     }
 
-    // Clean up directory provider (close file watchers, etc.)
+    // Clean up directory provider
     if (directoryProvider && typeof directoryProvider.cleanup === 'function') {
-      console.log('Cleaning up directory provider...');
+      logger.debug('Cleaning up directory provider...');
       try {
         await directoryProvider.cleanup();
-        console.log('Directory provider cleaned up');
+        logger.debug('Directory provider cleaned up');
       } catch (err) {
         console.error('Error cleaning up directory provider:', err);
       }
     }
 
-    // Close database connections last
-    if (db) {
-      console.log('Closing database connections...');
+    // Clean up auth provider
+    if (authProvider && typeof authProvider.cleanup === 'function') {
+      logger.debug('Cleaning up auth provider...');
       try {
-        await db.shutdown();
-        console.log('Database connections closed');
+        await authProvider.cleanup();
+        logger.debug('Auth provider cleaned up');
       } catch (err) {
-        console.error('Error closing database:', err);
+        console.error('Error cleaning up auth provider:', err);
       }
     }
 
-    console.log('Graceful shutdown completed');
+    logger.debug('Graceful shutdown completed');
     process.exit(0);
   } catch (err) {
     console.error('Error during shutdown:', err);

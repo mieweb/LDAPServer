@@ -1,9 +1,20 @@
 const { DirectoryProvider } = require('@ldap-gateway/core');
+const DatabaseService = require('../../../services/databaseServices');
+const dbConfig = require('../../../config/dbConfig');
+const logger = require('../../../utils/logger');
 
 class DBDirectory extends DirectoryProvider {
-  constructor(dbService) {
+  constructor() {
     super();
-    this.db = dbService;
+    this.db = new DatabaseService(dbConfig);
+    this.initialized = false;
+  }
+
+  async initialize() {
+    if (!this.initialized) {
+      await this.db.initialize();
+      this.initialized = true;
+    }
   }
 
   async findUser(username) {
@@ -25,6 +36,14 @@ class DBDirectory extends DirectoryProvider {
 
   async getAllGroups() {
     return await this.db.getAllGroups();
+  }
+
+  async cleanup() {
+    if (this.initialized) {
+      await this.db.shutdown();
+      this.initialized = false;
+      logger.info("[DBBackend] Database connection closed");
+    }
   }
 }
 

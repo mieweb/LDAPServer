@@ -14,6 +14,24 @@ class AuthProvider {
   async authenticate(username, password, req) {
     throw new Error('authenticate must be implemented');
   }
+
+  /**
+   * Initialize the authentication provider (optional)
+   * Called before first use to set up connections, load configs, etc.
+   * @returns {Promise<void>}
+   */
+  async initialize() {
+    // Optional - providers that need initialization should override this
+  }
+
+  /**
+   * Clean up resources used by the authentication provider (optional)
+   * Called during graceful shutdown to close connections, file watchers, etc.
+   * @returns {Promise<void>}
+   */
+  async cleanup() {
+    // Optional - providers that need cleanup should override this
+  }
 }
 
 module.exports = AuthProvider;

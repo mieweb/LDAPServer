@@ -6,19 +6,27 @@ const { AuthProvider } = require('@ldap-gateway/core');
 const logger = require('../../../utils/logger');
 
 class ProxmoxBackend extends AuthProvider {
-  constructor(shadowPath) {
+  constructor() {
     super();
-    this.shadowPath = shadowPath;
+    this.shadowPath = process.env.PROXMOX_SHADOW_CFG || null;
     this.shadowCache = null;
     this.fileWatcher = null;
     this.reloadTimeout = null;
-    
-    if (shadowPath) {
-      this.loadShadowFile();
-      this.setupFileWatcher();
-    } else {
-      logger.warn("[ProxmoxBackend] No shadow path provided. Authentication will fail.");
+    this.initialized = false;
+  }
+
+  async initialize() {
+    if (this.initialized) return;
+
+    if (!this.shadowPath) {
+      logger.warn("[ProxmoxBackend] No PROXMOX_SHADOW_CFG environment variable set. Authentication will fail.");
+      return;
     }
+
+    this.loadShadowFile();
+    this.setupFileWatcher();
+    this.initialized = true;
+    logger.info("[ProxmoxBackend] Initialized successfully");
   }
 
   /**
@@ -30,12 +38,12 @@ class ProxmoxBackend extends AuthProvider {
         logger.warn("[ProxmoxBackend] No shadow path provided");
         return;
       }
-      
+
       if (!fs.existsSync(this.shadowPath)) {
         logger.warn(`[ProxmoxBackend] Shadow file does not exist: ${this.shadowPath}`);
         return;
       }
-      
+
       this.shadowCache = fs.readFileSync(this.shadowPath, 'utf8');
       logger.info(`[ProxmoxBackend] Loaded Proxmox shadow.cfg from ${this.shadowPath}`);
     } catch (err) {
@@ -106,7 +114,7 @@ class ProxmoxBackend extends AuthProvider {
     if (this.reloadTimeout) {
       clearTimeout(this.reloadTimeout);
     }
-    
+
     this.reloadTimeout = setTimeout(() => {
       this.loadShadowFile();
       logger.info("[ProxmoxBackend] Shadow file reloaded successfully after file change");
@@ -116,7 +124,9 @@ class ProxmoxBackend extends AuthProvider {
   /**
    * Clean up file watcher when instance is destroyed
    */
-  async destroy() {
+  async cleanup() {
+    if (!this.initialized) return;
+
     if (this.fileWatcher) {
       await this.fileWatcher.close();
       logger.info("[ProxmoxBackend] File watcher closed");
@@ -124,25 +134,27 @@ class ProxmoxBackend extends AuthProvider {
     if (this.reloadTimeout) {
       clearTimeout(this.reloadTimeout);
     }
+
+    this.initialized = false;
   }
 
   async authenticate(username, password) {
     try {
       // Use cached shadow data if available, otherwise read from file
       const shadow = this.shadowCache || fs.readFileSync(this.shadowPath, 'utf8');
-      
+
       if (!shadow) {
         logger.error("[ProxmoxBackend] No shadow data available");
         return false;
       }
 
       const lines = shadow.split('\n');
-      
+
       for (const line of lines) {
         if (!line) continue;
-        
+
         const [fileUser, hash] = line.split(':');
-        
+
         if (fileUser === username) {
           logger.debug(`[ProxmoxBackend] Found user ${username} in shadow file, verifying password...`);
           const isValid = unixcrypt.verify(password, hash);
@@ -150,7 +162,7 @@ class ProxmoxBackend extends AuthProvider {
           return isValid;
         }
       }
-      
+
       logger.debug(`[ProxmoxBackend] User ${username} not found in shadow file`);
       return false;
     } catch (err) {

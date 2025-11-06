@@ -5,20 +5,20 @@ const { DirectoryProvider } = require('@ldap-gateway/core');
 const logger = require('../../../utils/logger');
 
 class ProxmoxDirectory extends DirectoryProvider {
-  constructor(configPath) {
+  constructor() {
     super();
-    this.configPath = configPath;
+    this.configPath = process.env.PROXMOX_USER_CFG || null;
     this.users = [];
     this.groups = [];
     this.watcher = null;
     this.reloadTimer = null;
     this.DEBOUNCE_MS = 500;
     
-    if (configPath) {
+    if (this.configPath) {
       this.loadConfig();
       this.setupFileWatcher();
     } else {
-      logger.warn("[ProxmoxDirectory] No config path provided. Using empty user/group lists.");
+      logger.warn("[ProxmoxDirectory] No PROXMOX_USER_CFG environment variable set. Using empty user/group lists.");
     }
   }
 
@@ -191,14 +191,6 @@ class ProxmoxDirectory extends DirectoryProvider {
 
     this.users = users;
     this.groups = groups;
-    
-    // Debug logging
-    logger.debug("[ProxmoxDirectory] Parsed groups:", this.groups.map(g => ({
-      name: g.name,
-      gidNumber: g.gidNumber,
-      gid_number: g.gid_number,
-      memberCount: g.memberUids.length
-    })));
   }
 
   async findUser(username) {

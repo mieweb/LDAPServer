@@ -81,14 +81,14 @@ async function getAllGroups() {
   try {
     const query = `
       SELECT 
-        g.id,
-        g.name,
         g.gid,
+        g.name,
+        g.gid as id,
         GROUP_CONCAT(u.username) as member_uids
-      FROM groups g
-      LEFT JOIN user_groups ug ON g.id = ug.group_id
+      FROM \`groups\` g
+      LEFT JOIN user_groups ug ON g.gid = ug.group_id
       LEFT JOIN users u ON ug.user_id = u.id
-      GROUP BY g.id, g.name, g.gid
+      GROUP BY g.gid, g.name
       ORDER BY g.name
     `;
 

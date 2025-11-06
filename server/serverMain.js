@@ -4,18 +4,13 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const configLoader = require('./config/configurationLoader');
-const dbConfig = require('./config/dbConfig');
 
-const { AUTHENTICATION_BACKEND } = require('./constants/constants');
-
-const DatabaseService = require('./services/databaseServices');
 const AuthService = require('./services/authService');
 const NotificationService = require('./services/notificationService');
 
 const { handleUserSearch, handleGroupSearch } = require('./handlers/searchHandlers');
 
 const logger = require('./utils/logger');
-const resolveLDAPHosts = require('./utils/resolveLdapHosts');
 const { createLdapEntry } = require('./utils/ldapUtils');
 const { extractCredentials, getUsernameFromFilter, isAllUsersRequest } = require('./utils/utils');
 const { setupGracefulShutdown } = require('./utils/shutdownUtils');
@@ -141,52 +136,38 @@ function loadCertificates(config) {
   return { certContent, keyContent };
 }
 
-// Initialize the database connection
-const db = new DatabaseService(dbConfig);
-
 // Function to start the LDAP server
 async function startServer(config) {
-  await db.initialize();
 
   // Load certificates
   const { certContent, keyContent } = loadCertificates(config);
 
-  let ldapServerPool = [];
-  if (config.authBackend === AUTHENTICATION_BACKEND.LDAP) {
-    ldapServerPool = await resolveLDAPHosts();
-  }
-
   // Set up directory providers using ProviderFactory
   let selectedDirectory;
   try {
-    selectedDirectory = ProviderFactory.createDirectoryProvider(config.directoryBackend, {
-      databaseService: db,
-      userCfgPath: config.proxmoxUserCfg
-    });
+    selectedDirectory = ProviderFactory.createDirectoryProvider(config.directoryBackend);
+    logger.info(`Directory provider created: ${config.directoryBackend}`);
+    
+    // Initialize the directory provider
+    await selectedDirectory.initialize();
     logger.info(`Directory provider initialized: ${config.directoryBackend}`);
   } catch (error) {
     logger.error(`Failed to initialize directory provider '${config.directoryBackend}':`, error.message);
-    logger.info('Falling back to db directory provider');
-    selectedDirectory = ProviderFactory.createDirectoryProvider('db', {
-      databaseService: db
-    });
+    throw error;
   }
 
   // Set up authentication providers using ProviderFactory
   let selectedBackend;
   try {
-    selectedBackend = ProviderFactory.createAuthProvider(config.authBackend, {
-      databaseService: db,
-      ldapServerPool: ldapServerPool,
-      shadowCfgPath: config.proxmoxShadowCfg
-    });
+    selectedBackend = ProviderFactory.createAuthProvider(config.authBackend);
+    logger.info(`Auth provider created: ${config.authBackend}`);
+    
+    // Initialize the auth provider
+    await selectedBackend.initialize();
     logger.info(`Auth provider initialized: ${config.authBackend}`);
   } catch (error) {
     logger.error(`Failed to initialize auth provider '${config.authBackend}':`, error.message);
-    logger.info('Falling back to db auth provider');
-    selectedBackend = ProviderFactory.createAuthProvider('db', {
-      databaseService: db
-    });
+    throw error;
   }
   
   const authService = new AuthService(selectedBackend);
@@ -345,7 +326,10 @@ async function startServer(config) {
   });
 
   // Graceful shutdown
-  setupGracefulShutdown({ db });
+  setupGracefulShutdown({ 
+    directoryProvider: selectedDirectory,
+    authProvider: selectedBackend
+  });
 }
 
 // Export the initialization function instead of startServer directly

@@ -1,13 +1,16 @@
 const { AuthProvider } = require('@ldap-gateway/core');
 const ldap = require('ldapjs');
+const resolveLDAPHosts = require('../../../utils/resolveLdapHosts');
 
 const logger = require('../../../utils/logger');
 
 class LDAPBackend extends AuthProvider {
-  constructor(serverPool) {
+  constructor() {
     super();
-    this.serverPool = serverPool || [];
+    this.serverPool = [];
     this.failedServers = new Map();
+    this.initialized = false;
+    this.resetInterval = null;
 
     // periodically reset failed servers so they can be retried
     setInterval(() => {
@@ -16,7 +19,37 @@ class LDAPBackend extends AuthProvider {
     }, 5 * 60 * 1000); // every 5 minutes
   }
 
+  async initialize() {
+    if (this.initialized) return;
+    
+    this.serverPool = await resolveLDAPHosts();
+    
+    this.resetInterval = setInterval(() => {
+      this.failedServers.clear();
+      logger.debug("Resetting failed LDAP servers for retry.");
+    }, 5 * 60 * 1000);
+    
+    this.initialized = true;
+    logger.info(`[LDAPBackend] Initialized with ${this.serverPool.length} LDAP servers`);
+  }
+
+  async cleanup() {
+    if (!this.initialized) return;
+    
+    if (this.resetInterval) {
+      clearInterval(this.resetInterval);
+      this.resetInterval = null;
+    }
+    
+    this.initialized = false;
+    logger.info("[LDAPBackend] Cleaned up successfully");
+  }
+
   async authenticate(username, password, req) {
+    if (!this.initialized) {
+      throw new Error('Backend not initialized. Call initialize() first.');
+    }
+    
     for (const server of this.serverPool) {
       if (this.failedServers.get(server.hostname)) {
         continue;
@@ -86,7 +119,7 @@ class LDAPBackend extends AuthProvider {
         logger.debug("Service bind successful, searching for user...");
 
         let foundDN = null;
-        client.search(process.env.LDAP_USER_BASE_DN, opts, (err, res) => {
+        client.search(process.env.LDAP_BASE_DN, opts, (err, res) => {
           if (err) return reject(err);
 
           res.on('searchEntry', (entry) => {
