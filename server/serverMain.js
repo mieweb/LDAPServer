@@ -1,7 +1,4 @@
 const { LdapEngine } = require('@ldap-gateway/core');
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
 
 const configLoader = require('./config/configurationLoader');
 
@@ -33,8 +30,7 @@ async function initializeServer() {
   const config = configLoader.loadConfig();
   
   // Initialize dynamic backend loading
-  const backendDir = process.env.BACKEND_DIR || null;
-  ProviderFactory.initialize(backendDir);
+  ProviderFactory.initialize(config.backendDir);
   
   // List available backends for debugging
   if (config.logLevel === 'debug') {
@@ -47,92 +43,10 @@ async function initializeServer() {
   return startServer(config);
 }
 
-// Function to create self-signed certificates
-function createCertificates(config) {
-  const certDir = path.join(process.cwd(), 'cert');
-  const certPath = path.join(certDir, 'server.crt');
-  const keyPath = path.join(certDir, 'server.key');
-
-  try {
-    // Create cert directory if it doesn't exist
-    if (!fs.existsSync(certDir)) {
-      fs.mkdirSync(certDir, { recursive: true });
-      logger.info(`Created certificate directory: ${certDir}`);
-    }
-
-    // Check if certificates already exist
-    if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-      logger.info('Certificates already exist, using existing ones');
-      return { certPath, keyPath };
-    }
-
-    logger.info('Creating self-signed certificates...');
-
-    // Use the configured common name directly
-    const commonName = config.commonName;
-
-    // Create self-signed certificate
-    const opensslCmd = `openssl req -x509 -newkey rsa:4096 -keyout "${keyPath}" -out "${certPath}" -days 3650 -nodes -subj "/C=US/ST=State/L=City/O=Organization/CN=${commonName}"`;
-    
-    execSync(opensslCmd, { stdio: 'pipe' });
-
-    if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-      logger.info('Self-signed certificates created successfully');
-      return { certPath, keyPath };
-    } else {
-      throw new Error('Certificate files were not created');
-    }
-  } catch (error) {
-    logger.error('Failed to create certificates:', error.message);
-    logger.error('Please ensure OpenSSL is installed and available in PATH');
-    process.exit(1);
-  }
-}
-
-// Function to load certificates (either from files or environment variables)
-function loadCertificates(config) {
-  // If unencrypted mode is explicitly enabled, return null
-  if (config.unencrypted) {
-    logger.warn('LDAP server configured for unencrypted mode - SSL/TLS disabled');
-    return { certContent: null, keyContent: null };
-  }
-
-  let certContent = config.ldapCertContent;
-  let keyContent = config.ldapKeyContent;
-
-  // If certificate content is not provided, try to load from paths
-  if (!certContent || !keyContent) {
-    let certPath = config.ldapCertPath;
-    let keyPath = config.ldapKeyPath;
-
-    // If paths are not provided, create certificates
-    if (!certPath || !keyPath) {
-      const createdCerts = createCertificates(config);
-      certPath = createdCerts.certPath;
-      keyPath = createdCerts.keyPath;
-    }
-
-    try {
-      if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
-        throw new Error(`Certificate files not found: ${certPath}, ${keyPath}`);
-      }
-
-      certContent = fs.readFileSync(certPath, 'utf8');
-      keyContent = fs.readFileSync(keyPath, 'utf8');
-      logger.info('Certificates loaded from files');
-    } catch (error) {
-      logger.error('Failed to load certificates:', error.message);
-      process.exit(1);
-    }
-  }
-
-  return { certContent, keyContent };
-}
-
 // Function to start the LDAP server using LdapEngine
 async function startServer(config) {
-  // Load certificates
-  const { certContent, keyContent } = loadCertificates(config);
+  // Extract certificate content from config
+  const { certContent, keyContent } = config;
 
   // Set up directory providers using ProviderFactory
   let selectedDirectory;
@@ -173,7 +87,6 @@ async function startServer(config) {
     port: PORT,
     certificate: certContent,
     key: keyContent,
-    enableNotification: config.enableNotification,
     logger: logger
   });
 

@@ -8,6 +8,9 @@ const ProxmoxAuth = require('./auth/providers/auth/proxmoxBackend');
 const DBDirectory = require('./auth/providers/directory/DBDirectory');
 const ProxmoxDirectory = require('./auth/providers/directory/ProxmoxDirectory');
 
+// Import MFA wrapper
+const NotificationAuthProvider = require('./auth/providers/auth/notificationAuthProvider');
+
 /**
  * Wrapper for existing database authentication backend
  */
@@ -160,23 +163,35 @@ class ProviderFactory {
   }
 
   static createAuthProvider(type, options = {}) {
+    let baseProvider;
+
     // First check for dynamically loaded backends
     const DynamicBackend = backendLoader.getAuthBackend(type);
     if (DynamicBackend) {
-      return new DynamicBackend(options);
+      baseProvider = new DynamicBackend(options);
+    } else {
+      // Fall back to compiled backends - all self-configure
+      switch (type) {
+        case 'db':
+          baseProvider = new DatabaseAuthProvider();
+          break;
+        case 'ldap':
+          baseProvider = new LdapAuthProvider();
+          break;
+        case 'proxmox':
+          baseProvider = new ProxmoxAuthProvider();
+          break;
+        default:
+          throw new Error(`Unknown auth provider type: ${type}`);
+      }
     }
 
-    // Fall back to compiled backends - all self-configure
-    switch (type) {
-      case 'db':
-        return new DatabaseAuthProvider();
-      case 'ldap':
-        return new LdapAuthProvider();
-      case 'proxmox':
-        return new ProxmoxAuthProvider();
-      default:
-        throw new Error(`Unknown auth provider type: ${type}`);
+    // Wrap with MFA/notification support if enabled
+    if (process.env.ENABLE_NOTIFICATION === 'true') {
+      return new NotificationAuthProvider(baseProvider);
     }
+
+    return baseProvider;
   }
 
   static createDirectoryProvider(type, options = {}) {

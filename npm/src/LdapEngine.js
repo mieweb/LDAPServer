@@ -14,7 +14,6 @@ class LdapEngine extends EventEmitter {
       port: options.port || 636,
       certificate: options.certificate || null,
       key: options.key || null,
-      enableNotification: options.enableNotification || false,
       ...options
     };
     
@@ -139,14 +138,6 @@ class LdapEngine extends EventEmitter {
           this.emit('bindFail', { username, reason: 'invalid_credentials' });
           const error = new ldap.InvalidCredentialsError('Invalid credentials');
           return next(error);
-        }
-
-        // Handle notification service if enabled
-        if (this.config.enableNotification) {
-          this.emit('notificationRequest', { username });
-          // For now, assume notification is approved
-          // In a real implementation, this would wait for notification response
-          this.emit('notificationResponse', { username, action: 'APPROVE' });
         }
 
         this.emit('bindSuccess', { username, anonymous: false });

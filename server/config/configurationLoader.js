@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 const logger = require('../utils/logger');
 
 /**
@@ -83,7 +84,10 @@ class ConfigurationLoader {
       proxmoxUserCfg: process.env.PROXMOX_USER_CFG || null,
       proxmoxShadowCfg: process.env.PROXMOX_SHADOW_CFG || null,
       enableNotification: process.env.ENABLE_NOTIFICATION === 'true',
-      unencrypted: process.env.LDAP_UNENCRYPTED === 'true' || process.env.LDAP_UNENCRYPTED === '1'
+      unencrypted: process.env.LDAP_UNENCRYPTED === 'true' || process.env.LDAP_UNENCRYPTED === '1',
+      backendDir: process.env.BACKEND_DIR || null,
+      // Load certificates - this handles all certificate logic
+      ...this._loadCertificates()
     };
   }
 
@@ -97,6 +101,97 @@ class ConfigurationLoader {
       return 'dc=localhost';
     }
     return commonName.split('.').map(part => `dc=${part}`).join(',');
+  }
+
+  /**
+   * Load SSL/TLS certificates (handles all certificate logic)
+   * @private
+   */
+  _loadCertificates() {
+    // If unencrypted mode is explicitly enabled, return null values
+    if (process.env.LDAP_UNENCRYPTED === 'true' || process.env.LDAP_UNENCRYPTED === '1') {
+      logger.warn('LDAP server configured for unencrypted mode - SSL/TLS disabled');
+      return { 
+        certContent: null, 
+        keyContent: null 
+      };
+    }
+
+    let certContent = process.env.LDAP_CERT_CONTENT || null;
+    let keyContent = process.env.LDAP_KEY_CONTENT || null;
+
+    // If certificate content is not provided, try to load from paths
+    if (!certContent || !keyContent) {
+      let certPath = process.env.LDAP_CERT_PATH;
+      let keyPath = process.env.LDAP_KEY_PATH;
+
+      // If paths are not provided, create certificates
+      if (!certPath || !keyPath) {
+        const createdCerts = this._createCertificates();
+        certPath = createdCerts.certPath;
+        keyPath = createdCerts.keyPath;
+      }
+
+      try {
+        if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
+          throw new Error(`Certificate files not found: ${certPath}, ${keyPath}`);
+        }
+
+        certContent = fs.readFileSync(certPath, 'utf8');
+        keyContent = fs.readFileSync(keyPath, 'utf8');
+        logger.info('Certificates loaded from files');
+      } catch (error) {
+        logger.error('Failed to load certificates:', error.message);
+        process.exit(1);
+      }
+    }
+
+    return { certContent, keyContent };
+  }
+
+  /**
+   * Create self-signed certificates
+   * @private
+   */
+  _createCertificates() {
+    const certDir = path.join(process.cwd(), 'cert');
+    const certPath = path.join(certDir, 'server.crt');
+    const keyPath = path.join(certDir, 'server.key');
+
+    try {
+      // Create cert directory if it doesn't exist
+      if (!fs.existsSync(certDir)) {
+        fs.mkdirSync(certDir, { recursive: true });
+        logger.info(`Created certificate directory: ${certDir}`);
+      }
+
+      // Check if certificates already exist
+      if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+        logger.info('Certificates already exist, using existing ones');
+        return { certPath, keyPath };
+      }
+
+      logger.info('Creating self-signed certificates...');
+
+      // Use the configured common name directly
+      const commonName = process.env.LDAP_COMMON_NAME || 'localhost';
+
+      // Create self-signed certificate
+      const opensslCmd = `openssl req -x509 -newkey rsa:4096 -keyout "${keyPath}" -out "${certPath}" -days 3650 -nodes -subj "/C=US/ST=State/L=City/O=Organization/CN=${commonName}"`;
+      
+      execSync(opensslCmd, { stdio: 'pipe' });
+
+      if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+        logger.info('Self-signed certificates created successfully');
+        return { certPath, keyPath };
+      } else {
+        throw new Error('Certificate files were not created');
+      }
+    } catch (error) {
+      logger.error('Failed to create certificates:', error.message);
+      logger.error('Please ensure OpenSSL is installed and available in PATH');
+      process.exit(1);
+    }
   }
 
   /**
