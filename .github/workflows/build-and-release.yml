@@ -69,7 +69,7 @@ jobs:
           cache: 'npm'
 
       - name: Download core package
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: core-package
           path: npm/
@@ -112,11 +112,12 @@ jobs:
     needs: [build-core, build-server]
     strategy:
       matrix:
-        os: [linux]
         arch: [amd64, arm64]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -126,33 +127,80 @@ jobs:
 
       - name: Install nfpm
         run: |
-          curl -sfL https://install.goreleaser.com/github.com/goreleaser/nfpm.git | sh
-          sudo mv ./bin/nfpm /usr/local/bin/
+          cd /tmp
+          rm -f nfpm nfpm.tar.gz
+          curl -L https://github.com/goreleaser/nfpm/releases/download/v2.43.4/nfpm_2.43.4_Linux_x86_64.tar.gz -o nfpm.tar.gz
+          tar -xzf nfpm.tar.gz nfpm
+          sudo mv nfpm /usr/local/bin/nfpm
+          rm nfpm.tar.gz
+          nfpm --version
 
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: server-artifacts
           path: ./
 
-      - name: Build packages
+      - name: Prepare build environment
         run: |
           # Ensure binary is executable
           chmod +x dist/ldap-gateway
           
-          # Build deb package
-          nfpm package --packager deb --target dist/ldap-gateway_${{ needs.build-server.outputs.server-version }}_${{ matrix.arch }}.deb
+          # Make scripts executable
+          chmod +x nfpm/scripts/*.sh
           
-          # Build rpm package
-          nfpm package --packager rpm --target dist/ldap-gateway-${{ needs.build-server.outputs.server-version }}-1.${{ matrix.arch }}.rpm
+          # Create output directory
+          mkdir -p dist/packages
+          
+          # Debug: show directory structure
+          echo "Directory structure:"
+          ls -la
+          echo "Server directory:"
+          ls -la server/ || echo "No server directory"
+          echo "Dist directory:"
+          ls -la dist/ || echo "No dist directory"
+
+      - name: Update nfpm config for architecture
+        run: |
+          # Create arch-specific config
+          sed 's/arch: "amd64"/arch: "${{ matrix.arch }}"/' nfpm/nfpm.yaml > nfpm-${{ matrix.arch }}.yaml
+          
+          # Debug: show the config
+          echo "Generated nfpm config for ${{ matrix.arch }}:"
+          cat nfpm-${{ matrix.arch }}.yaml
+
+      - name: Build deb package
+        run: |
+          nfpm package \
+            --config nfpm-${{ matrix.arch }}.yaml \
+            --packager deb \
+            --target dist/packages/ldap-gateway_${{ needs.build-server.outputs.server-version }}_${{ matrix.arch }}.deb
+
+      - name: Build rpm package
+        run: |
+          nfpm package \
+            --config nfpm-${{ matrix.arch }}.yaml \
+            --packager rpm \
+            --target dist/packages/ldap-gateway-${{ needs.build-server.outputs.server-version }}-1.${{ matrix.arch }}.rpm
+
+      - name: Verify packages
+        run: |
+          echo "Built packages:"
+          ls -lh dist/packages/
+          
+          # Basic validation for amd64 (can't validate arm64 on x86_64 runner)
+          if [ "${{ matrix.arch }}" = "amd64" ]; then
+            echo "Package info for .deb:"
+            dpkg-deb --info dist/packages/*.deb || true
+            echo "Package info for .rpm:"
+            rpm -qip dist/packages/*.rpm || true
+          fi
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
           name: packages-${{ matrix.arch }}
-          path: |
-            dist/*.deb
-            dist/*.rpm
+          path: dist/packages/
           retention-days: 30
 
   create-release:
@@ -171,7 +219,25 @@ jobs:
           cache: 'npm'
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Organize release assets
+        run: |
+          # Create dist directory
+          mkdir -p dist
+          
+          # Copy packages
+          cp artifacts/packages-amd64/* dist/ 2>/dev/null || echo "No amd64 packages"
+          cp artifacts/packages-arm64/* dist/ 2>/dev/null || echo "No arm64 packages"
+          
+          # Copy binary if needed for tarball creation
+          cp artifacts/server-artifacts/dist/ldap-gateway dist/ 2>/dev/null || echo "No binary"
+          
+          # Show what we have
+          echo "Release assets prepared:"
+          ls -lh dist/
 
       - name: Install dependencies
         run: npm ci
@@ -179,12 +245,21 @@ jobs:
       - name: Create release tarball
         run: |
           # Make sure we have executable permissions
-          chmod +x create-release.sh
-          ./create-release.sh
-          
-          # Generate checksums
+          if [ -f create-release.sh ]; then
+            chmod +x create-release.sh
+            ./create-release.sh
+          else
+            echo "Warning: create-release.sh not found, skipping tarball creation"
+          fi
+
+      - name: Generate checksums
+        run: |
           cd dist
-          sha256sum * > checksums.txt
+          sha256sum *.deb *.rpm > checksums.txt 2>/dev/null || echo "No packages to checksum"
+          if [ -f *.tar.gz ]; then
+            sha256sum *.tar.gz >> checksums.txt
+          fi
+          cat checksums.txt
 
       - name: Extract version
         id: version
@@ -229,11 +304,7 @@ jobs:
             sudo rpm -i ldap-gateway-${{ steps.version.outputs.version }}-1.amd64.rpm
             ```
             
-            **macOS (Homebrew):**
-            ```bash
-            brew tap ${{ github.repository_owner }}/homebrew-tap
-            brew install ldap-gateway
-            ```
+            **ARM64 packages are also available** - replace `amd64` with `arm64` in the URLs above.
             
             ### Changes
             See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
@@ -259,7 +330,7 @@ jobs:
           registry-url: ${{ env.REGISTRY_URL }}
 
       - name: Download core package
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: core-package
           path: npm/
