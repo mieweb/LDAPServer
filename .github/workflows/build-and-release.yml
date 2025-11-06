@@ -46,7 +46,7 @@ jobs:
         run: npm run test:core
 
       - name: Upload core package
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: core-package
           path: npm/
@@ -98,7 +98,7 @@ jobs:
           timeout 5s ./dist/ldap-gateway --help || true
 
       - name: Upload server artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: server-artifacts
           path: |
@@ -147,7 +147,7 @@ jobs:
           nfpm package --packager rpm --target dist/ldap-gateway-${{ needs.build-server.outputs.server-version }}-1.${{ matrix.arch }}.rpm
 
       - name: Upload packages
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: packages-${{ matrix.arch }}
           path: |
