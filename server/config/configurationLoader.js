@@ -77,13 +77,6 @@ class ConfigurationLoader {
       commonName: process.env.LDAP_COMMON_NAME || 'localhost',
       ldapBaseDn: process.env.LDAP_BASE_DN || this._buildBaseDnFromCommonName(),
       ldapPort: process.env.LDAP_PORT || null,
-      ldapCertPath: process.env.LDAP_CERT_PATH || null,
-      ldapKeyPath: process.env.LDAP_KEY_PATH || null,
-      ldapCertContent: process.env.LDAP_CERT_CONTENT || null,
-      ldapKeyContent: process.env.LDAP_KEY_CONTENT || null,
-      proxmoxUserCfg: process.env.PROXMOX_USER_CFG || null,
-      proxmoxShadowCfg: process.env.PROXMOX_SHADOW_CFG || null,
-      enableNotification: process.env.ENABLE_NOTIFICATION === 'true',
       unencrypted: process.env.LDAP_UNENCRYPTED === 'true' || process.env.LDAP_UNENCRYPTED === '1',
       backendDir: process.env.BACKEND_DIR || null,
       // Load certificates - this handles all certificate logic

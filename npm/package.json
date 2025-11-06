@@ -26,8 +26,8 @@
     "node": ">=18.0.0"
   },
   "peerDependencies": {
-    "ldapjs": "git+https://github.com/anishapant21/node-ldapjs.git",
-    "@ldapjs/controls": "git+https://github.com/anishapant21/controls.git"
+    "ldapjs": "git+https://github.com/mieweb/node-ldapjs.git",
+    "@ldapjs/controls": "git+https://github.com/mieweb/controls.git"
   },
   "dependencies": {
     "winston": "^3.17.0"
