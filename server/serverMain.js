@@ -1,18 +1,11 @@
-const ldap = require('ldapjs');
+const { LdapEngine } = require('@ldap-gateway/core');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
 const configLoader = require('./config/configurationLoader');
 
-const AuthService = require('./services/authService');
-const NotificationService = require('./services/notificationService');
-
-const { handleUserSearch, handleGroupSearch } = require('./handlers/searchHandlers');
-
 const logger = require('./utils/logger');
-const { createLdapEntry } = require('./utils/ldapUtils');
-const { extractCredentials, getUsernameFromFilter, isAllUsersRequest } = require('./utils/utils');
 const { setupGracefulShutdown } = require('./utils/shutdownUtils');
 const { checkAndSetupEnvironment } = require('./utils/setupUtils');
 
@@ -136,9 +129,8 @@ function loadCertificates(config) {
   return { certContent, keyContent };
 }
 
-// Function to start the LDAP server
+// Function to start the LDAP server using LdapEngine
 async function startServer(config) {
-
   // Load certificates
   const { certContent, keyContent } = loadCertificates(config);
 
@@ -169,167 +161,90 @@ async function startServer(config) {
     logger.error(`Failed to initialize auth provider '${config.authBackend}':`, error.message);
     throw error;
   }
-  
-  const authService = new AuthService(selectedBackend);
 
-  // Create the LDAP server
-  const serverOptions = {};
-  
-  // Only add SSL/TLS options if certificates are provided
-  if (certContent && keyContent) {
-    serverOptions.certificate = certContent;
-    serverOptions.key = keyContent;
-    logger.info("LDAP server configured with SSL/TLS certificates");
-  } else {
-    logger.warn("LDAP server running without SSL/TLS certificates");
-  }
-  
-  const server = ldap.createServer(serverOptions);
+  // Determine port based on SSL/TLS configuration
+  const PORT = (certContent && keyContent) 
+    ? (config.ldapPort || 636) 
+    : (config.ldapPort || 389);
 
-  // Anonymous bind support
-  server.bind('', (req, res, next) => {
-    logger.debug("Anonymous bind request - allowing for search operations");
-    res.end();
+  // Create and configure LDAP engine
+  const ldapEngine = new LdapEngine({
+    baseDn: config.ldapBaseDn,
+    port: PORT,
+    certificate: certContent,
+    key: keyContent,
+    enableNotification: config.enableNotification,
+    logger: logger
   });
 
-  // Authenticated bind (LDAP BIND)
-  server.bind(config.ldapBaseDn, async (req, res, next) => {
-    const { username, password } = extractCredentials(req);
+  // Set providers
+  ldapEngine.setAuthProvider(selectedBackend);
+  ldapEngine.setDirectoryProvider(selectedDirectory);
 
-    logger.debug("Authenticated bind request", { username });
-
-    try {
-      // Authenticate the user using the selected backend
-      const isAuthenticated = await authService.authenticate(username, password, req);
-
-      logger.debug(`User ${username} authenticated: ${isAuthenticated}`);
-      if (!isAuthenticated) {
-        return next(new ldap.InvalidCredentialsError('Invalid credentials'));
-      }
-
-      if (config.enableNotification) {
-        const response = await NotificationService.sendAuthenticationNotification(username);
-        if (response.action === "APPROVE") {
-          res.end();
-        } else {
-          return next(new ldap.InvalidCredentialsError('Authentication rejected'));
-        }
-      } else {
-        res.end();
-      }
-    } catch (error) {
-      logger.error("Bind error", { error });
-      return next(new ldap.OperationsError('Authentication error'));
+  // Set up event listeners for logging and monitoring
+  ldapEngine.on('started', (info) => {
+    if (info.hasCertificate) {
+      logger.info(`Server is running with SSL/TLS encryption ldaps://${config.commonName}:${info.port} to connect securely`);
+    } else {
+      logger.warn(`\n*****\n*****\nServer is running without SSL/TLS encryption ldap://${config.commonName}:${info.port}\nNot good, so you should just be testing.\n*****\n*****\n`);
     }
   });
 
-  // LDAP SEARCH
-  server.search(config.ldapBaseDn, async (req, res, next) => {
-    const filterStr = req.filter.toString();
-    
-    logger.debug(`LDAP Search - Filter: ${filterStr}, Attributes: ${req.attributes}`);
-
-    const username = getUsernameFromFilter(filterStr);
-
-    if (username) {
-      logger.debug(`RETURNING SPECIFIC USER: ${username}`);
-      await handleUserSearch(username, res, selectedDirectory);
-      return;
+  ldapEngine.on('bindRequest', ({ username, anonymous }) => {
+    if (anonymous) {
+      logger.debug("Anonymous bind request - allowing for search operations");
+    } else {
+      logger.debug("Authenticated bind request", { username });
     }
-
-    if (isAllUsersRequest(filterStr, req.attributes)) {
-      logger.debug("RETURNING ALL USERS - detected user sync request:", filterStr);
-
-      const users = await selectedDirectory.getAllUsers();
-      logger.debug(`Found ${users.length} users`);
-
-      for (const user of users) {
-        const entry = createLdapEntry(user);
-        logger.debug("Sending user entry:", {
-          dn: entry.dn,
-          uid: entry.attributes.uid,
-          objectClass: entry.attributes.objectClass,
-          cn: entry.attributes.cn,
-          uidNumber: entry.attributes.uidNumber,
-          gidNumber: entry.attributes.gidNumber
-        });
-        res.send(entry);
-      }
-
-      logger.debug("User search completed, ending response");
-      res.end();
-      return;
-    }
-
-    // Enhanced group search detection
-    const isGroupSearch =
-      /(objectClass=posixGroup)|(objectClass=groupOfNames)|(memberUid=)/i.test(filterStr) ||
-      /gidNumber=/i.test(filterStr) ||
-      (filterStr.length === 0 && (req.attributes.includes('member') || req.attributes.includes('uniqueMember') || req.attributes.includes('memberOf'))) ||
-      req.attributes.includes('gidNumber') ||
-      req.attributes.includes('memberUid') ||
-      req.attributes.includes('cn') && req.attributes.length === 1; // Common group-only attribute requests
-
-    if (isGroupSearch) {
-      logger.debug("RETURNING GROUPS FOR GROUP SEARCH:", filterStr);
-      await handleGroupSearch(filterStr, res, selectedDirectory);
-      return;
-    }
-
-    // Handle mixed searches (both users and groups)
-    if (/objectClass=/i.test(filterStr) || filterStr.length === 0) {
-      logger.debug("GENERIC OBJECTCLASS SEARCH - RETURNING BOTH USERS AND GROUPS:", filterStr);
-
-      // Return users first
-      const users = await selectedDirectory.getAllUsers();
-      for (const user of users) {
-        const entry = createLdapEntry(user);
-        res.send(entry);
-      }
-
-      // Then return groups
-      await handleGroupSearch(filterStr, res, selectedDirectory);
-      return;
-    }
-
-    logger.debug("No matching pattern found in filter, ending");
-    res.end();
   });
 
-  // Add error handling for the server
-  server.on('error', (err) => {
+  ldapEngine.on('bindSuccess', ({ username, anonymous }) => {
+    if (!anonymous) {
+      logger.debug(`User ${username} authenticated: true`);
+    }
+  });
+
+  ldapEngine.on('bindFail', ({ username, reason }) => {
+    logger.debug(`User ${username} authenticated: false - ${reason}`);
+  });
+
+  ldapEngine.on('searchRequest', ({ filter, attributes }) => {
+    logger.debug(`LDAP Search - Filter: ${filter}, Attributes: ${attributes}`);
+  });
+
+  ldapEngine.on('searchResponse', ({ filter, entryCount, duration }) => {
+    logger.debug(`Search completed: ${entryCount} entries in ${duration}ms`);
+  });
+
+  ldapEngine.on('entryFound', ({ type, entry }) => {
+    if (type === 'user') {
+      logger.debug("Sending user entry:", { dn: entry });
+    }
+  });
+
+  ldapEngine.on('serverError', (err) => {
     logger.error('LDAP Server error:', err);
   });
 
-  server.on('clientError', (err, socket) => {
+  ldapEngine.on('clientError', ({ error, socket }) => {
     logger.error('LDAP Client connection error:', { 
-      error: err.message, 
+      error: error.message, 
       remoteAddress: socket?.remoteAddress,
       remotePort: socket?.remotePort 
     });
   });
 
-  // Start the LDAP server
-  // Use port 636 for LDAPS by default, 389 for plain LDAP only if explicitly unencrypted
-  const PORT = (certContent && keyContent) 
-    ? (config.ldapPort || 636) 
-    : (config.ldapPort || 389);
-    
-  server.listen(PORT, "0.0.0.0", () => {
-    logger.info(`LDAP Server listening on port ${PORT}`);
-    if (certContent && keyContent) {
-      // show full daps://  path
-      logger.info(`Server is running with SSL/TLS encryption ldaps://${config.commonName}:${PORT} to connect securely`);
-    } else {
-      logger.warn(`\n*****\n*****\nServer is running without SSL/TLS encryption ldap://${config.commonName}:${PORT}\nNot good, so you should just be testing.\n*****\n*****\n`);
-    }
-  });
+  // Start the LDAP engine
+  await ldapEngine.start();
 
   // Graceful shutdown
   setupGracefulShutdown({ 
     directoryProvider: selectedDirectory,
-    authProvider: selectedBackend
+    authProvider: selectedBackend,
+    ldapEngine: ldapEngine
   });
+
+  return ldapEngine;
 }
 
 // Export the initialization function instead of startServer directly

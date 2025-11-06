@@ -220,8 +220,8 @@ class LdapEngine extends EventEmitter {
     this.server.on('clientError', (err, socket) => {
       this.logger.error('LDAP Client connection error:', { 
         error: err.message, 
-        remoteAddress: socket.remoteAddress,
-        remotePort: socket.remotePort 
+        remoteAddress: socket?.remoteAddress,
+        remotePort: socket?.remotePort 
       });
       this.emit('clientError', { error: err, socket });
     });

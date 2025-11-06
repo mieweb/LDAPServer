@@ -39,13 +39,21 @@ function setupGracefulShutdown(resources) {
  * @param {Object} resources - Resources that need to be cleaned up
  */
 async function gracefulShutdown(resources) {
-  const { directoryProvider, authProvider, ldapServer } = resources;
+  const { directoryProvider, authProvider, ldapServer, ldapEngine } = resources;
 
   try {
     logger.debug('Starting graceful shutdown...');
 
-    // Close LDAP server first (stop accepting new connections)
-    if (ldapServer) {
+    // Close LDAP server/engine first (stop accepting new connections)
+    if (ldapEngine) {
+      logger.debug('Stopping LDAP engine...');
+      try {
+        await ldapEngine.stop();
+        logger.debug('LDAP engine stopped');
+      } catch (err) {
+        console.error('Error stopping LDAP engine:', err);
+      }
+    } else if (ldapServer) {
       logger.debug('Closing LDAP server...');
       try {
         await new Promise((resolve, reject) => {
