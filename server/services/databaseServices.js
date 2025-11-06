@@ -50,14 +50,14 @@ class DatabaseService {
   }
 
   async getAllUsers() {
-  await this.initialize();
-  return this.driver.getAllUsers();
-}
+    await this.initialize();
+    return this.driver.getAllUsers();
+  }
 
-async getAllGroups() {
-  await this.initialize();
-  return this.driver.getAllGroups();
-}
+  async getAllGroups() {
+    await this.initialize();
+    return this.driver.getAllGroups();
+  }
 }
 
 module.exports = DatabaseService;

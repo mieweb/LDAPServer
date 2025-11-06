@@ -1,4 +1,5 @@
 const mysql = require("mysql2/promise");
+import logger from "../../utils/logger";
 
 // Create a connection pool at startup
 let pool;
@@ -72,7 +73,7 @@ async function findGroupsByMemberUid(username) {
 }
 
 async function getAllUsers() {
-    const [rows] = await this.pool.query('SELECT * FROM users');
+    const [rows] = await pool.query('SELECT * FROM users');
     return rows;
 }
 
@@ -91,7 +92,7 @@ async function getAllGroups() {
       ORDER BY g.name
     `;
 
-    const groups = await this.executeQuery(query);
+    const [groups] = await pool.query(query);
 
     return groups.map(group => ({
       id: group.id,

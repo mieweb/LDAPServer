@@ -337,7 +337,7 @@ async function startServer(config) {
   server.listen(PORT, "0.0.0.0", () => {
     logger.info(`LDAP Server listening on port ${PORT}`);
     if (certContent && keyContent) {
-      // show fill daps://  path
+      // show full daps://  path
       logger.info(`Server is running with SSL/TLS encryption ldaps://${config.commonName}:${PORT} to connect securely`);
     } else {
       logger.warn(`\n*****\n*****\nServer is running without SSL/TLS encryption ldap://${config.commonName}:${PORT}\nNot good, so you should just be testing.\n*****\n*****\n`);

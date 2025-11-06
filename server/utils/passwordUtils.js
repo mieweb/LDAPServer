@@ -7,7 +7,7 @@ function hashPassword(password, salt) {
     .pbkdf2Sync(
       password,
       salt,
-      1000, // iterations
+      100000, // iterations
       64, // key length
       "sha512"
     )

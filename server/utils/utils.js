@@ -1,3 +1,5 @@
+const logger = require('./logger');
+
 function extractCredentials(req) {
   const dnParts = req.dn.toString().split(",");
   const username = dnParts[0].split("=")[1];
@@ -7,7 +9,7 @@ function extractCredentials(req) {
 }
 
 const getUsernameFromFilter = (filterStr) => {
-  console.log("Filter str", filterStr)
+  logger.debug("Filter str", filterStr)
   // Return null for empty filters - these should be handled as "get all" requests
   if (!filterStr || filterStr.trim().length === 0) {
     return null;
