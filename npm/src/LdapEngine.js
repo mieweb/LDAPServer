@@ -12,7 +12,7 @@ class LdapEngine extends EventEmitter {
     this.config = {
       baseDn: options.baseDn || 'dc=localhost',
       bindIp: options.bindIp || '127.0.0.1',
-      port: options.port || 636,
+      port: options.port || 389,
       certificate: options.certificate || null,
       key: options.key || null,
       ...options
