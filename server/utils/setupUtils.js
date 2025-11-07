@@ -138,11 +138,11 @@ function generateEnvFile(config) {
   envContent += '# Server Configuration\n';
   envContent += `LDAP_COMMON_NAME=${config.LDAP_COMMON_NAME}\n`;
   envContent += `LDAP_BASE_DN=${config.LDAP_BASE_DN}\n`;
-  envContent += `LDAP_PORT=${config.LDAP_PORT}\n`;
+  envContent += `PORT=${config.LDAP_PORT}\n`;
   envContent += `LDAP_UNENCRYPTED=${config.LDAP_UNENCRYPTED}\n\n`;
   
   envContent += '# Authentication and Directory\n';
-  envContent += `AUTH_BACKEND=${config.AUTH_BACKEND}\n`;
+  envContent += `AUTH_BACKENDS=${config.AUTH_BACKEND}\n`;
   envContent += `DIRECTORY_BACKEND=${config.DIRECTORY_BACKEND}\n\n`;
   
   if (config.DB_HOST) {

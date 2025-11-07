@@ -12,34 +12,29 @@ class ProviderFactory {
   }
 
   createAuthProvider(type, options = {}) {
-    return new this.backendLoader.getAuthBackend(type);
+    const AuthProvider = this.backendLoader.getAuthBackend(type);
+    return new AuthProvider();
   }
 
   createDirectoryProvider(type, options = {}) {
-    return new this.backendLoader.getDirectoryBackend(type);
+    const DirectoryProvider = this.backendLoader.getDirectoryBackend(type);
+    return new DirectoryProvider();
   }
 
   /**
    * List all available backends (compiled + dynamic)
    * @returns {Object} Object with auth and directory arrays
    */
-  static listAvailableBackends() {
-    return backendLoader.listBackends();
+  listAvailableBackends() {
+    return this.backendLoader.listBackends();
   }
 
   /**
    * Reload dynamic backends (useful for development)
    */
-  static reloadBackends() {
-    backendLoader.reload();
+  reloadBackends() {
+    this.backendLoader.reload();
   }
 }
 
-module.exports = {
-  ProviderFactory,
-  DatabaseAuthProvider,
-  LdapAuthProvider,
-  ProxmoxAuthProvider,
-  DatabaseDirectoryProvider,
-  ProxmoxDirectoryProvider
-};
+module.exports = ProviderFactory;

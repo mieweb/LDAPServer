@@ -1,12 +1,9 @@
 const { LdapEngine } = require('@ldap-gateway/core');
-
 const ConfigurationLoader = require('./config/configurationLoader');
-
-const logger = require('./utils/logger');
+const ProviderFactory = require('./providers');
 const { setupGracefulShutdown } = require('./utils/shutdownUtils');
 const { checkAndSetupEnvironment } = require('./utils/setupUtils');
-
-const { ProviderFactory } = require('./providers');
+const logger = require('./utils/logger');
 
 // Check for command line arguments
 function parseCommandLineArgs() {
@@ -118,7 +115,7 @@ async function startServer(config) {
   // Graceful shutdown
   setupGracefulShutdown({ 
     directoryProvider: selectedDirectory,
-    authProvider: selectedBackend,
+    authProviders: selectedBackends,
     ldapEngine: ldapEngine
   });
 

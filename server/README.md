@@ -5,9 +5,7 @@ This is a bundled distribution of the LDAP Gateway Server.
 ## Quick Start
 
 1. Copy .env.example to .env and configure your settings
-2. Run the server:
-   - Linux/macOS: ./ldap-gateway
-   - Windows: node ldap-gateway
+2. Run the server: `npm start`
 
 ## Configuration
 

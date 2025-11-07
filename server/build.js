@@ -16,12 +16,11 @@ const filesToCopy = [
   'providers.js',
   'package.json',
   '.env.example',
-  'ldap-gateway',
   'README.md',
 ];
 
 const directoriesToCopy = [
-  'auth',
+  'backends',
   'cert', 
   'config',
   'db',

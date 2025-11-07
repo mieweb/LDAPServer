@@ -39,7 +39,7 @@ function setupGracefulShutdown(resources) {
  * @param {Object} resources - Resources that need to be cleaned up
  */
 async function gracefulShutdown(resources) {
-  const { directoryProvider, authProvider, ldapServer, ldapEngine } = resources;
+  const { directoryProvider, authProviders, ldapEngine } = resources;
 
   try {
     logger.debug('Starting graceful shutdown...');
@@ -80,13 +80,15 @@ async function gracefulShutdown(resources) {
     }
 
     // Clean up auth provider
-    if (authProvider && typeof authProvider.cleanup === 'function') {
-      logger.debug('Cleaning up auth provider...');
-      try {
-        await authProvider.cleanup();
-        logger.debug('Auth provider cleaned up');
-      } catch (err) {
-        console.error('Error cleaning up auth provider:', err);
+    for (const authProvider of authProviders) {
+      if (authProvider && typeof authProvider.cleanup === 'function') {
+        logger.debug('Cleaning up auth provider...');
+        try {
+          await authProvider.cleanup();
+          logger.debug('Auth provider cleaned up');
+        } catch (err) {
+          console.error('Error cleaning up auth provider:', err);
+        }
       }
     }
 
