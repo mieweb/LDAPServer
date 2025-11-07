@@ -141,25 +141,6 @@ jobs:
           name: server-artifacts
           path: ./
 
-      - name: Prepare build environment
-        run: |
-          # Ensure binary is executable
-          chmod +x dist/ldap-gateway
-          
-          # Make scripts executable
-          chmod +x nfpm/scripts/*.sh
-          
-          # Create output directory
-          mkdir -p dist/packages
-          
-          # Debug: show directory structure
-          echo "Directory structure:"
-          ls -la
-          echo "Server directory:"
-          ls -la server/ || echo "No server directory"
-          echo "Dist directory:"
-          ls -la dist/ || echo "No dist directory"
-
       - name: Update nfpm config for architecture
         run: |
           # Create arch-specific config
