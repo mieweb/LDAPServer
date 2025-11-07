@@ -25,43 +25,12 @@ class ConfigurationLoader {
       return this.config;
     }
 
-    // Search order for .env files
-    const envPaths = [
-      path.join(process.cwd(), '.env'),
-      '/etc/ldap-gateway/.env'
-    ];
-
-    // Try to load .env files in order
-    for (const envPath of envPaths) {
-      if (this._loadEnvFile(envPath)) {
-        logger.info(`Loaded configuration from: ${envPath}`);
-        break;
-      }
-    }
-
     // Build configuration object from environment variables
+    require('dotenv').config(); // Load .env from current directory if exists
     this.config = this._buildConfigFromEnv();
     this.loaded = true;
 
     return this.config;
-  }
-
-  /**
-   * Load environment file if it exists
-   * @private
-   */
-  _loadEnvFile(filePath) {
-    if (!fs.existsSync(filePath)) {
-      return false;
-    }
-
-    try {
-      require('dotenv').config({ path: filePath });
-      return true;
-    } catch (error) {
-      logger.warn(`Failed to load env file ${filePath}:`, error.message);
-      return false;
-    }
   }
 
   /**
