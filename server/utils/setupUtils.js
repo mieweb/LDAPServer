@@ -82,15 +82,18 @@ async function runInteractiveSetup() {
 
     // Authentication backend - simplified choice
     console.log('\nAuthentication backends:');
-    console.log('  db   - Use local database for authentication');
-    console.log('  ldap - Delegate authentication to another LDAP server');
-    config.AUTH_BACKEND = await askQuestion(rl, 'Authentication backend (db/ldap)', 'db');
+    console.log('  mysql   - Use MySQL database for authentication');
+    console.log('  mongodb - Use MongoDB database for authentication');
+    console.log('  ldap    - Delegate authentication to another LDAP server');
+    console.log('  proxmox - Use Proxmox VE authentication');
+    config.AUTH_BACKEND = await askQuestion(rl, 'Authentication backend (mysql/mongodb/ldap/proxmox)', 'mysql');
 
     // Directory backend - simplified choice
     console.log('\nDirectory backends:');
-    console.log('  db      - Use local database for user/group directory');
+    console.log('  mysql   - Use MySQL database for user/group directory');
+    console.log('  mongodb - Use MongoDB database for user/group directory');
     console.log('  proxmox - Use Proxmox VE user configuration');
-    config.DIRECTORY_BACKEND = await askQuestion(rl, 'Directory backend (db/proxmox)', 'db');
+    config.DIRECTORY_BACKEND = await askQuestion(rl, 'Directory backend (mysql/mongodb/proxmox)', 'mysql');
 
     // Only ask for additional config if needed
     if (config.AUTH_BACKEND === 'ldap') {
@@ -112,14 +115,18 @@ async function runInteractiveSetup() {
     config.ENABLE_NOTIFICATION = 'false';
     config.LOG_LEVEL = 'info';
 
-    // Only ask for database config if using db backend
-    if (config.AUTH_BACKEND === 'db' || config.DIRECTORY_BACKEND === 'db') {
-      console.log('\n📊 Database Configuration:');
-      config.DB_HOST = await askQuestion(rl, 'Database host', 'localhost');
-      config.DB_PORT = await askQuestion(rl, 'Database port', '3306');
-      config.DB_NAME = await askQuestion(rl, 'Database name', 'ldap_server');
-      config.DB_USER = await askQuestion(rl, 'Database username', 'ldap_user');
-      config.DB_PASSWORD = await askQuestion(rl, 'Database password');
+    // Ask for database config if using mysql or mongodb backend
+    if (config.AUTH_BACKEND === 'mysql' || config.DIRECTORY_BACKEND === 'mysql') {
+      console.log('\n📊 MySQL Database Configuration:');
+      config.MYSQL_HOST = await askQuestion(rl, 'MySQL host', 'localhost');
+      config.MYSQL_PORT = await askQuestion(rl, 'MySQL port', '3306');
+      config.MYSQL_DATABASE = await askQuestion(rl, 'MySQL database name', 'ldap_user_db');
+      config.MYSQL_USER = await askQuestion(rl, 'MySQL username', 'root');
+      config.MYSQL_PASSWORD = await askQuestion(rl, 'MySQL password');
+    } else if (config.AUTH_BACKEND === 'mongodb' || config.DIRECTORY_BACKEND === 'mongodb') {
+      console.log('\n📊 MongoDB Configuration:');
+      config.MONGO_URI = await askQuestion(rl, 'MongoDB URI', 'mongodb://localhost:27017/ldap_user_db');
+      config.MONGO_DATABASE = await askQuestion(rl, 'MongoDB database name', 'ldap_user_db');
     }
 
   } finally {

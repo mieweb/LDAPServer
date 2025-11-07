@@ -81,14 +81,14 @@ async function getAllGroups() {
   try {
     const query = `
       SELECT 
-        g.gid,
+        g.gid_number,
         g.name,
-        g.gid as id,
+        g.gid_number as id,
         GROUP_CONCAT(u.username) as member_uids
       FROM \`groups\` g
-      LEFT JOIN user_groups ug ON g.gid = ug.group_id
+      LEFT JOIN user_groups ug ON g.gid_number = ug.group_id
       LEFT JOIN users u ON ug.user_id = u.id
-      GROUP BY g.gid, g.name
+      GROUP BY g.gid_number, g.name
       ORDER BY g.name
     `;
 
@@ -97,7 +97,7 @@ async function getAllGroups() {
     return groups.map(group => ({
       id: group.id,
       name: group.name,
-      gid: group.gid,
+      gid_number: group.gid_number,
       member_uids: group.member_uids ? group.member_uids.split(',') : []
     }));
   } catch (error) {

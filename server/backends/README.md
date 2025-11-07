@@ -17,7 +17,7 @@ server/backends/
 1. **Copy the template**: Start with `template.js` or an example file
 2. **Rename the file**: Use a descriptive name (e.g., `redis-auth.js`)
 3. **Implement the interface**: Add your backend logic
-4. **Configure**: Set `AUTH_BACKEND` or `DIRECTORY_BACKEND` to your backend name
+4. **Configure**: Set `AUTH_BACKENDS` or `DIRECTORY_BACKEND` to your backend name
 5. **Restart**: The backend loads automatically on server start
 
 ## 📝 Backend Structure
@@ -159,7 +159,7 @@ Set your backend in `.env`:
 
 ```ini
 # Use a dynamic authentication backend
-AUTH_BACKEND=my-custom-auth
+AUTH_BACKENDS=my-custom-auth
 
 # Use a dynamic directory backend
 DIRECTORY_BACKEND=my-custom-directory

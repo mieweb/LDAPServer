@@ -6,7 +6,7 @@
  * 
  * Setup:
  * 1. Rename this file (remove .example.js, e.g., api-auth.js)
- * 2. Set AUTH_BACKEND=api-auth in your .env file
+ * 2. Set AUTH_BACKENDS=api-auth in your .env file
  * 3. Configure API_AUTH_URL and API_AUTH_TOKEN environment variables
  * 4. Restart the server
  */
