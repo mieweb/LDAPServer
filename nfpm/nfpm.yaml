@@ -60,10 +60,8 @@ contents:
       mode: 0644
 
 scripts:
-  preinstall: "./nfpm/scripts/preinstall.sh"
   postinstall: "./nfpm/scripts/postinstall.sh"
   preremove: "./nfpm/scripts/preremove.sh"
-  postremove: "./nfpm/scripts/postremove.sh"
 
 rpm:
   summary: "LDAP Gateway Server for bridging LDAP authentication to various backends"
