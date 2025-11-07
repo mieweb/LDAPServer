@@ -1,6 +1,6 @@
 const { AuthProvider } = require('@ldap-gateway/core');
-const NotificationService = require('../../../services/notificationService');
-const logger = require('../../../utils/logger');
+const NotificationService = require('../services/notificationService');
+const logger = require('../utils/logger');
 
 /**
  * Wrapper AuthProvider that adds MFA/notification functionality to any base auth provider
@@ -25,15 +25,6 @@ class NotificationAuthProvider extends AuthProvider {
 
   async authenticate(username, password, req) {
     try {
-      // Step 1: Perform base authentication
-      const isValid = await this.baseAuthProvider.authenticate(username, password, req);
-      
-      if (!isValid) {
-        logger.debug(`[NotificationAuthProvider] Base auth failed for ${username}`);
-        return false;
-      }
-
-      // Step 2: MFA/Notification check
       logger.debug(`[NotificationAuthProvider] Base auth succeeded, sending MFA notification for ${username}`);
       
       const response = await NotificationService.sendAuthenticationNotification(username);
@@ -59,4 +50,8 @@ class NotificationAuthProvider extends AuthProvider {
   }
 }
 
-module.exports = NotificationAuthProvider;
+module.exports = {
+  name: 'notification',
+  type: 'auth',
+  provider: NotificationAuthProvider,
+};

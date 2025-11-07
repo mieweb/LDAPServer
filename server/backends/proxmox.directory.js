@@ -2,7 +2,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { DirectoryProvider } = require('@ldap-gateway/core');
 
-const logger = require('../../../utils/logger');
+const logger = require('../utils/logger');
+const { name } = require('./proxmox.auth');
 
 class ProxmoxDirectory extends DirectoryProvider {
   constructor() {
@@ -284,4 +285,8 @@ class ProxmoxDirectory extends DirectoryProvider {
   }
 }
 
-module.exports = ProxmoxDirectory;
+module.exports = {
+  name: 'proxmox',
+  type: 'directory',
+  provider: ProxmoxDirectory,
+};

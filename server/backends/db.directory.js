@@ -1,7 +1,7 @@
 const { DirectoryProvider } = require('@ldap-gateway/core');
-const DatabaseService = require('../../../services/databaseServices');
-const dbConfig = require('../../../config/dbConfig');
-const logger = require('../../../utils/logger');
+const DatabaseService = require('../services/databaseServices');
+const dbConfig = require('../config/dbConfig');
+const logger = require('../utils/logger');
 
 class DBDirectory extends DirectoryProvider {
   constructor() {
@@ -47,4 +47,8 @@ class DBDirectory extends DirectoryProvider {
   }
 }
 
-module.exports = DBDirectory;
+module.exports = {
+  name: 'db',
+  type: 'directory',
+  provider: DBDirectory,
+};

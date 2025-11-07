@@ -30,16 +30,6 @@ async function initializeServer() {
   const configLoader = new ConfigurationLoader();
   const config = configLoader.loadConfig();
   
-  // Initialize dynamic backend loading
-  ProviderFactory.initialize(config.backendDir);
-  
-  // List available backends for debugging
-  if (config.logLevel === 'debug') {
-    const availableBackends = ProviderFactory.listAvailableBackends();
-    logger.debug('Available auth backends:', availableBackends.auth);
-    logger.debug('Available directory backends:', availableBackends.directory);
-  }
-  
   // Continue with server initialization
   return startServer(config);
 }
@@ -47,33 +37,15 @@ async function initializeServer() {
 // Function to start the LDAP server using LdapEngine
 async function startServer(config) {
   // Set up directory providers using ProviderFactory
-  let selectedDirectory;
-  try {
-    selectedDirectory = ProviderFactory.createDirectoryProvider(config.directoryBackend);
-    logger.info(`Directory provider created: ${config.directoryBackend}`);
-    
-    // Initialize the directory provider
-    await selectedDirectory.initialize();
-    logger.info(`Directory provider initialized: ${config.directoryBackend}`);
-  } catch (error) {
-    logger.error(`Failed to initialize directory provider '${config.directoryBackend}':`, error.message);
-    throw error;
-  }
+  const providerFactory = new ProviderFactory(config.backendDir);
+  const availableBackends = providerFactory.listAvailableBackends();
+  logger.debug('Available auth backends:', availableBackends.auth);
+  logger.debug('Available directory backends:', availableBackends.directory);
 
-  // Set up authentication providers using ProviderFactory
-  let selectedBackend;
-  try {
-    selectedBackend = ProviderFactory.createAuthProvider(config.authBackend);
-    logger.info(`Auth provider created: ${config.authBackend}`);
-    
-    // Initialize the auth provider
-    await selectedBackend.initialize();
-    logger.info(`Auth provider initialized: ${config.authBackend}`);
-  } catch (error) {
-    logger.error(`Failed to initialize auth provider '${config.authBackend}':`, error.message);
-    throw error;
-  }
-
+  const selectedDirectory = providerFactory.createDirectoryProvider(config.directoryBackend);
+  const selectedBackends = config.authBackends.map((authBackend) => {
+    return providerFactory.createAuthProvider(authBackend);
+  });
 
   // Create and configure LDAP engine
   const ldapEngine = new LdapEngine({
@@ -83,11 +55,9 @@ async function startServer(config) {
     certificate: config.certContent,
     key: config.keyContent,
     logger: logger,
+    authProviders: selectedBackends,
+    directoryProvider: selectedDirectory
   });
-
-  // Set providers
-  ldapEngine.setAuthProvider(selectedBackend);
-  ldapEngine.setDirectoryProvider(selectedDirectory);
 
   // Set up event listeners for logging and monitoring
   ldapEngine.on('started', (info) => {

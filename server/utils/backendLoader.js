@@ -8,20 +8,11 @@ const logger = require('./logger');
  * Supports both authentication and directory providers
  */
 class BackendLoader {
-  constructor() {
+  constructor(backendDir = null) {
     this.loadedBackends = {
       auth: new Map(),
       directory: new Map()
     };
-    this.backendDir = null;
-  }
-
-  /**
-   * Initialize the backend loader with a directory path
-   * @param {string} backendDir - Path to directory containing backend files
-   */
-  initialize(backendDir = null) {
-    // Default to ./backends relative to project root
     this.backendDir = backendDir || path.join(process.cwd(), 'backends');
     
     if (!fs.existsSync(this.backendDir)) {
@@ -221,4 +212,4 @@ class BackendLoader {
 }
 
 // Export singleton instance
-module.exports = new BackendLoader();
+module.exports = BackendLoader;

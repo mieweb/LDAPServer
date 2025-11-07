@@ -18,26 +18,10 @@ class LdapEngine extends EventEmitter {
       ...options
     };
     
-    this.authProvider = null;
-    this.directoryProvider = null;
+    this.authProviders = options.authProviders;
+    this.directoryProvider = options.directoryProvider;
     this.server = null;
     this.logger = options.logger || console;
-  }
-
-  /**
-   * Set the authentication provider
-   * @param {AuthProvider} provider - Implementation of AuthProvider interface
-   */
-  setAuthProvider(provider) {
-    this.authProvider = provider;
-  }
-
-  /**
-   * Set the directory provider  
-   * @param {DirectoryProvider} provider - Implementation of DirectoryProvider interface
-   */
-  setDirectoryProvider(provider) {
-    this.directoryProvider = provider;
   }
 
   /**
@@ -45,11 +29,9 @@ class LdapEngine extends EventEmitter {
    * @returns {Promise<void>}
    */
   async start() {
-    if (!this.authProvider) {
-      throw new Error('AuthProvider must be set before starting');
-    }
-    if (!this.directoryProvider) {
-      throw new Error('DirectoryProvider must be set before starting');
+    this.directoryProvider.initialize();
+    for (const authProvider of this.authProviders) {
+      authProvider.initialize();
     }
 
     // Create server options
@@ -133,7 +115,11 @@ class LdapEngine extends EventEmitter {
       try {
         this.emit('bindRequest', { username, anonymous: false });
         
-        const isAuthenticated = await this.authProvider.authenticate(username, password, req);
+        // Authenticate against all auth providers - all must return true
+        const authResults = await Promise.all(
+          this.authProviders.map(provider => provider.authenticate(username, password, req))
+        );
+        const isAuthenticated = authResults.every(result => result === true);
         
         if (!isAuthenticated) {
           this.emit('bindFail', { username, reason: 'invalid_credentials' });

@@ -1,8 +1,8 @@
 const { AuthProvider } = require('@ldap-gateway/core');
 const ldap = require('ldapjs');
-const resolveLDAPHosts = require('../../../utils/resolveLdapHosts');
+const resolveLDAPHosts = require('../utils/resolveLdapHosts');
 
-const logger = require('../../../utils/logger');
+const logger = require('../utils/logger');
 
 class LDAPBackend extends AuthProvider {
   constructor() {
@@ -147,4 +147,8 @@ class LDAPBackend extends AuthProvider {
   }
 }
 
-module.exports = LDAPBackend;
+module.exports = {
+  name: 'ldap',
+  type: 'auth',
+  provider: LDAPBackend,
+};

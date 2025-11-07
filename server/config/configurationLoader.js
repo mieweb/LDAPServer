@@ -69,11 +69,9 @@ class ConfigurationLoader {
    * @private
    */
   _buildConfigFromEnv() {
-    const { AUTHENTICATION_BACKEND } = require('../constants/constants');
-
     return {
-      authBackend: process.env.AUTH_BACKEND || AUTHENTICATION_BACKEND.DATABASE,
-      directoryBackend: process.env.DIRECTORY_BACKEND || 'db',
+      authBackend: process.env.AUTH_BACKENDS.split(','),
+      directoryBackend: process.env.DIRECTORY_BACKEND,
       commonName: process.env.LDAP_COMMON_NAME || 'localhost',
       ldapBaseDn: process.env.LDAP_BASE_DN || this._buildBaseDnFromCommonName(),
       port: process.env.PORT || process.env.LDAP_UNENCRYPTED === 'true' ? 636 : 389,

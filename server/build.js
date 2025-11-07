@@ -47,7 +47,6 @@ const directoriesToCopy = [
   'auth',
   'cert', 
   'config',
-  'constants',
   'db',
   'handlers',
   'services',

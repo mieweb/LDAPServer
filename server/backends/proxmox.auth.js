@@ -3,7 +3,7 @@ const chokidar = require('chokidar');
 const unixcrypt = require('unixcrypt');
 const { AuthProvider } = require('@ldap-gateway/core');
 
-const logger = require('../../../utils/logger');
+const logger = require('../utils/logger');
 
 class ProxmoxBackend extends AuthProvider {
   constructor() {
@@ -172,4 +172,8 @@ class ProxmoxBackend extends AuthProvider {
   }
 }
 
-module.exports = ProxmoxBackend;
+module.exports = {
+  name: 'proxmox',
+  type: 'auth',
+  provider: ProxmoxBackend,
+};
