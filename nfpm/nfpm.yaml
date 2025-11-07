@@ -48,7 +48,7 @@ contents:
 
   # Configuration directory
   - src: "./server/.env.example"
-    dst: "/etc/ldap-gateway/.env.example"
+    dst: "/etc/default/ldap-gateway"
     type: config
     file_info:
       mode: 0644
@@ -58,30 +58,6 @@ contents:
     dst: "/lib/systemd/system/ldap-gateway.service"
     file_info:
       mode: 0644
-
-  # Log directory
-  - dst: "/var/log/ldap-gateway"
-    type: dir
-    file_info:
-      mode: 0755
-      owner: ldap-gateway
-      group: ldap-gateway
-
-  # Runtime directory
-  - dst: "/var/run/ldap-gateway"
-    type: dir
-    file_info:
-      mode: 0755
-      owner: ldap-gateway
-      group: ldap-gateway
-
-  # Certificate directory
-  - dst: "/etc/ldap-gateway/certs"
-    type: dir
-    file_info:
-      mode: 0700
-      owner: ldap-gateway
-      group: ldap-gateway
 
 scripts:
   preinstall: "./nfpm/scripts/preinstall.sh"

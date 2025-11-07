@@ -14,7 +14,7 @@ WorkingDirectory=/opt/ldap-gateway
 
 # Environment
 Environment=NODE_ENV=production
-EnvironmentFile=-/etc/ldap-gateway/.env
+EnvironmentFile=-/etc/default/ldap-gateway
 
 # Start the server
 ExecStart=/opt/ldap-gateway/ldap-gateway
