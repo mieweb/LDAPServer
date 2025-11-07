@@ -114,8 +114,6 @@ async function startServer(config) {
 
   // Graceful shutdown
   setupGracefulShutdown({ 
-    directoryProvider: selectedDirectory,
-    authProviders: selectedBackends,
     ldapEngine: ldapEngine
   });
 

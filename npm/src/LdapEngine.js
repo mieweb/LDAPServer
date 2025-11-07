@@ -22,6 +22,7 @@ class LdapEngine extends EventEmitter {
     this.directoryProvider = options.directoryProvider;
     this.server = null;
     this.logger = options.logger || console;
+    this._stopping = false;
   }
 
   /**
@@ -45,6 +46,9 @@ class LdapEngine extends EventEmitter {
     }
 
     this.server = ldap.createServer(serverOptions);
+    
+    // Prevent EventEmitter memory leak warnings
+    this.server.setMaxListeners(20);
 
     // Setup bind handlers
     this._setupBindHandlers();
@@ -77,21 +81,66 @@ class LdapEngine extends EventEmitter {
   }
 
   /**
-   * Stop the LDAP server
+   * Stop the LDAP server and cleanup all providers
    * @returns {Promise<void>}
    */
   async stop() {
-    if (!this.server) {
+    if (!this.server || this._stopping) {
       return;
     }
 
-    return new Promise((resolve) => {
-      this.server.close(() => {
-        this.logger.info('LDAP Server stopped');
-        this.emit('stopped');
-        resolve();
+    this._stopping = true;
+
+    try {
+      // First close the LDAP server
+      await new Promise((resolve) => {
+        this.server.close(() => {
+          this.logger.info('LDAP Server stopped');
+          resolve();
+        });
       });
-    });
+
+      // Then cleanup all providers
+      await this._cleanupProviders();
+
+      this.emit('stopped');
+    } finally {
+      // Clear server reference to prevent multiple calls
+      this.server = null;
+      this._stopping = false;
+    }
+  }
+
+  /**
+   * Cleanup all configured providers
+   * @private
+   */
+  async _cleanupProviders() {
+    // Cleanup directory provider
+    if (this.directoryProvider && typeof this.directoryProvider.cleanup === 'function') {
+      this.logger.debug('Cleaning up directory provider...');
+      try {
+        await this.directoryProvider.cleanup();
+        this.logger.debug('Directory provider cleaned up');
+      } catch (err) {
+        this.logger.error('Error cleaning up directory provider:', err);
+      }
+    }
+
+    // Cleanup all auth providers
+    if (this.authProviders && Array.isArray(this.authProviders)) {
+      for (const [index, authProvider] of this.authProviders.entries()) {
+        if (authProvider && typeof authProvider.cleanup === 'function') {
+          this.logger.debug(`Cleaning up auth provider ${index + 1}...`);
+          try {
+            await authProvider.cleanup();
+            this.logger.debug(`Auth provider ${index + 1} cleaned up`);
+          } catch (err) {
+            this.logger.error(`Error cleaning up auth provider ${index + 1}:`, err);
+          }
+        }
+      }
+    }
   }
 
   /**
