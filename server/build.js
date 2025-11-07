@@ -69,11 +69,6 @@ for (const dir of directoriesToCopy) {
   }
 }
 
-// Make launcher executable on Unix systems
-if (process.platform !== 'win32') {
-  fs.chmodSync(launcherPath, '755');
-}
-
 console.log('Build complete!');
 console.log(`Distribution created in: ${distDir}`);
 console.log('');
