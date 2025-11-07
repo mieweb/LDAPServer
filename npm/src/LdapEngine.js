@@ -11,6 +11,7 @@ class LdapEngine extends EventEmitter {
     
     this.config = {
       baseDn: options.baseDn || 'dc=localhost',
+      bindIp: options.bindIp || '127.0.0.1',
       port: options.port || 636,
       certificate: options.certificate || null,
       key: options.key || null,
@@ -74,7 +75,7 @@ class LdapEngine extends EventEmitter {
 
     // Start listening
     return new Promise((resolve, reject) => {
-      this.server.listen(this.config.port, "0.0.0.0", (err) => {
+      this.server.listen(this.config.port, this.config.bindIp, (err) => {
         if (err) {
           const { normalizeServerError } = require('./utils/errorUtils');
           const normalizedError = normalizeServerError(err);

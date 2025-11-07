@@ -1,6 +1,6 @@
 const { LdapEngine } = require('@ldap-gateway/core');
 
-const configLoader = require('./config/configurationLoader');
+const ConfigurationLoader = require('./config/configurationLoader');
 
 const logger = require('./utils/logger');
 const { setupGracefulShutdown } = require('./utils/shutdownUtils');
@@ -27,6 +27,7 @@ async function initializeServer() {
   await checkAndSetupEnvironment(reconfig);
   
   // Load configuration using the centralized configuration loader
+  const configLoader = new ConfigurationLoader();
   const config = configLoader.loadConfig();
   
   // Initialize dynamic backend loading
@@ -45,9 +46,6 @@ async function initializeServer() {
 
 // Function to start the LDAP server using LdapEngine
 async function startServer(config) {
-  // Extract certificate content from config
-  const { certContent, keyContent } = config;
-
   // Set up directory providers using ProviderFactory
   let selectedDirectory;
   try {
@@ -76,18 +74,15 @@ async function startServer(config) {
     throw error;
   }
 
-  // Determine port based on SSL/TLS configuration
-  const PORT = (certContent && keyContent) 
-    ? (config.ldapPort || 636) 
-    : (config.ldapPort || 389);
 
   // Create and configure LDAP engine
   const ldapEngine = new LdapEngine({
     baseDn: config.ldapBaseDn,
-    port: PORT,
-    certificate: certContent,
-    key: keyContent,
-    logger: logger
+    bindIp: config.bindIp,
+    port: config.port,
+    certificate: config.certContent,
+    key: config.keyContent,
+    logger: logger,
   });
 
   // Set providers
