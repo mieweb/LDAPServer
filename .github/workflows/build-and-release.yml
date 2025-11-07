@@ -89,14 +89,6 @@ jobs:
       - name: Run server tests
         run: npm run test:server
 
-      - name: Create binary
-        run: npm run build:binary
-
-      - name: Smoke test binary
-        run: |
-          chmod +x dist/ldap-gateway
-          timeout 5s ./dist/ldap-gateway --help || true
-
       - name: Upload server artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -225,13 +217,7 @@ jobs:
 
       - name: Create release tarball
         run: |
-          # Make sure we have executable permissions
-          if [ -f create-release.sh ]; then
-            chmod +x create-release.sh
-            ./create-release.sh
-          else
-            echo "Warning: create-release.sh not found, skipping tarball creation"
-          fi
+          ./create-release.sh
 
       - name: Generate checksums
         run: |

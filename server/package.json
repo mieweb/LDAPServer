@@ -13,8 +13,6 @@
         "start": "node index.js",
         "dev": "node index.js",
         "build": "node build.js",
-        "bundle": "node build.js --target=linux",
-        "binary": "node build.js --target=linux && mkdir -p ../dist && cp dist/ldap-gateway ../dist/",
         "test": "echo \"Server smoke test\" && node -e \"console.log('Server package OK')\""
     },
     "dependencies": {

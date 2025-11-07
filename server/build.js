@@ -75,4 +75,4 @@ console.log('To test the build:');
 console.log(`  cd ${distDir}`);
 console.log('  cp .env.example .env');
 console.log('  # Edit .env with your configuration');
-console.log('  ./ldap-gateway');
+console.log('  node index.js');
