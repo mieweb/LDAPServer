@@ -119,7 +119,7 @@ class LDAPBackend extends AuthProvider {
         logger.debug("Service bind successful, searching for user...");
 
         let foundDN = null;
-        client.search(process.env.LDAP_BASE_DN, opts, (err, res) => {
+        client.search(process.env.LDAP_AUTH_BASE_DN, opts, (err, res) => {
           if (err) return reject(err);
 
           res.on('searchEntry', (entry) => {

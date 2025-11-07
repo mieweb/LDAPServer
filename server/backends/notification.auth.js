@@ -3,21 +3,17 @@ const NotificationService = require('../services/notificationService');
 const logger = require('../utils/logger');
 
 /**
- * Wrapper AuthProvider that adds MFA/notification functionality to any base auth provider
+ * MFA/Notification AuthProvider that sends push notifications for authentication
+ * Works as a standalone auth provider in the chain (doesn't wrap other providers)
  */
 class NotificationAuthProvider extends AuthProvider {
-  constructor(baseAuthProvider) {
+  constructor() {
     super();
-    this.baseAuthProvider = baseAuthProvider;
     this.initialized = false;
   }
 
   async initialize() {
     if (!this.initialized) {
-      // Initialize the wrapped provider
-      if (this.baseAuthProvider.initialize) {
-        await this.baseAuthProvider.initialize();
-      }
       this.initialized = true;
       logger.debug('[NotificationAuthProvider] Initialized with MFA support');
     }
@@ -25,7 +21,7 @@ class NotificationAuthProvider extends AuthProvider {
 
   async authenticate(username, password, req) {
     try {
-      logger.debug(`[NotificationAuthProvider] Base auth succeeded, sending MFA notification for ${username}`);
+      logger.debug(`[NotificationAuthProvider] Sending MFA notification for ${username}`);
       
       const response = await NotificationService.sendAuthenticationNotification(username);
       
@@ -43,9 +39,9 @@ class NotificationAuthProvider extends AuthProvider {
   }
 
   async cleanup() {
-    if (this.initialized && this.baseAuthProvider.cleanup) {
-      await this.baseAuthProvider.cleanup();
+    if (this.initialized) {
       this.initialized = false;
+      logger.info("[NotificationAuthProvider] Cleanup completed");
     }
   }
 }

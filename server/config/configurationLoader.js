@@ -43,7 +43,7 @@ class ConfigurationLoader {
       directoryBackend: process.env.DIRECTORY_BACKEND,
       commonName: process.env.LDAP_COMMON_NAME || 'localhost',
       ldapBaseDn: process.env.LDAP_BASE_DN || this._buildBaseDnFromCommonName(),
-      port: process.env.PORT || (process.env.LDAP_UNENCRYPTED === 'true' ? 636 : 389),
+      port: process.env.PORT || (process.env.LDAP_UNENCRYPTED === 'true' ? 389 : 636),
       bindIp: process.env.BIND_IP || '127.0.0.1',
       unencrypted: process.env.LDAP_UNENCRYPTED === 'true' || process.env.LDAP_UNENCRYPTED === '1',
       backendDir: process.env.BACKEND_DIR || null,
