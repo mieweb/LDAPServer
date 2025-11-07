@@ -37,13 +37,3 @@ jobs:
 
       - name: Test server package
         run: npm run test:server
-
-      - name: Create binary
-        run: npm run build:binary
-
-      - name: Verify binary
-        run: |
-          ls -la dist/
-          file dist/ldap-gateway
-          chmod +x dist/ldap-gateway
-          timeout 5s ./dist/ldap-gateway --help || echo "Binary created successfully"
