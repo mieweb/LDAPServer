@@ -144,6 +144,7 @@ jobs:
 
       - name: Build deb package
         run: |
+          mkdir -p dist/packages
           nfpm package \
             --config nfpm-${{ matrix.arch }}.yaml \
             --packager deb \
@@ -151,6 +152,7 @@ jobs:
 
       - name: Build rpm package
         run: |
+          mkdir -p dist/packages
           nfpm package \
             --config nfpm-${{ matrix.arch }}.yaml \
             --packager rpm \
