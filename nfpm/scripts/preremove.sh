@@ -1,19 +1,13 @@
 #!/bin/bash
 set -e
 
-# Pre-removal script for LDAP Gateway
+before_remove () {
+    debsystemctl=$(command -v deb-systemd-invoke || echo systemctl)
+    $debsystemctl stop ldap-gateway.service >/dev/null || true
+    $debsystemctl disable ldap-gateway.service >/dev/null || true
+    $debsystemctl --system daemon-reload >/dev/null || true
+}
 
-echo "Preparing to remove LDAP Gateway..."
-
-# Stop and disable the service
-if systemctl is-active --quiet ldap-gateway 2>/dev/null; then
-    echo "Stopping LDAP Gateway service..."
-    systemctl stop ldap-gateway || true
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    before_remove
 fi
-
-if systemctl is-enabled --quiet ldap-gateway 2>/dev/null; then
-    echo "Disabling LDAP Gateway service..."
-    systemctl disable ldap-gateway || true
-fi
-
-exit 0
