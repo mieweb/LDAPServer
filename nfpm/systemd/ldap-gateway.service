@@ -18,14 +18,12 @@ EnvironmentFile=-/etc/default/ldap-gateway
 
 # Start the server
 ExecStart=/opt/ldap-gateway/ldap-gateway
-ExecReload=/bin/kill -USR1 $MAINPID
 
 # Security settings
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/var/log/ldap-gateway /var/run/ldap-gateway /etc/ldap-gateway
 
 # Capabilities
 AmbientCapabilities=CAP_NET_BIND_SERVICE
