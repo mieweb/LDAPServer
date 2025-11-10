@@ -187,7 +187,7 @@ The LDAP gateway separates **directory lookups** from **authentication**, allowi
 
 #### MySQL + Active Directory
 ```ini
-DIRECTORY_BACKEND=mysql    # User info from MySQL
+DIRECTORY_BACKEND=mysql   # User info from MySQL
 AUTH_BACKENDS=ldap        # Passwords via AD
 MYSQL_HOST=your-mysql-host
 MYSQL_DATABASE=your_database
@@ -197,7 +197,7 @@ LDAP_BIND_DN=CN=service,DC=your-domain,DC=com
 
 #### MySQL Self-Contained
 ```ini
-DIRECTORY_BACKEND=mysql    # User info from MySQL
+DIRECTORY_BACKEND=mysql   # User info from MySQL
 AUTH_BACKENDS=mysql       # Passwords in MySQL
 MYSQL_HOST=localhost
 MYSQL_DATABASE=users
@@ -208,7 +208,7 @@ MYSQL_PASSWORD=secure_password
 #### MongoDB Self-Contained
 ```ini  
 DIRECTORY_BACKEND=mongodb  # User info from MongoDB
-AUTH_BACKENDS=mongodb     # Passwords in MongoDB
+AUTH_BACKENDS=mongodb      # Passwords in MongoDB
 MONGO_URI=mongodb://localhost:27017/users
 MONGO_DATABASE=users
 ```
@@ -216,7 +216,7 @@ MONGO_DATABASE=users
 #### Proxmox Container Auth
 ```ini
 DIRECTORY_BACKEND=proxmox  # Users from Proxmox config
-AUTH_BACKENDS=proxmox     # Passwords from Proxmox
+AUTH_BACKENDS=proxmox      # Passwords from Proxmox
 PROXMOX_USER_CFG=/etc/pve/user.cfg
 PROXMOX_SHADOW_CFG=/etc/pve/shadow.cfg
 ```
@@ -224,7 +224,7 @@ PROXMOX_SHADOW_CFG=/etc/pve/shadow.cfg
 #### Multi-Backend Authentication (Fallback)
 ```ini
 DIRECTORY_BACKEND=mysql    # User info from MySQL
-AUTH_BACKENDS=mysql,ldap  # Try MySQL auth first, fallback to LDAP
+AUTH_BACKENDS=mysql,ldap   # Try MySQL auth first, fallback to LDAP
 MYSQL_HOST=your-mysql-host
 MYSQL_DATABASE=your_database
 AD_DOMAIN=your-domain.com
@@ -332,14 +332,11 @@ The LDAP Gateway integrates with [WebChart EHR](https://www.mieweb.com/) systems
 
 ```ini
 DIRECTORY_BACKEND=mysql    # WebChart uses MySQL
-AUTH_BACKENDS=mysql       # Or ldap for AD integration
+AUTH_BACKENDS=mysql
 MYSQL_HOST=webchart-host
 MYSQL_DATABASE=webchart
 MYSQL_USER=readonly_user
 MYSQL_PASSWORD=secure_password
-
-# Optional: Custom UID mapping
-LDAP_UID_OBS_NAME="LDAP UID Number"
 ```
 
 WebChart users are mapped to standard LDAP objects with healthcare-specific attributes and group memberships based on WebChart realms.
@@ -354,7 +351,7 @@ Direct integration with Proxmox virtualization environments:
 - **Container Authentication** → Centralized LDAP for all containers/VMs
 - **Configuration Syncing** → Reads directly from Proxmox user/shadow files
 - **MFA Support** → Optional push notifications via [MIE Authenticator](https://github.com/mieweb/mieweb_auth_app)
-- **Automated Setup** → Use [pown.sh](https://github.com/anishapant21/pown.sh) for container LDAP client configuration
+- **Automated Setup** → Use [pown.sh](https://github.com/mieweb/pown.sh) for container LDAP client configuration
 
 ### Deployment
 ```bash
@@ -446,12 +443,12 @@ npm run test:server
 
 ## 📚 Resources
 
-- 🎥 **[Demo Video](https://youtu.be/qsE1BWpmsME?si=MRnwFHu6LCd-2fhk)** - Complete setup walkthrough
+- 🎬 **[Quick Demo](https://youtube.com/shorts/C_7CIJVPkgg?si=VHommCsoQokObiKp)** - Complete walkthrough shorts
 - 📖 **[API Documentation](./npm/README.md)** - Core package usage
 - 🔧 **[Server Configuration](./server/README.md)** - Server setup guide
 - 🏥 **[WebChart Integration](https://docs.google.com/document/d/1_6iutppKego9Kg_FGuDg5OwbXJUqZ0a2Fj7ajgNLU8k/edit)** - Healthcare deployment
 - 📱 **[MIE Authenticator](https://github.com/mieweb/mieweb_auth_app)** - MFA mobile app
-- 🛠️ **[pown.sh](https://github.com/anishapant21/pown.sh)** - Container automation
+- 🛠️ **[pown.sh](https://github.com/mieweb/pown.sh)** - Container automation
 
 ---
 
