@@ -120,24 +120,27 @@ Create or edit `/etc/ldap-gateway/.env`:
 # Directory backend: where to find user/group information
 DIRECTORY_BACKEND=mysql  # mysql | mongodb | proxmox
 
-# Authentication backend: how to validate passwords  
-AUTH_BACKEND=ldap       # db | ldap | proxmox
+# Authentication backends: how to validate passwords (comma-separated for multiple)
+AUTH_BACKENDS=ldap      # mysql | mongodb | ldap | proxmox | notification | mysql,ldap | ldap,notification
 
-# MySQL (WebChart integration)
+# LDAP Server Configuration
+LDAP_BASE_DN=dc=company,dc=com
+
+# MySQL configuration (for any MySQL-based system)
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
 MYSQL_USER=ldap_user
 MYSQL_PASSWORD=secure_password
-MYSQL_DATABASE=webchart
+MYSQL_DATABASE=your_database
+
+# MongoDB configuration (for mongodb backends)
+MONGO_URI=mongodb://localhost:27017/ldap_user_db
+MONGO_DATABASE=ldap_user_db
 
 # External LDAP/AD authentication
 LDAP_BIND_DN=CN=ldap-service,OU=Service Accounts,DC=company,DC=com
 LDAP_BIND_PASSWORD=ldap_service_password
 AD_DOMAIN=company.com
-
-# Server settings
-LDAP_PORT=636
-LDAP_BASE_DN=dc=company,dc=com
 ```
 
 ### Start Service
@@ -164,41 +167,82 @@ The LDAP gateway separates **directory lookups** from **authentication**, allowi
 
 | Backend | Description | Use Case |
 |---------|-------------|----------|
-| `mysql` | MySQL/MariaDB with WebChart schema | Healthcare systems, EHR integration |
+| `mysql` | MySQL/MariaDB databases | Any MySQL-based system (WebChart, custom schemas) |
 | `mongodb` | MongoDB collections | Modern web applications |
 | `proxmox` | Proxmox user.cfg/shadow.cfg files | Virtualization environments |
 
-### Authentication Backends (`AUTH_BACKEND`) 
+### Authentication Backends (`AUTH_BACKENDS`) 
+
+**Multiple backends supported** - Use comma-separated values (e.g., `AUTH_BACKENDS=mysql,ldap`) to try authentication providers in order.
 
 | Backend | Description | Use Case |
 |---------|-------------|----------|
-| `db` | Database password hashes | Self-contained authentication |
+| `mysql` | MySQL/MariaDB password hashes | Self-contained auth with MySQL databases |
+| `mongodb` | MongoDB password hashes | Self-contained auth with MongoDB collections |
 | `ldap` | External LDAP/Active Directory | Enterprise SSO integration |
 | `proxmox` | Proxmox shadow file | Proxmox container authentication |
+| `notification` | MFA push notifications via mobile app | Two-factor authentication, enhanced security |
 
 ### Example Configurations
 
-#### WebChart + Active Directory
+#### MySQL + Active Directory
 ```ini
-DIRECTORY_BACKEND=mysql    # User info from WebChart
-AUTH_BACKEND=ldap         # Passwords via AD
-MYSQL_HOST=webchart-db
-AD_DOMAIN=hospital.local
+DIRECTORY_BACKEND=mysql    # User info from MySQL
+AUTH_BACKENDS=ldap        # Passwords via AD
+MYSQL_HOST=your-mysql-host
+MYSQL_DATABASE=your_database
+AD_DOMAIN=your-domain.com
+LDAP_BIND_DN=CN=service,DC=your-domain,DC=com
+```
+
+#### MySQL Self-Contained
+```ini
+DIRECTORY_BACKEND=mysql    # User info from MySQL
+AUTH_BACKENDS=mysql       # Passwords in MySQL
+MYSQL_HOST=localhost
+MYSQL_DATABASE=users
+MYSQL_USER=ldap_user
+MYSQL_PASSWORD=secure_password
 ```
 
 #### MongoDB Self-Contained
 ```ini  
 DIRECTORY_BACKEND=mongodb  # User info from MongoDB
-AUTH_BACKEND=db           # Passwords in MongoDB
-MONGODB_URI=mongodb://localhost:27017/users
+AUTH_BACKENDS=mongodb     # Passwords in MongoDB
+MONGO_URI=mongodb://localhost:27017/users
+MONGO_DATABASE=users
 ```
 
 #### Proxmox Container Auth
 ```ini
 DIRECTORY_BACKEND=proxmox  # Users from Proxmox config
-AUTH_BACKEND=proxmox      # Passwords from Proxmox
+AUTH_BACKENDS=proxmox     # Passwords from Proxmox
 PROXMOX_USER_CFG=/etc/pve/user.cfg
 PROXMOX_SHADOW_CFG=/etc/pve/shadow.cfg
+```
+
+#### Multi-Backend Authentication (Fallback)
+```ini
+DIRECTORY_BACKEND=mysql    # User info from MySQL
+AUTH_BACKENDS=mysql,ldap  # Try MySQL auth first, fallback to LDAP
+MYSQL_HOST=your-mysql-host
+MYSQL_DATABASE=your_database
+AD_DOMAIN=your-domain.com
+LDAP_BIND_DN=CN=service,DC=your-domain,DC=com
+```
+
+#### MFA with Push Notifications
+```ini
+DIRECTORY_BACKEND=mysql       # User info from MySQL
+AUTH_BACKENDS=ldap,notification # LDAP auth + MFA push notifications
+MYSQL_HOST=your-mysql-host
+MYSQL_DATABASE=your_database
+AD_DOMAIN=your-domain.com
+LDAP_BIND_DN=CN=service,DC=your-domain,DC=com
+
+# MFA Configuration (requires MIE Authenticator app)
+ENABLE_NOTIFICATION=true
+NOTIFICATION_URL=https://your-notification-service.com
 ```
 
 ### 🔌 Custom Backends (Dynamic Loading)
@@ -227,7 +271,7 @@ module.exports = {
 
 2. **Configure to use it**:
 ```ini
-AUTH_BACKEND=my-auth
+AUTH_BACKENDS=my-auth
 ```
 
 3. **Restart the server** - your backend loads automatically!
@@ -238,6 +282,8 @@ AUTH_BACKEND=my-auth
 - ✅ **Full access to core interfaces** - use AuthProvider and DirectoryProvider
 - ✅ **Template included** - `server/backends/template.js` to get started
 - ✅ **Examples provided** - See `server/backends/*.example.js`
+
+🎥 **[Quick Demo](https://youtube.com/shorts/D3332Tr4fYk?si=igINgFQvvrxmSySd)** - See custom backend creation in action
 
 📚 **Full documentation**: See [server/backends/README.md](server/backends/README.md) for complete guide with examples.
 
@@ -282,23 +328,21 @@ ldap-gateway --config-test
 
 ## 🏥 WebChart Integration
 
-Specialized support for [WebChart EHR](https://www.mieweb.com/) systems:
+The LDAP Gateway integrates with [WebChart EHR](https://www.mieweb.com/) systems using the MySQL backend:
 
-### Schema Mapping
-- **Users** → `posixAccount` objects with healthcare-specific attributes
-- **UID Numbers** → Derived from "LDAP UID Number" observations or `user_id + 10000`
-- **Groups** → Based on WebChart realms and roles
-- **Security** → Integrates with WebChart permission system
-
-### Configuration
 ```ini
-DIRECTORY_BACKEND=mysql
+DIRECTORY_BACKEND=mysql    # WebChart uses MySQL
+AUTH_BACKENDS=mysql       # Or ldap for AD integration
+MYSQL_HOST=webchart-host
 MYSQL_DATABASE=webchart
 MYSQL_USER=readonly_user
+MYSQL_PASSWORD=secure_password
 
-# Optional: Custom observation code for UID mapping
-LDAP_UID_OBS_NAME="Custom UID Field"
+# Optional: Custom UID mapping
+LDAP_UID_OBS_NAME="LDAP UID Number"
 ```
+
+WebChart users are mapped to standard LDAP objects with healthcare-specific attributes and group memberships based on WebChart realms.
 
 ---
 
@@ -327,7 +371,7 @@ dpkg -i ldap-gateway_amd64.deb
 # Configure for Proxmox
 cat > /etc/ldap-gateway/.env << EOF
 DIRECTORY_BACKEND=proxmox
-AUTH_BACKEND=proxmox
+AUTH_BACKENDS=proxmox
 PROXMOX_USER_CFG=/etc/pve/user.cfg
 PROXMOX_SHADOW_CFG=/etc/pve/shadow.cfg
 EOF
@@ -411,161 +455,8 @@ npm run test:server
 
 ---
 
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-<sub>Built with ❤️ by [MIEWeb](https://www.mieweb.com/) for healthcare and enterprise environments.</sub>
-
-Edit `.env` with appropriate values (see [Configuration](#-configuration)).
-
----
-
-### Usage
-
-Start everything locally:
-
-```bash
-./launch.sh
-```
-
-This will:
-
-* Spin up MySQL + LDAP client in Docker
-* Start LDAP server
-
-To stop:
-
-```bash
-./shutdown.sh
-```
-
----
-
-### Testing
-
-LDAP search:
-
-```bash
-ldapsearch -x -H ldaps://localhost:636 -b "dc=mieweb,dc=com" "(uid=ann)"
-ldapsearch -x -H ldaps://localhost:636 -b "dc=mieweb,dc=com" "(objectClass=posixAccount)"
-```
-
-SSH authentication:
-
-```bash
-ssh ann@localhost -p 2222
-```
-
----
-
-## 🔑 Backends
-
-The LDAP server separates **authentication** from **directory lookups**.
-
-### Directory Backends (`DIRECTORY_BACKEND`)
-
-* **`mysql`** -> MySQL as directory source
-* **`mongodb`** → MongoDB as directory source.
-* **`proxmox`** → users discovered through Proxmox configuration files
-
-### Authentication Backends (`AUTH_BACKEND`)
-
-* **`db`** → Passwords validated against DB.
-* **`ldap`** → Passwords validated against external AD/LDAP.
-* **`proxmox`** → Passwords validated against proxmox config files.
 
 
----
-
-## 📖 WebChart Integration
-
-The LDAP server includes a dedicated integration with the WebChart MySQL schema, allowing users managed in WebChart to be exposed through LDAP in a standards-compliant way.
-
-### Schema Mapping
-
-* **User Mapping** → WebChart users are mapped into LDAP `posixAccount` objects.
-* **UID Number (`uidNumber`)** →
-
-  * Primary source: The value is derived from the WebChart **Observation Code** named *“LDAP UID Number”*.
-  * If multiple observation entries exist, the **latest value** is always selected.
-  * Fallback: If no observation code is present, the `uidNumber` defaults to `users.user_id + 10000`.
-* **GID Number (`gidNumber`)** → Derived from the `realms.id` field in WebChart.
-
----
-
-## 🔧 Configuration
-
-Example `.env` for WebChart + AD auth:
-
-```ini
-# Directory backend: db (WebChart SQL)
-DIRECTORY_BACKEND=db
-
-# Authentication backend: db or ldap
-AUTH_BACKEND=ldap
-
-# MySQL (WebChart)
-MYSQL_HOST=
-MYSQL_PORT=
-MYSQL_USER=
-MYSQL_PASSWORD=
-MYSQL_DATABASE=
-
-# AD / LDAP auth
-AD_DOMAIN=
-LDAP_BIND_DN=
-LDAP_BIND_PASSWORD=
-
-# Optional: Observation Code override
-LDAP_UID_OBS_NAME=
-```
-
----
-
-## Proxmox Integration
-
-In addition to database backends (WebChart/MySQL, MongoDB), the LDAP server also integrates directly with **Proxmox environments**. This enables centralized authentication for containers and VMs while leveraging existing Proxmox user and group configuration.
-
-### Features
-
-* **Direct File Access** → Reads from `user.cfg` and `shadow.cfg` to reflect Proxmox users into LDAP.
-* **Auto-Reload** → Automatically detects changes to config files and reloads user/group data without restart.
-* **Containerized Deployment** → LDAP server runs as a container inside Proxmox.
-* **Centralized Authentication** → Single LDAP authority for all Proxmox containers.
-* **MFA Support** → Optional multi-factor authentication through the [MIE Authenticator App](https://github.com/mieweb/mieweb_auth_app).
-* **Automation** → The [`pown.sh`](https://github.com/anishapant21/pown.sh) script configures LDAP clients on containers automatically (packages, services, sudo setup).
-
-### Configuration
-
-To enable Proxmox integration, configure the following in your `.env`:
-
-```sh
-# Proxmox Integration
-DIRECTORY_BACKEND=proxmox
-AUTH_BACKEND=proxmox
-PROXMOX_USER_CFG=<path-to-user.cfg>
-PROXMOX_SHADOW_CFG=<path-to-shadow.cfg>
-```
-
-### Authentication Flow
-
-1. User connects via SSH to a container.
-2. The container forwards authentication to the LDAP server.
-3. The LDAP server validates the credentials against Proxmox config.
-4. If MFA is enabled, a push notification is sent to the user’s device.
-5. On approval, access is granted.
-
-### Resources
-
-* [LDAPServer](https://github.com/mieweb/LDAPServer)
-* [pown.sh](https://github.com/anishapant21/pown.sh) – Automated Proxmox LDAP client setup
-* [MIE Auth App](https://github.com/mieweb/mieweb_auth_app) – MFA mobile application
-* [Full Proxmox Integration Documentation](https://docs.google.com/document/d/1_6iutppKego9Kg_FGuDg5OwbXJUqZ0a2Fj7ajgNLU8k/edit?usp=sharing)
-
----
 
 ## Elaborative
 
@@ -626,7 +517,10 @@ sequenceDiagram
     NotifSvc-->>CustomLDAP: Send approval response
     CustomLDAP-->>Client: Allow SSH login
 ```
+## 📄 License
 
-## 📺 Demo
+MIT License - see [LICENSE](LICENSE) file for details.
 
-🎥 [LDAP Server Demo](https://youtu.be/qsE1BWpmsME?si=MRnwFHu6LCd-2fhk)
+---
+
+<sub>Built with ❤️ by [MIEWeb](https://www.mieweb.com/) for healthcare and enterprise environments.</sub>
