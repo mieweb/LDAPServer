@@ -17,7 +17,7 @@ Environment=NODE_ENV=production
 EnvironmentFile=-/etc/default/ldap-gateway
 
 # Start the server
-ExecStart=/usr/bin/env node /opt/ldap-gateway/index.js
+ExecStart=/usr/bin/env node /opt/ldap-gateway/server/index.js
 
 # Security settings
 NoNewPrivileges=yes
