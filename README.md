@@ -222,6 +222,9 @@ PROXMOX_SHADOW_CFG=/etc/pve/shadow.cfg
 ```
 
 #### Multi-Backend Authentication (Fallback)
+
+🎥 **[Multiple Backends Demo](https://youtube.com/shorts/4N-aov0wxZ4?si=AA9SN_s_EfpkM-MK)** - See how to configure multiple authentication backends
+
 ```ini
 DIRECTORY_BACKEND=mysql    # User info from MySQL
 AUTH_BACKENDS=mysql,ldap   # Try MySQL auth first, fallback to LDAP
