@@ -9,9 +9,7 @@ module.exports = {
   LdapEngine,
   AuthProvider,
   DirectoryProvider,
-  utils: {
-    ...ldapUtils,
-    ...filterUtils,
-    ...errorUtils
-  }
+  ldapUtils,
+  filterUtils,
+  errorUtils
 };

@@ -302,7 +302,7 @@ class LdapEngine extends EventEmitter {
     // Handle group search requests
     if (isGroupSearchRequest(filterStr, attributes)) {
       this.logger.debug(`Searching for groups with filter: ${filterStr}`);
-      const groups = await this.directoryProvider.getAllGroups();
+      const groups = await this.directoryProvider.findGroups(filterStr);
       this.logger.debug(`Found ${groups.length} groups`);
       
       for (const group of groups) {

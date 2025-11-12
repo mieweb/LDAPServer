@@ -1,4 +1,4 @@
-const { DirectoryProvider } = require('@ldap-gateway/core');
+const { DirectoryProvider, filterUtils } = require('@ldap-gateway/core');
 const mysqlDriver = require('../db/drivers/mysql');
 const logger = require('../utils/logger');
 
@@ -55,16 +55,44 @@ class MySQLDirectoryProvider extends DirectoryProvider {
       
       logger.debug(`[MySQLDirectoryProvider] Finding groups with filter: ${filter}`);
       
-      // Parse memberUid from filter for group membership queries
-      const memberUidMatch = filter.match(/memberUid=([^)&]+)/i);
-      if (memberUidMatch) {
-        const username = memberUidMatch[1];
+      // Parse the filter to extract all conditions
+      const filterConditions = filterUtils.parseGroupFilter(filter);
+      logger.debug(`[MySQLDirectoryProvider] Parsed filter conditions:`, filterConditions);
+      
+      // If memberUid filter is present, use optimized query
+      if (filterConditions.memberUid) {
+        const username = filterConditions.memberUid;
         logger.debug(`[MySQLDirectoryProvider] Finding groups for member: ${username}`);
-        return await mysqlDriver.findGroupsByMemberUid(username);
+        const groups = await mysqlDriver.findGroupsByMemberUid(username);
+        
+        // Apply cn filter if present
+        if (filterConditions.cn) {
+          const filtered = groups.filter(g => g.name === filterConditions.cn);
+          logger.debug(`[MySQLDirectoryProvider] After cn filter (${filterConditions.cn}): ${filtered.length} groups`);
+          return filtered;
+        }
+        
+        return groups;
       }
       
-      // Return all groups if no specific member filter
-      return await mysqlDriver.getAllGroups();
+      // Get all groups and apply filters
+      let groups = await mysqlDriver.getAllGroups();
+      
+      // Apply cn filter if present
+      if (filterConditions.cn) {
+        groups = groups.filter(g => g.name === filterConditions.cn);
+        logger.debug(`[MySQLDirectoryProvider] After cn filter (${filterConditions.cn}): ${groups.length} groups`);
+      }
+      
+      // Apply gidNumber filter if present
+      if (filterConditions.gidNumber && filterConditions.gidNumber !== '*') {
+        const gidNum = parseInt(filterConditions.gidNumber, 10);
+        groups = groups.filter(g => g.gid_number === gidNum || g.gidNumber === gidNum);
+        logger.debug(`[MySQLDirectoryProvider] After gidNumber filter (${gidNum}): ${groups.length} groups`);
+      }
+      
+      logger.debug(`[MySQLDirectoryProvider] Returning ${groups.length} groups`);
+      return groups;
       
     } catch (error) {
       logger.error('[MySQLDirectoryProvider] Error finding groups:', error);

@@ -1,6 +1,6 @@
 const fs = require('fs');
 const crypto = require('crypto');
-const { DirectoryProvider } = require('@ldap-gateway/core');
+const { DirectoryProvider, filterUtils } = require('@ldap-gateway/core');
 
 const logger = require('../utils/logger');
 const { name } = require('./proxmox.auth');
@@ -201,53 +201,45 @@ class ProxmoxDirectory extends DirectoryProvider {
   }
 
   async findGroups(filter) {
-    const groups = this.groups;
-    logger.debug(`[findGroups] Received filter: ${filter}`);
-    logger.debug(`[findGroups] Available groups:`, groups.map(g => ({
+    logger.debug(`[ProxmoxDirectory] findGroups called with filter: ${filter}`);
+    logger.debug(`[ProxmoxDirectory] Available groups:`, this.groups.map(g => ({
       name: g.name,
       gidNumber: g.gidNumber,
       memberCount: g.memberUids.length
     })));
 
-    // Match filters like (memberUid=username)
-    const memberUidMatch = filter.match(/memberUid=([^)&]+)/i);
-    if (memberUidMatch) {
-      const username = memberUidMatch[1];
-      logger.debug(`[findGroups] Detected memberUid match for: ${username}`);
-      const matched = groups.filter(group => group.memberUids.includes(username));
-      logger.debug(`[findGroups] Returning ${matched.length} groups for memberUid:`,
-        matched.map(g => ({ name: g.name, gidNumber: g.gidNumber })));
-      return matched;
+    // Parse the filter to extract all conditions
+    const filterConditions = filterUtils.parseGroupFilter(filter);
+    logger.debug(`[ProxmoxDirectory] Parsed filter conditions:`, filterConditions);
+
+    let results = this.groups;
+
+    // Apply cn filter if present
+    if (filterConditions.cn) {
+      results = results.filter(group => group.name === filterConditions.cn);
+      logger.debug(`[ProxmoxDirectory] After cn filter (${filterConditions.cn}): ${results.length} groups`);
     }
 
-    // Match filters like (cn=groupname)
-    const cnMatch = filter.match(/cn=([^)&]+)/i);
-    if (cnMatch) {
-      const cn = cnMatch[1];
-      logger.debug(`[findGroups] Detected cn match for: ${cn}`);
-      const matched = groups.filter(group => group.name === cn);
-      logger.debug(`[findGroups] Returning ${matched.length} groups for cn:`,
-        matched.map(g => ({ name: g.name, gidNumber: g.gidNumber })));
-      return matched;
+    // Apply memberUid filter if present
+    if (filterConditions.memberUid) {
+      results = results.filter(group => group.memberUids.includes(filterConditions.memberUid));
+      logger.debug(`[ProxmoxDirectory] After memberUid filter (${filterConditions.memberUid}): ${results.length} groups`);
     }
 
-    // Match filters like (objectClass=posixGroup)
-    const objectClassMatch = filter.match(/objectClass=posixGroup/i);
-    if (objectClassMatch) {
-      logger.debug(`[findGroups] Detected objectClass=posixGroup. Returning all groups:`,
-        groups.map(g => ({ name: g.name, gidNumber: g.gidNumber })));
-      return groups;
+    // Apply gidNumber filter if present
+    if (filterConditions.gidNumber && filterConditions.gidNumber !== '*') {
+      const gidNum = parseInt(filterConditions.gidNumber, 10);
+      results = results.filter(group => group.gidNumber === gidNum);
+      logger.debug(`[ProxmoxDirectory] After gidNumber filter (${gidNum}): ${results.length} groups`);
     }
 
-    // Match filters like (gidNumber=*)
-    const gidNumberMatch = filter.match(/gidNumber=/i);
-    if (gidNumberMatch) {
-      logger.debug(`[findGroups] Detected gidNumber search. Returning all groups.`);
-      return groups;
-    }
-
-    logger.debug(`[findGroups] No recognized pattern in filter. Returning empty array.`);
-    return [];
+    // objectClass=posixGroup doesn't filter further since all our groups are posixGroups
+    // If no specific filters, return all groups
+    
+    logger.debug(`[ProxmoxDirectory] Returning ${results.length} groups:`,
+      results.map(g => ({ name: g.name, gidNumber: g.gidNumber })));
+    
+    return results;
   }
 
   async getAllUsers() {

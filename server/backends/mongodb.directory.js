@@ -1,4 +1,4 @@
-const { DirectoryProvider } = require('@ldap-gateway/core');
+const { DirectoryProvider, filterUtils } = require('@ldap-gateway/core');
 const mongoDbDriver = require('../db/drivers/mongoDb');
 const logger = require('../utils/logger');
 
@@ -53,16 +53,44 @@ class MongoDBDirectoryProvider extends DirectoryProvider {
       
       logger.debug(`[MongoDBDirectoryProvider] Finding groups with filter: ${filter}`);
       
-      // Parse memberUid from filter for group membership queries
-      const memberUidMatch = filter.match(/memberUid=([^)&]+)/i);
-      if (memberUidMatch) {
-        const username = memberUidMatch[1];
+      // Parse the filter to extract all conditions
+      const filterConditions = filterUtils.parseGroupFilter(filter);
+      logger.debug(`[MongoDBDirectoryProvider] Parsed filter conditions:`, filterConditions);
+      
+      // If memberUid filter is present, use optimized query
+      if (filterConditions.memberUid) {
+        const username = filterConditions.memberUid;
         logger.debug(`[MongoDBDirectoryProvider] Finding groups for member: ${username}`);
-        return await mongoDbDriver.findGroupsByMemberUid(username);
+        const groups = await mongoDbDriver.findGroupsByMemberUid(username);
+        
+        // Apply cn filter if present
+        if (filterConditions.cn) {
+          const filtered = groups.filter(g => g.name === filterConditions.cn);
+          logger.debug(`[MongoDBDirectoryProvider] After cn filter (${filterConditions.cn}): ${filtered.length} groups`);
+          return filtered;
+        }
+        
+        return groups;
       }
       
-      // Return all groups if no specific member filter
-      return await mongoDbDriver.getAllGroups();
+      // Get all groups and apply filters
+      let groups = await mongoDbDriver.getAllGroups();
+      
+      // Apply cn filter if present
+      if (filterConditions.cn) {
+        groups = groups.filter(g => g.name === filterConditions.cn);
+        logger.debug(`[MongoDBDirectoryProvider] After cn filter (${filterConditions.cn}): ${groups.length} groups`);
+      }
+      
+      // Apply gidNumber filter if present
+      if (filterConditions.gidNumber && filterConditions.gidNumber !== '*') {
+        const gidNum = parseInt(filterConditions.gidNumber, 10);
+        groups = groups.filter(g => g.gid_number === gidNum || g.gidNumber === gidNum);
+        logger.debug(`[MongoDBDirectoryProvider] After gidNumber filter (${gidNum}): ${groups.length} groups`);
+      }
+      
+      logger.debug(`[MongoDBDirectoryProvider] Returning ${groups.length} groups`);
+      return groups;
       
     } catch (error) {
       logger.error('[MongoDBDirectoryProvider] Error finding groups:', error);

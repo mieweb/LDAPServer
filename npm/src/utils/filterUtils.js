@@ -92,10 +92,51 @@ function isMixedSearchRequest(filterStr) {
   return /objectClass=/i.test(filterStr) || filterStr.length === 0;
 }
 
+/**
+ * Parse LDAP filter string and extract filter conditions
+ * Handles compound filters like (&(objectClass=posixGroup)(cn=groupname))
+ * @param {string} filterStr - LDAP filter string
+ * @returns {Object} Object with extracted filter conditions
+ */
+function parseGroupFilter(filterStr) {
+  if (!filterStr || typeof filterStr !== 'string') {
+    return {};
+  }
+
+  const result = {};
+
+  // Extract cn (group name)
+  const cnMatch = filterStr.match(/cn=([^)&|]+)/i);
+  if (cnMatch) {
+    result.cn = cnMatch[1].trim();
+  }
+
+  // Extract memberUid
+  const memberUidMatch = filterStr.match(/memberUid=([^)&|]+)/i);
+  if (memberUidMatch) {
+    result.memberUid = memberUidMatch[1].trim();
+  }
+
+  // Extract gidNumber
+  const gidNumberMatch = filterStr.match(/gidNumber=([^)&|]+)/i);
+  if (gidNumberMatch) {
+    const gidValue = gidNumberMatch[1].trim();
+    result.gidNumber = gidValue === '*' ? '*' : gidValue;
+  }
+
+  // Check for objectClass=posixGroup
+  if (/objectClass=posixGroup/i.test(filterStr)) {
+    result.objectClass = 'posixGroup';
+  }
+
+  return result;
+}
+
 module.exports = {
   extractCredentials,
   getUsernameFromFilter,
   isAllUsersRequest,
   isGroupSearchRequest,
-  isMixedSearchRequest
+  isMixedSearchRequest,
+  parseGroupFilter
 };
