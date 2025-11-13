@@ -212,16 +212,16 @@ class ProxmoxDirectory extends DirectoryProvider {
     const filterConditions = filterUtils.parseGroupFilter(filter);
     logger.debug(`[ProxmoxDirectory] Parsed filter conditions:`, filterConditions);
 
-    let results = this.groups;
+    let results = [...this.groups];
 
-    // Apply cn filter if present
-    if (filterConditions.cn) {
+    // Apply cn filter if present (skip wildcards)
+    if (filterConditions.cn && filterConditions.cn !== '*') {
       results = results.filter(group => group.name === filterConditions.cn);
       logger.debug(`[ProxmoxDirectory] After cn filter (${filterConditions.cn}): ${results.length} groups`);
     }
 
-    // Apply memberUid filter if present
-    if (filterConditions.memberUid) {
+    // Apply memberUid filter if present (skip wildcards)
+    if (filterConditions.memberUid && filterConditions.memberUid !== '*') {
       results = results.filter(group => group.memberUids.includes(filterConditions.memberUid));
       logger.debug(`[ProxmoxDirectory] After memberUid filter (${filterConditions.memberUid}): ${results.length} groups`);
     }
@@ -231,6 +231,22 @@ class ProxmoxDirectory extends DirectoryProvider {
       const gidNum = parseInt(filterConditions.gidNumber, 10);
       results = results.filter(group => group.gidNumber === gidNum);
       logger.debug(`[ProxmoxDirectory] After gidNumber filter (${gidNum}): ${results.length} groups`);
+      
+      // If no explicit group found, check for user private group
+      if (results.length === 0) {
+        const user = this.users.find(u => u.gid_number === gidNum);
+        if (user) {
+          logger.debug(`[ProxmoxDirectory] Creating implicit user private group for gid ${gidNum} (user: ${user.username})`);
+          results = [{
+            name: user.username,
+            memberUids: [user.username],
+            gid_number: gidNum,
+            gidNumber: gidNum,
+            dn: `cn=${user.username},${process.env.LDAP_BASE_DN}`,
+            objectClass: ["posixGroup"],
+          }];
+        }
+      }
     }
 
     // objectClass=posixGroup doesn't filter further since all our groups are posixGroups

@@ -59,14 +59,14 @@ class MySQLDirectoryProvider extends DirectoryProvider {
       const filterConditions = filterUtils.parseGroupFilter(filter);
       logger.debug(`[MySQLDirectoryProvider] Parsed filter conditions:`, filterConditions);
       
-      // If memberUid filter is present, use optimized query
-      if (filterConditions.memberUid) {
+      // If memberUid filter is present, use optimized query (skip wildcards)
+      if (filterConditions.memberUid && filterConditions.memberUid !== '*') {
         const username = filterConditions.memberUid;
         logger.debug(`[MySQLDirectoryProvider] Finding groups for member: ${username}`);
         const groups = await mysqlDriver.findGroupsByMemberUid(username);
         
-        // Apply cn filter if present
-        if (filterConditions.cn) {
+        // Apply cn filter if present (skip wildcards)
+        if (filterConditions.cn && filterConditions.cn !== '*') {
           const filtered = groups.filter(g => g.name === filterConditions.cn);
           logger.debug(`[MySQLDirectoryProvider] After cn filter (${filterConditions.cn}): ${filtered.length} groups`);
           return filtered;
@@ -78,8 +78,8 @@ class MySQLDirectoryProvider extends DirectoryProvider {
       // Get all groups and apply filters
       let groups = await mysqlDriver.getAllGroups();
       
-      // Apply cn filter if present
-      if (filterConditions.cn) {
+      // Apply cn filter if present (skip wildcards)
+      if (filterConditions.cn && filterConditions.cn !== '*') {
         groups = groups.filter(g => g.name === filterConditions.cn);
         logger.debug(`[MySQLDirectoryProvider] After cn filter (${filterConditions.cn}): ${groups.length} groups`);
       }
@@ -89,6 +89,23 @@ class MySQLDirectoryProvider extends DirectoryProvider {
         const gidNum = parseInt(filterConditions.gidNumber, 10);
         groups = groups.filter(g => g.gid_number === gidNum || g.gidNumber === gidNum);
         logger.debug(`[MySQLDirectoryProvider] After gidNumber filter (${gidNum}): ${groups.length} groups`);
+        
+        // If no explicit group found, check for user private group
+        if (groups.length === 0) {
+          const users = await mysqlDriver.getAllUsers();
+          const user = users.find(u => u.gid_number === gidNum || u.gidNumber === gidNum);
+          if (user) {
+            logger.debug(`[MySQLDirectoryProvider] Creating implicit user private group for gid ${gidNum} (user: ${user.username})`);
+            groups = [{
+              name: user.username,
+              memberUids: [user.username],
+              gid_number: gidNum,
+              gidNumber: gidNum,
+              dn: `cn=${user.username},${process.env.LDAP_BASE_DN}`,
+              objectClass: ["posixGroup"],
+            }];
+          }
+        }
       }
       
       logger.debug(`[MySQLDirectoryProvider] Returning ${groups.length} groups`);
