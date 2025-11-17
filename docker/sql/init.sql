@@ -4,14 +4,14 @@ USE ldap_user_db;
 
 -- 1. Create groups table first with member_uids as JSON
 CREATE TABLE IF NOT EXISTS `groups` (
-  gid INT PRIMARY KEY,
+  gid_number INT PRIMARY KEY,
   name VARCHAR(50) UNIQUE NOT NULL,
   description VARCHAR(200),
   member_uids JSON NOT NULL DEFAULT (JSON_ARRAY())
 );
 
 -- 2. Insert primary groups FIRST
-INSERT INTO `groups` (gid, name, description, member_uids) VALUES
+INSERT INTO `groups` (gid_number, name, description, member_uids) VALUES
   (1001, 'ann_primary', 'Primary group for Ann', JSON_ARRAY('ann')),
   (1002, 'abrol_primary', 'Primary group for Abrol', JSON_ARRAY('abrol')),
   (1003, 'evan_primary', 'Primary group for Evan', JSON_ARRAY('evan')),
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS users (
   uid_number INT UNIQUE,
   gid_number INT,
   home_directory VARCHAR(200),
-  FOREIGN KEY (gid_number) REFERENCES `groups`(gid)
+  FOREIGN KEY (gid_number) REFERENCES `groups`(gid_number)
 );
 
 -- 4. Now insert users (gid_number matches existing groups)
@@ -40,7 +40,7 @@ INSERT INTO users (username, password, full_name, email, uid_number, gid_number,
   ('chris', 'chris','Chris Evans', 'chris@mieweb.com', 1005, 1005, '/home/chris');
 
 -- 5. Add secondary groups
-INSERT INTO `groups` (gid, name, description, member_uids) VALUES
+INSERT INTO `groups` (gid_number, name, description, member_uids) VALUES
   (5000, 'developers', 'Development team', JSON_ARRAY('ann', 'evan')),
   (5001, 'sysadmins', 'System administrators', JSON_ARRAY('abrol', 'hrits', 'chris')),
   (5002, 'devops', 'DevOps team', JSON_ARRAY('ann', 'hrits'));
