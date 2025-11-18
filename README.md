@@ -126,6 +126,11 @@ AUTH_BACKENDS=ldap      # mysql | mongodb | ldap | proxmox | notification | mysq
 # LDAP Server Configuration
 LDAP_BASE_DN=dc=company,dc=com
 
+# Security: Require authentication for search operations (recommended for production)
+# When enabled, clients must bind with credentials before performing searches
+# Default: false (allows anonymous searches for backward compatibility)
+REQUIRE_AUTH_FOR_SEARCH=true
+
 # MySQL configuration (for any MySQL-based system)
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
@@ -142,6 +147,34 @@ LDAP_BIND_DN=CN=ldap-service,OU=Service Accounts,DC=company,DC=com
 LDAP_BIND_PASSWORD=ldap_service_password
 AD_DOMAIN=company.com
 ```
+
+### Security Settings
+
+#### Require Authentication for Search
+
+For production deployments, you should require authentication before allowing LDAP search operations:
+
+```ini
+# Require bind before allowing searches (recommended for production)
+REQUIRE_AUTH_FOR_SEARCH=true
+```
+
+**Behavior:**
+- `false` (default): Allows anonymous searches - useful for development and testing
+- `true`: Clients must authenticate with valid credentials before searching
+
+**Example:**
+```bash
+# Without authentication (fails when REQUIRE_AUTH_FOR_SEARCH=true)
+ldapsearch -H ldaps://localhost:636 -x -b "dc=company,dc=com" "(uid=john)"
+# Result: Insufficient access (error 50)
+
+# With authentication (succeeds)
+ldapsearch -H ldaps://localhost:636 -x -D "uid=john,dc=company,dc=com" -w password -b "dc=company,dc=com" "(uid=john)"
+# Result: Returns user information
+```
+
+**Recommendation:** Set to `true` for all production environments to prevent unauthorized directory enumeration.
 
 ### Start Service
 
