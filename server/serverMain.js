@@ -53,7 +53,8 @@ async function startServer(config) {
     key: config.keyContent,
     logger: logger,
     authProviders: selectedBackends,
-    directoryProvider: selectedDirectory
+    directoryProvider: selectedDirectory,
+    requireAuthForSearch: config.requireAuthForSearch
   });
 
   // Set up event listeners for logging and monitoring

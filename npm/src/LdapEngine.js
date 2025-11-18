@@ -15,6 +15,7 @@ class LdapEngine extends EventEmitter {
       port: options.port || 389,
       certificate: options.certificate || null,
       key: options.key || null,
+      requireAuthForSearch: options.requireAuthForSearch || false,
       ...options
     };
     
@@ -196,6 +197,16 @@ class LdapEngine extends EventEmitter {
     this.server.search(this.config.baseDn, async (req, res, next) => {
       const filterStr = req.filter.toString();
       this.logger.debug(`LDAP Search - Filter: ${filterStr}, Attributes: ${req.attributes}`);
+
+      // Check if authentication is required for search operations
+      if (this.config.requireAuthForSearch) {
+        const isAnonymous = !req.connection.ldap.bindDN || req.connection.ldap.bindDN.toString() === '';
+        if (isAnonymous) {
+          this.logger.debug('Anonymous search rejected - authentication required');
+          const error = new ldap.InsufficientAccessRightsError('Authentication required for search operations');
+          return next(error);
+        }
+      }
 
       let entryCount = 0;
       const startTime = Date.now();
