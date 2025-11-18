@@ -110,7 +110,7 @@ AUTH_BACKEND=redis-auth
 REDIS_URL=redis://localhost:6379
 
 # Keep existing directory backend
-DIRECTORY_BACKEND=mysql
+DIRECTORY_BACKEND=sql
 ```
 
 ### Step 4: Add Test Data to Redis

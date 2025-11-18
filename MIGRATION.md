@@ -67,13 +67,21 @@ npm run dev
 | `src/.env` | `/etc/ldap-gateway/.env` | Production (binary install) |
 
 ### Environment Variables
-**No changes required** - all existing environment variables work as before:
+**Configuration syntax has changed** - backend names and SQL configuration updated:
 
 ```ini
-# These remain the same
-DIRECTORY_BACKEND=mysql
-AUTH_BACKEND=ldap
-MYSQL_HOST=localhost
+# Backend names changed from 'mysql' to 'sql'
+DIRECTORY_BACKEND=sql      # Changed from 'mysql'
+AUTH_BACKENDS=sql,ldap     # Changed from 'mysql,ldap'
+
+# SQL configuration now uses connection URL and custom queries
+SQL_URL=mysql://user:password@localhost:3306/database  # Replaces MYSQL_HOST, MYSQL_PORT, etc.
+SQL_QUERY_ONE_USER='SELECT * FROM users WHERE username = ?'
+SQL_QUERY_ALL_USERS='SELECT * FROM users'
+SQL_QUERY_GROUPS_BY_MEMBER='SELECT * FROM groups WHERE member = ?'
+SQL_QUERY_ALL_GROUPS='SELECT * FROM groups'
+
+# Other settings remain the same
 LDAP_BIND_DN=...
 # etc.
 ```
