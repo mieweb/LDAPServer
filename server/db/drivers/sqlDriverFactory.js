@@ -19,7 +19,7 @@ class SqlDriverFactory {
     switch (type) {
       case 'mysql':
       case 'mariadb':
-        const MySQLDriver = require('./mysqlDriver');
+        const MySQLDriver = require('./mysql');
         return new MySQLDriver();
         
       case 'postgresql':

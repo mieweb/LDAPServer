@@ -167,6 +167,7 @@ The LDAP gateway separates **directory lookups** from **authentication**, allowi
 
 | Backend | Description | Use Case |
 |---------|-------------|----------|
+| `sql` | Generic SQL databases (MySQL, PostgreSQL, SQLite) | **NEW!** Unified SQL backend supporting multiple dialects |
 | `mysql` | MySQL/MariaDB databases | Any MySQL-based system (WebChart, custom schemas) |
 | `mongodb` | MongoDB collections | Modern web applications |
 | `proxmox` | Proxmox user.cfg/shadow.cfg files | Virtualization environments |
@@ -177,6 +178,7 @@ The LDAP gateway separates **directory lookups** from **authentication**, allowi
 
 | Backend | Description | Use Case |
 |---------|-------------|----------|
+| `sql` | Generic SQL databases (MySQL, PostgreSQL, SQLite) | **NEW!** Unified SQL backend supporting multiple dialects with custom queries |
 | `mysql` | MySQL/MariaDB password hashes | Self-contained auth with MySQL databases |
 | `mongodb` | MongoDB password hashes | Self-contained auth with MongoDB collections |
 | `ldap` | External LDAP/Active Directory | Enterprise SSO integration |
@@ -184,6 +186,49 @@ The LDAP gateway separates **directory lookups** from **authentication**, allowi
 | `notification` | MFA push notifications via mobile app | Two-factor authentication, enhanced security |
 
 ### Example Configurations
+
+#### Generic SQL Backend (MySQL)
+```ini
+DIRECTORY_BACKEND=sql      # Use generic SQL backend
+AUTH_BACKENDS=sql          # SQL authentication
+SQL_DRIVER=mysql           # MySQL/MariaDB
+SQL_HOST=localhost
+SQL_DATABASE=ldap_user_db
+SQL_USER=ldap_user
+SQL_PASSWORD=secure_password
+```
+
+#### Generic SQL Backend (PostgreSQL)
+```ini
+DIRECTORY_BACKEND=sql      # Use generic SQL backend
+AUTH_BACKENDS=sql          # SQL authentication
+SQL_DRIVER=postgresql      # PostgreSQL
+SQL_HOST=localhost
+SQL_PORT=5432
+SQL_DATABASE=ldap_user_db
+SQL_USER=postgres
+SQL_PASSWORD=secure_password
+```
+
+#### Generic SQL Backend (SQLite)
+```ini
+DIRECTORY_BACKEND=sql      # Use generic SQL backend
+AUTH_BACKENDS=sql          # SQL authentication
+SQL_DRIVER=sqlite          # SQLite
+SQL_DATABASE=/var/lib/ldap-gateway/ldap.db
+```
+
+#### Generic SQL with Custom Queries
+```ini
+DIRECTORY_BACKEND=sql
+AUTH_BACKENDS=sql
+SQL_DRIVER=mysql
+SQL_HOST=localhost
+SQL_DATABASE=custom_schema
+# Override default queries for custom schema
+SQL_QUERY_FIND_USER=SELECT * FROM employees WHERE login = ?
+SQL_QUERY_GET_ALL_USERS=SELECT emp_id as id, login as username, name as full_name FROM employees
+```
 
 #### MySQL + Active Directory
 ```ini
@@ -449,6 +494,7 @@ npm run test:server
 - 🎬 **[Quick Demo](https://youtube.com/shorts/C_7CIJVPkgg?si=VHommCsoQokObiKp)** - Complete walkthrough shorts
 - 📖 **[API Documentation](./npm/README.md)** - Core package usage
 - 🔧 **[Server Configuration](./server/README.md)** - Server setup guide
+- 🗄️ **[SQL Backend Guide](./server/backends/SQL_BACKEND_GUIDE.md)** - Multi-dialect SQL support (MySQL, PostgreSQL, SQLite)
 - 🏥 **[WebChart Integration](https://docs.google.com/document/d/1_6iutppKego9Kg_FGuDg5OwbXJUqZ0a2Fj7ajgNLU8k/edit)** - Healthcare deployment
 - 📱 **[MIE Authenticator](https://github.com/mieweb/mieweb_auth_app)** - MFA mobile app
 - 🛠️ **[pown.sh](https://github.com/mieweb/pown.sh)** - Container automation

@@ -73,7 +73,6 @@ class MySQLDriver extends BaseSqlDriver {
   async releaseConnection(connection) {
     connection.release();
   }
-}
 
   /**
    * Find user by username
