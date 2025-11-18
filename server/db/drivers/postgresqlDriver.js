@@ -1,12 +1,12 @@
-const mysql = require("mysql2/promise");
+const { Pool } = require("pg");
 const BaseSqlDriver = require("./baseSqlDriver");
 const logger = require("../../utils/logger");
 
 /**
- * MySQL/MariaDB SQL Driver
- * Implements the BaseSqlDriver interface for MySQL databases
+ * PostgreSQL SQL Driver
+ * Implements the BaseSqlDriver interface for PostgreSQL databases
  */
-class MySQLDriver extends BaseSqlDriver {
+class PostgreSQLDriver extends BaseSqlDriver {
   constructor() {
     super();
     this.pool = null;
@@ -18,17 +18,17 @@ class MySQLDriver extends BaseSqlDriver {
    */
   createPool(config) {
     if (!this.pool) {
-      this.pool = mysql.createPool({
+      this.pool = new Pool({
         host: config.host,
-        port: config.port || 3306,
+        port: config.port || 5432,
         user: config.user,
         password: config.password,
         database: config.database,
-        waitForConnections: true,
-        connectionLimit: 10,
-        queueLimit: 0
+        max: 10, // Maximum number of connections
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
       });
-      console.log(`MySQL Connection Pool Created: mysql://${config.user}@${config.host}/${config.database}`);
+      console.log(`PostgreSQL Connection Pool Created: postgresql://${config.user}@${config.host}/${config.database}`);
     }
     return this.pool;
   }
@@ -48,7 +48,7 @@ class MySQLDriver extends BaseSqlDriver {
     if (this.pool) {
       await this.pool.end();
       this.pool = null;
-      console.log("MySQL Connection Pool Closed");
+      console.log("PostgreSQL Connection Pool Closed");
     }
   }
 
@@ -56,15 +56,17 @@ class MySQLDriver extends BaseSqlDriver {
    * Execute a query
    */
   async query(sql, params = []) {
-    const [rows] = await this.pool.query(sql, params);
-    return rows;
+    // Convert ? placeholders to $1, $2, etc. for PostgreSQL
+    const pgQuery = this.convertPlaceholders(sql, '?', '$');
+    const result = await this.pool.query(pgQuery, params);
+    return result.rows;
   }
 
   /**
    * Get a connection from the pool
    */
   async getConnection() {
-    return await this.pool.getConnection();
+    return await this.pool.connect();
   }
 
   /**
@@ -73,7 +75,6 @@ class MySQLDriver extends BaseSqlDriver {
   async releaseConnection(connection) {
     connection.release();
   }
-}
 
   /**
    * Find user by username
@@ -86,11 +87,11 @@ class MySQLDriver extends BaseSqlDriver {
 
     const connection = await this.getConnection();
     try {
-      const [rows] = await connection.execute(
-        "SELECT * FROM users WHERE username = ?",
+      const result = await connection.query(
+        "SELECT * FROM users WHERE username = $1",
         [username]
       );
-      return rows[0] || null;
+      return result.rows[0] || null;
     } finally {
       this.releaseConnection(connection);
     }
@@ -107,13 +108,15 @@ class MySQLDriver extends BaseSqlDriver {
 
     const connection = await this.getConnection();
     try {
-      const [rows] = await connection.execute(
+      // PostgreSQL uses JSONB and different syntax for JSON operations
+      const result = await connection.query(
         "SELECT g.name, g.gid_number, g.member_uids " +
-        "FROM `groups` g " +
-        "WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))",
+        "FROM groups g " +
+        "WHERE g.member_uids::jsonb ? $1",
         [username]
       );
-      return rows.map(row => {
+      return result.rows.map(row => {
+        // PostgreSQL might return JSONB, ensure it's parsed
         if (row.member_uids && typeof row.member_uids === 'string') {
           try {
             row.member_uids = JSON.parse(row.member_uids);
@@ -137,8 +140,8 @@ class MySQLDriver extends BaseSqlDriver {
       return this._executeCustomQuery(this.config.queries.getAllUsers, [], false);
     }
 
-    const [rows] = await this.pool.query('SELECT * FROM users');
-    return rows;
+    const result = await this.pool.query('SELECT * FROM users');
+    return result.rows;
   }
 
   /**
@@ -156,24 +159,24 @@ class MySQLDriver extends BaseSqlDriver {
           g.gid_number,
           g.name,
           g.gid_number as id,
-          GROUP_CONCAT(u.username) as member_uids
-        FROM \`groups\` g
+          STRING_AGG(u.username, ',') as member_uids
+        FROM groups g
         LEFT JOIN user_groups ug ON g.gid_number = ug.group_id
         LEFT JOIN users u ON ug.user_id = u.id
         GROUP BY g.gid_number, g.name
         ORDER BY g.name
       `;
 
-      const [groups] = await this.pool.query(query);
+      const result = await this.pool.query(query);
 
-      return groups.map(group => ({
+      return result.rows.map(group => ({
         id: group.id,
         name: group.name,
         gid_number: group.gid_number,
         member_uids: group.member_uids ? group.member_uids.split(',') : []
       }));
     } catch (error) {
-      logger.error('Error getting all groups from MySQL:', error);
+      logger.error('Error getting all groups from PostgreSQL:', error);
       throw error;
     }
   }
@@ -183,14 +186,17 @@ class MySQLDriver extends BaseSqlDriver {
    * @private
    */
   async _executeCustomQuery(query, params, returnFirst = false) {
+    // Convert ? placeholders to $1, $2, etc. for PostgreSQL
+    const pgQuery = this.convertPlaceholders(query, '?', '$');
+    
     const connection = await this.getConnection();
     try {
-      const [rows] = await connection.execute(query, params);
-      return returnFirst ? (rows[0] || null) : rows;
+      const result = await connection.query(pgQuery, params);
+      return returnFirst ? (result.rows[0] || null) : result.rows;
     } finally {
       this.releaseConnection(connection);
     }
   }
 }
 
-module.exports = MySQLDriver;
+module.exports = PostgreSQLDriver;
