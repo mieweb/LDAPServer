@@ -24,6 +24,9 @@ class LdapEngine extends EventEmitter {
     this.server = null;
     this.logger = options.logger || console;
     this._stopping = false;
+    
+    // Track authenticated connections (workaround for ldapjs bindDN not updating)
+    this.authenticatedConnections = new Set();
   }
 
   /**
@@ -56,6 +59,9 @@ class LdapEngine extends EventEmitter {
     
     // Setup search handlers
     this._setupSearchHandlers();
+
+    // Setup connection cleanup
+    this._setupConnectionHandlers();
 
     // Setup error handlers
     this._setupErrorHandlers();
@@ -157,10 +163,10 @@ class LdapEngine extends EventEmitter {
       res.end();
     });
 
-    // Authenticated bind
+    // Authenticated bind - catch all DNs under our base
     this.server.bind(this.config.baseDn, async (req, res, next) => {
       const { username, password } = this._extractCredentials(req);
-      this.logger.debug("Authenticated bind request", { username });
+      this.logger.debug("Authenticated bind request", { username, dn: req.dn.toString() });
 
       try {
         this.emit('bindRequest', { username, anonymous: false });
@@ -177,6 +183,8 @@ class LdapEngine extends EventEmitter {
           return next(error);
         }
 
+        // Track this connection as authenticated
+        this.authenticatedConnections.add(req.connection.ldap.id);
         this.emit('bindSuccess', { username, anonymous: false });
         res.end();
       } catch (error) {
@@ -194,19 +202,28 @@ class LdapEngine extends EventEmitter {
    * @private
    */
   _setupSearchHandlers() {
-    this.server.search(this.config.baseDn, async (req, res, next) => {
+    // Authorization middleware (if enabled)
+    const authorizeSearch = (req, res, next) => {
+      if (!this.config.requireAuthForSearch) {
+        return next();
+      }
+
+      const connectionId = req.connection.ldap.id;
+      const isAuthenticated = this.authenticatedConnections.has(connectionId);
+      
+      if (!isAuthenticated) {
+        this.logger.debug(`Anonymous search rejected - authentication required (connection: ${connectionId})`);
+        return next(new ldap.InsufficientAccessRightsError('Authentication required for search operations'));
+      }
+      
+      this.logger.debug(`Authenticated search allowed (connection: ${connectionId})`);
+      return next();
+    };
+
+    // Search handler with authorization middleware
+    this.server.search(this.config.baseDn, authorizeSearch, async (req, res, next) => {
       const filterStr = req.filter.toString();
       this.logger.debug(`LDAP Search - Filter: ${filterStr}, Attributes: ${req.attributes}`);
-
-      // Check if authentication is required for search operations
-      if (this.config.requireAuthForSearch) {
-        const isAnonymous = !req.connection.ldap.bindDN || req.connection.ldap.bindDN.toString() === '';
-        if (isAnonymous) {
-          this.logger.debug('Anonymous search rejected - authentication required');
-          const error = new ldap.InsufficientAccessRightsError('Authentication required for search operations');
-          return next(error);
-        }
-      }
 
       let entryCount = 0;
       const startTime = Date.now();
@@ -241,6 +258,20 @@ class LdapEngine extends EventEmitter {
           duration: Date.now() - startTime
         });
         return next(normalizedError);
+      }
+    });
+  }
+
+  /**
+   * Setup connection handlers for cleanup
+   * @private
+   */
+  _setupConnectionHandlers() {
+    this.server.on('close', (connectionId) => {
+      // Clean up authenticated connections when they close
+      if (this.authenticatedConnections.has(connectionId)) {
+        this.authenticatedConnections.delete(connectionId);
+        this.logger.debug(`[CONNECTION] Removed closed connection ${connectionId} from authenticated set`);
       }
     });
   }
