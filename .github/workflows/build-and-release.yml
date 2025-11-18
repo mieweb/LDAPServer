@@ -1,0 +1,345 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '18'
+  REGISTRY_URL: 'https://registry.npmjs.org'
+
+jobs:
+  build-core:
+    name: Build Core Package
+    runs-on: ubuntu-latest
+    outputs:
+      core-version: ${{ steps.core-info.outputs.version }}
+      core-package: ${{ steps.core-info.outputs.package }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Build core package
+        run: npm run build:core
+
+      - name: Get core package info
+        id: core-info
+        run: |
+          cd npm
+          echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+          echo "package=$(node -p "require('./package.json').name")" >> $GITHUB_OUTPUT
+
+      - name: Run core tests
+        run: npm run test:core
+
+      - name: Upload core package
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-package
+          path: npm/
+          retention-days: 7
+
+  build-server:
+    name: Build Server Package
+    runs-on: ubuntu-latest
+    needs: build-core
+    outputs:
+      server-version: ${{ steps.server-info.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Download core package
+        uses: actions/download-artifact@v4
+        with:
+          name: core-package
+          path: npm/
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build server package
+        run: npm run build:server
+
+      - name: Get server package info
+        id: server-info
+        run: |
+          cd server
+          echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Run server tests
+        run: npm run test:server
+
+      - name: Upload server artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-artifacts
+          path: |
+            server/
+            dist/
+          retention-days: 7
+
+  build-packages:
+    name: Build Distribution Packages
+    runs-on: ubuntu-latest
+    needs: [build-core, build-server]
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install nfpm
+        run: |
+          cd /tmp
+          rm -f nfpm nfpm.tar.gz
+          curl -L https://github.com/goreleaser/nfpm/releases/download/v2.43.4/nfpm_2.43.4_Linux_x86_64.tar.gz -o nfpm.tar.gz
+          tar -xzf nfpm.tar.gz nfpm
+          sudo mv nfpm /usr/local/bin/nfpm
+          rm nfpm.tar.gz
+          nfpm --version
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: server-artifacts
+          path: ./
+
+      - name: Update nfpm config for architecture
+        run: |
+          # Create arch-specific config
+          sed 's/arch: "amd64"/arch: "${{ matrix.arch }}"/' nfpm/nfpm.yaml > nfpm-${{ matrix.arch }}.yaml
+          
+          # Debug: show the config
+          echo "Generated nfpm config for ${{ matrix.arch }}:"
+          cat nfpm-${{ matrix.arch }}.yaml
+
+      - name: Build deb package
+        run: |
+          mkdir -p dist/packages
+          nfpm package \
+            --config nfpm-${{ matrix.arch }}.yaml \
+            --packager deb \
+            --target dist/packages/ldap-gateway_${{ needs.build-server.outputs.server-version }}_${{ matrix.arch }}.deb
+
+      - name: Build rpm package
+        run: |
+          mkdir -p dist/packages
+          nfpm package \
+            --config nfpm-${{ matrix.arch }}.yaml \
+            --packager rpm \
+            --target dist/packages/ldap-gateway-${{ needs.build-server.outputs.server-version }}-1.${{ matrix.arch }}.rpm
+
+      - name: Verify packages
+        run: |
+          echo "Built packages:"
+          ls -lh dist/packages/
+          
+          # Basic validation for amd64 (can't validate arm64 on x86_64 runner)
+          if [ "${{ matrix.arch }}" = "amd64" ]; then
+            echo "Package info for .deb:"
+            dpkg-deb --info dist/packages/*.deb || true
+            echo "Package info for .rpm:"
+            rpm -qip dist/packages/*.rpm || true
+          fi
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: dist/packages/
+          retention-days: 30
+
+  create-release:
+    name: Create Release Assets
+    runs-on: ubuntu-latest
+    needs: [build-core, build-server, build-packages]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Organize release assets
+        run: |
+          # Create dist directory
+          mkdir -p dist
+          
+          # Copy packages
+          cp artifacts/packages-amd64/* dist/ 2>/dev/null || echo "No amd64 packages"
+          cp artifacts/packages-arm64/* dist/ 2>/dev/null || echo "No arm64 packages"
+          
+          # Copy binary if needed for tarball creation
+          cp artifacts/server-artifacts/dist/ldap-gateway dist/ 2>/dev/null || echo "No binary"
+          
+          # Show what we have
+          echo "Release assets prepared:"
+          ls -lh dist/
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create release tarball
+        run: |
+          ./create-release.sh
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum *.deb *.rpm > checksums.txt 2>/dev/null || echo "No packages to checksum"
+          if [ -f *.tar.gz ]; then
+            sha256sum *.tar.gz >> checksums.txt
+          fi
+          cat checksums.txt
+
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          files: |
+            dist/ldap-gateway-*.tar.gz
+            dist/ldap-gateway_*_amd64.deb
+            dist/ldap-gateway_*_arm64.deb
+            dist/ldap-gateway-*-1.amd64.rpm
+            dist/ldap-gateway-*-1.arm64.rpm
+            dist/checksums.txt
+          body: |
+            ## LDAP Gateway ${{ steps.version.outputs.version }}
+            
+            ### Installation Options
+            
+            **Binary Release (All Platforms):**
+            ```bash
+            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ldap-gateway-${{ steps.version.outputs.version }}.tar.gz
+            tar -xzf ldap-gateway-${{ steps.version.outputs.version }}.tar.gz
+            cd ldap-gateway-${{ steps.version.outputs.version }}
+            sudo ./install.sh
+            ```
+            
+            **Ubuntu/Debian:**
+            ```bash
+            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ldap-gateway_${{ steps.version.outputs.version }}_amd64.deb
+            sudo dpkg -i ldap-gateway_${{ steps.version.outputs.version }}_amd64.deb
+            ```
+            
+            **RHEL/CentOS/Fedora:**
+            ```bash
+            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ldap-gateway-${{ steps.version.outputs.version }}-1.amd64.rpm
+            sudo rpm -i ldap-gateway-${{ steps.version.outputs.version }}-1.amd64.rpm
+            ```
+            
+            **ARM64 packages are also available** - replace `amd64` with `arm64` in the URLs above.
+            
+            ### Changes
+            See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
+            
+            ### Verification
+            All release assets include SHA256 checksums in `checksums.txt`.
+
+  publish-npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: [build-core, build-server]
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment: npm-publish
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          registry-url: ${{ env.REGISTRY_URL }}
+
+      - name: Download core package
+        uses: actions/download-artifact@v4
+        with:
+          name: core-package
+          path: npm/
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Publish core package
+        run: |
+          cd npm
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    runs-on: ubuntu-latest
+    needs: create-release
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
+    steps:
+      - name: Extract version and assets
+        id: release-info
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Download the tarball to get SHA256
+          curl -sL "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ldap-gateway-$VERSION.tar.gz" | sha256sum | cut -d' ' -f1 > sha256
+          echo "sha256=$(cat sha256)" >> $GITHUB_OUTPUT
+
+      - name: Update Homebrew formula
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          repository: ${{ github.repository_owner }}/homebrew-tap
+          event-type: update-formula
+          client-payload: |
+            {
+              "formula": "ldap-gateway",
+              "version": "${{ steps.release-info.outputs.version }}",
+              "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ldap-gateway-${{ steps.release-info.outputs.version }}.tar.gz",
+              "sha256": "${{ steps.release-info.outputs.sha256 }}"
+            }
