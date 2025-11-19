@@ -196,13 +196,11 @@ function generateEnvFile(config) {
 
 async function checkAndSetupEnvironment(forceReconfig = false) {
   const envPath = path.join(process.cwd(), '.env');
+
+  const needsConfig = forceReconfig || (!process.env.LDAP_BASE_DN || !process.env.AUTH_BACKENDS || !process.env.DIRECTORY_BACKEND) && !fs.existsSync(envPath);
   
-  if (!fs.existsSync(envPath) || forceReconfig) {
-    if (forceReconfig && fs.existsSync(envPath)) {
-      console.log('\n🔄 Reconfiguring LDAP server...');
-    } else {
-      console.log('No .env file found.');
-    }
+  if (needsConfig) {
+    console.log('\n🔄 Reconfiguring LDAP server...');
     
     const config = await runInteractiveSetup();
     generateEnvFile(config);
