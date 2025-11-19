@@ -82,18 +82,18 @@ async function runInteractiveSetup() {
 
     // Authentication backend - simplified choice
     console.log('\nAuthentication backends:');
-    console.log('  mysql   - Use MySQL database for authentication');
+    console.log('  sql     - Use MySQL database for authentication');
     console.log('  mongodb - Use MongoDB database for authentication');
     console.log('  ldap    - Delegate authentication to another LDAP server');
     console.log('  proxmox - Use Proxmox VE authentication');
-    config.AUTH_BACKEND = await askQuestion(rl, 'Authentication backend (mysql/mongodb/ldap/proxmox)', 'mysql');
+    config.AUTH_BACKEND = await askQuestion(rl, 'Authentication backend (sql/mongodb/ldap/proxmox)', 'sql');
 
     // Directory backend - simplified choice
     console.log('\nDirectory backends:');
-    console.log('  mysql   - Use MySQL database for user/group directory');
+    console.log('  sql     - Use MySQL database for user/group directory');
     console.log('  mongodb - Use MongoDB database for user/group directory');
     console.log('  proxmox - Use Proxmox VE user configuration');
-    config.DIRECTORY_BACKEND = await askQuestion(rl, 'Directory backend (mysql/mongodb/proxmox)', 'mysql');
+    config.DIRECTORY_BACKEND = await askQuestion(rl, 'Directory backend (sql/mongodb/proxmox)', 'sql');
 
     // Only ask for additional config if needed
     if (config.AUTH_BACKEND === 'ldap') {
@@ -116,13 +116,13 @@ async function runInteractiveSetup() {
     config.LOG_LEVEL = 'info';
 
     // Ask for database config if using mysql or mongodb backend
-    if (config.AUTH_BACKEND === 'mysql' || config.DIRECTORY_BACKEND === 'mysql') {
+    if (config.AUTH_BACKEND === 'sql' || config.DIRECTORY_BACKEND === 'sql') {
       console.log('\n📊 MySQL Database Configuration:');
-      config.MYSQL_HOST = await askQuestion(rl, 'MySQL host', 'localhost');
-      config.MYSQL_PORT = await askQuestion(rl, 'MySQL port', '3306');
-      config.MYSQL_DATABASE = await askQuestion(rl, 'MySQL database name', 'ldap_user_db');
-      config.MYSQL_USER = await askQuestion(rl, 'MySQL username', 'root');
-      config.MYSQL_PASSWORD = await askQuestion(rl, 'MySQL password');
+      config.SQL_URI = await askQuestion(rl, 'SQL connection URI', 'sqlite://ldap_user_db.sqlite');
+      config.SQL_QUERY_ALL_USERS = await askQuestion(rl, 'SQL query to get all users', 'SELECT * FROM users');
+      config.SQL_QUERY_ALL_GROUPS = await askQuestion(rl, 'SQL query to get all groups', 'SELECT * FROM groups');
+      config.SQL_QUERY_ONE_USER = await askQuestion(rl, 'SQL query to find one user by username', 'SELECT * FROM users WHERE username = ?');
+      config.SQL_QUERY_GROUPS_BY_MEMBER = await askQuestion(rl, 'SQL query to find groups by member username', 'SELECT g.* FROM groups g JOIN user_groups ug ON g.id = ug.group_id JOIN users u ON ug.user_id = u.id WHERE u.username = ?');
     } else if (config.AUTH_BACKEND === 'mongodb' || config.DIRECTORY_BACKEND === 'mongodb') {
       console.log('\n📊 MongoDB Configuration:');
       config.MONGO_URI = await askQuestion(rl, 'MongoDB URI', 'mongodb://localhost:27017/ldap_user_db');
@@ -152,13 +152,19 @@ function generateEnvFile(config) {
   envContent += `AUTH_BACKENDS=${config.AUTH_BACKEND}\n`;
   envContent += `DIRECTORY_BACKEND=${config.DIRECTORY_BACKEND}\n\n`;
   
-  if (config.DB_HOST) {
-    envContent += '# Database Configuration\n';
-    envContent += `DB_HOST=${config.DB_HOST}\n`;
-    envContent += `DB_PORT=${config.DB_PORT}\n`;
-    envContent += `DB_NAME=${config.DB_NAME}\n`;
-    envContent += `DB_USER=${config.DB_USER}\n`;
-    envContent += `DB_PASSWORD=${config.DB_PASSWORD}\n\n`;
+  if (config.AUTH_BACKEND === 'sql' || config.DIRECTORY_BACKEND === 'sql') {
+    envContent += '# SQL Database Configuration\n';
+    envContent += `SQL_URI=${config.SQL_URI}\n`;
+    envContent += `SQL_QUERY_ALL_USERS=${config.SQL_QUERY_ALL_USERS}\n`;
+    envContent += `SQL_QUERY_ALL_GROUPS=${config.SQL_QUERY_ALL_GROUPS}\n`;
+    envContent += `SQL_QUERY_ONE_USER=${config.SQL_QUERY_ONE_USER}\n`;
+    envContent += `SQL_QUERY_GROUPS_BY_MEMBER=${config.SQL_QUERY_GROUPS_BY_MEMBER}\n\n`;
+  }
+  
+  if (config.AUTH_BACKEND === 'mongodb' || config.DIRECTORY_BACKEND === 'mongodb') {
+    envContent += '# MongoDB Configuration\n';
+    envContent += `MONGO_URI=${config.MONGO_URI}\n`;
+    envContent += `MONGO_DATABASE=${config.MONGO_DATABASE}\n\n`;
   }
   
   if (config.LDAP_SERVER_URL) {
