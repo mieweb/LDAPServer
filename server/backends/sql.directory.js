@@ -51,7 +51,7 @@ class SQLDirectoryProvider extends DirectoryProvider {
       if (filterConditions.memberUid && filterConditions.memberUid !== '*') {
         const username = filterConditions.memberUid;
         logger.debug(`[SQLDirectoryProvider] Finding groups for member: ${username}`);
-        const groups = await this.sequelize.query(
+        const [groups, _] = await this.sequelize.query(
           process.env.SQL_QUERY_GROUPS_BY_MEMBER,
           { replacements: [username] }
         );
@@ -111,7 +111,7 @@ class SQLDirectoryProvider extends DirectoryProvider {
   async getAllUsers() {
     try {
       logger.debug('[SQLDirectoryProvider] Getting all users');
-      const users = await this.sequelize.query(process.env.SQL_QUERY_ALL_USERS);
+      const [users, _] = await this.sequelize.query(process.env.SQL_QUERY_ALL_USERS);
       
       logger.debug(`[SQLDirectoryProvider] Found ${users.length} users`);
       return users;
@@ -127,7 +127,7 @@ class SQLDirectoryProvider extends DirectoryProvider {
       await this.initialize();
       
       logger.debug('[SQLDirectoryProvider] Getting all groups');
-      const groups = await this.sequelize.query(process.env.SQL_QUERY_ALL_GROUPS);
+      const [groups, _] = await this.sequelize.query(process.env.SQL_QUERY_ALL_GROUPS);
       
       logger.debug(`[SQLDirectoryProvider] Found ${groups.length} groups`);
       return groups;
