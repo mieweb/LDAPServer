@@ -267,12 +267,15 @@ class LdapEngine extends EventEmitter {
    * @private
    */
   _setupConnectionHandlers() {
-    this.server.on('close', (connectionId) => {
-      // Clean up authenticated connections when they close
-      if (this.authenticatedConnections.has(connectionId)) {
-        this.authenticatedConnections.delete(connectionId);
-        this.logger.debug(`[CONNECTION] Removed closed connection ${connectionId} from authenticated set`);
-      }
+    // Listen for new connections and attach cleanup handler
+    this.server.on('connection', (connection) => {
+      connection.on('close', () => {
+        const connectionId = connection.ldap.id;
+        if (this.authenticatedConnections.has(connectionId)) {
+          this.authenticatedConnections.delete(connectionId);
+          this.logger.debug(`[CONNECTION] Removed closed connection ${connectionId} from authenticated set`);
+        }
+      });
     });
   }
 
