@@ -126,9 +126,9 @@ AUTH_BACKENDS=ldap      # mysql | mongodb | ldap | proxmox | notification | mysq
 # LDAP Server Configuration
 LDAP_BASE_DN=dc=company,dc=com
 
-# Security: Require authentication for search operations (recommended for production)
-# When enabled, clients must bind with credentials before performing searches
-# Default: false (allows anonymous searches for backward compatibility)
+# Security: Require authentication for search operations
+# Default: true (authentication required for security)
+# Set to false only for development/testing if you need anonymous access
 REQUIRE_AUTH_FOR_SEARCH=true
 
 # MySQL configuration (for any MySQL-based system)
@@ -152,16 +152,19 @@ AD_DOMAIN=company.com
 
 #### Require Authentication for Search
 
-For production deployments, you should require authentication before allowing LDAP search operations:
+By default, authentication is required before allowing LDAP search operations:
 
 ```ini
-# Require bind before allowing searches (recommended for production)
-REQUIRE_AUTH_FOR_SEARCH=true
+# Authentication required by default (recommended for security)
+REQUIRE_AUTH_FOR_SEARCH=true  # This is the default
+
+# Only disable for development/testing if needed
+# REQUIRE_AUTH_FOR_SEARCH=false
 ```
 
 **Behavior:**
-- `false` (default): Allows anonymous searches - useful for development and testing
-- `true`: Clients must authenticate with valid credentials before searching
+- `true` (default): Clients must authenticate with valid credentials before searching
+- `false`: Allows anonymous searches - only use for development/testing
 
 **Example:**
 ```bash

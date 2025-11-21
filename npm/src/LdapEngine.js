@@ -15,7 +15,7 @@ class LdapEngine extends EventEmitter {
       port: options.port || 389,
       certificate: options.certificate || null,
       key: options.key || null,
-      requireAuthForSearch: options.requireAuthForSearch || false,
+      requireAuthForSearch: options.requireAuthForSearch !== false,
       ...options
     };
     
