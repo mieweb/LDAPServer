@@ -24,9 +24,6 @@ class LdapEngine extends EventEmitter {
     this.server = null;
     this.logger = options.logger || console;
     this._stopping = false;
-    
-    // Track authenticated connections (workaround for ldapjs bindDN not updating)
-    this.authenticatedConnections = new Set();
   }
 
   /**
@@ -59,9 +56,6 @@ class LdapEngine extends EventEmitter {
     
     // Setup search handlers
     this._setupSearchHandlers();
-
-    // Setup connection cleanup
-    this._setupConnectionHandlers();
 
     // Setup error handlers
     this._setupErrorHandlers();
@@ -183,8 +177,6 @@ class LdapEngine extends EventEmitter {
           return next(error);
         }
 
-        // Track this connection as authenticated
-        this.authenticatedConnections.add(req.connection.ldap.id);
         this.emit('bindSuccess', { username, anonymous: false });
         res.end();
       } catch (error) {
@@ -208,15 +200,17 @@ class LdapEngine extends EventEmitter {
         return next();
       }
 
-      const connectionId = req.connection.ldap.id;
-      const isAuthenticated = this.authenticatedConnections.has(connectionId);
+      // Check if connection has authenticated bindDN (not anonymous)
+      const bindDN = req.connection.ldap.bindDN;
+      const bindDNStr = bindDN ? bindDN.toString() : 'null';
+      const isAnonymous = !bindDN || bindDNStr === 'cn=anonymous';
       
-      if (!isAuthenticated) {
-        this.logger.debug(`Anonymous search rejected - authentication required (connection: ${connectionId})`);
+      if (isAnonymous) {
+        this.logger.debug(`Anonymous search rejected - authentication required`);
         return next(new ldap.InsufficientAccessRightsError('Authentication required for search operations'));
       }
       
-      this.logger.debug(`Authenticated search allowed (connection: ${connectionId})`);
+      this.logger.debug(`Authenticated search allowed for ${bindDNStr}`);
       return next();
     };
 
@@ -259,23 +253,6 @@ class LdapEngine extends EventEmitter {
         });
         return next(normalizedError);
       }
-    });
-  }
-
-  /**
-   * Setup connection handlers for cleanup
-   * @private
-   */
-  _setupConnectionHandlers() {
-    // Listen for new connections and attach cleanup handler
-    this.server.on('connection', (connection) => {
-      connection.on('close', () => {
-        const connectionId = connection.ldap.id;
-        if (this.authenticatedConnections.has(connectionId)) {
-          this.authenticatedConnections.delete(connectionId);
-          this.logger.debug(`[CONNECTION] Removed closed connection ${connectionId} from authenticated set`);
-        }
-      });
     });
   }
 
