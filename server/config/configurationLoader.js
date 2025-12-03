@@ -47,6 +47,7 @@ class ConfigurationLoader {
       bindIp: process.env.BIND_IP || '0.0.0.0',
       unencrypted: process.env.LDAP_UNENCRYPTED === 'true' || process.env.LDAP_UNENCRYPTED === '1',
       backendDir: process.env.BACKEND_DIR || null,
+      requireAuthForSearch: process.env.REQUIRE_AUTH_FOR_SEARCH !== 'false',
       // Load certificates - this handles all certificate logic
       ...this._loadCertificates()
     };
