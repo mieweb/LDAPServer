@@ -15,6 +15,7 @@ class LdapEngine extends EventEmitter {
       port: options.port || 389,
       certificate: options.certificate || null,
       key: options.key || null,
+      requireAuthForSearch: options.requireAuthForSearch !== false,
       ...options
     };
     
@@ -156,10 +157,10 @@ class LdapEngine extends EventEmitter {
       res.end();
     });
 
-    // Authenticated bind
+    // Authenticated bind - catch all DNs under our base
     this.server.bind(this.config.baseDn, async (req, res, next) => {
       const { username, password } = this._extractCredentials(req);
-      this.logger.debug("Authenticated bind request", { username });
+      this.logger.debug("Authenticated bind request", { username, dn: req.dn.toString() });
 
       try {
         this.emit('bindRequest', { username, anonymous: false });
@@ -193,7 +194,28 @@ class LdapEngine extends EventEmitter {
    * @private
    */
   _setupSearchHandlers() {
-    this.server.search(this.config.baseDn, async (req, res, next) => {
+    // Authorization middleware (if enabled)
+    const authorizeSearch = (req, res, next) => {
+      if (!this.config.requireAuthForSearch) {
+        return next();
+      }
+
+      // Check if connection has authenticated bindDN (not anonymous)
+      const bindDN = req.connection.ldap.bindDN;
+      const bindDNStr = bindDN ? bindDN.toString() : 'null';
+      const isAnonymous = !bindDN || bindDNStr === 'cn=anonymous';
+      
+      if (isAnonymous) {
+        this.logger.debug(`Anonymous search rejected - authentication required`);
+        return next(new ldap.InsufficientAccessRightsError('Authentication required for search operations'));
+      }
+      
+      this.logger.debug(`Authenticated search allowed for ${bindDNStr}`);
+      return next();
+    };
+
+    // Search handler with authorization middleware
+    this.server.search(this.config.baseDn, authorizeSearch, async (req, res, next) => {
       const filterStr = req.filter.toString();
       this.logger.debug(`LDAP Search - Filter: ${filterStr}, Attributes: ${req.attributes}`);
 
