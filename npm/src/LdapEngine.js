@@ -61,6 +61,10 @@ class LdapEngine extends EventEmitter {
       }
     } else {
       this.logger.warn("LDAP server running without SSL/TLS certificates");
+      // Warn if TLS options are configured but certificates are missing
+      if (this.config.tlsMinVersion || this.config.tlsMaxVersion || this.config.tlsCiphers) {
+        this.logger.warn("TLS version/cipher options are configured but will be ignored because no certificates are provided");
+      }
     }
 
     this.server = ldap.createServer(serverOptions);
