@@ -49,7 +49,9 @@ class ConfigurationLoader {
       backendDir: process.env.BACKEND_DIR || null,
       requireAuthForSearch: process.env.REQUIRE_AUTH_FOR_SEARCH !== 'false',
       // Load certificates - this handles all certificate logic
-      ...this._loadCertificates()
+      ...this._loadCertificates(),
+      // Load TLS configuration
+      ...this._loadTlsConfig()
     };
   }
 
@@ -109,6 +111,58 @@ class ConfigurationLoader {
     }
 
     return { certContent, keyContent };
+  }
+
+  /**
+   * Load TLS configuration options
+   * @private
+   */
+  _loadTlsConfig() {
+    const validVersions = ['TLSv1.2', 'TLSv1.3'];
+    
+    // Parse TLS minimum version
+    let tlsMinVersion = null;
+    if (process.env.TLS_MIN_VERSION) {
+      const minVersion = process.env.TLS_MIN_VERSION.trim();
+      if (validVersions.includes(minVersion)) {
+        tlsMinVersion = minVersion;
+      } else {
+        logger.warn(`Invalid TLS_MIN_VERSION: ${minVersion}. Valid options: ${validVersions.join(', ')}`);
+      }
+    }
+
+    // Parse TLS maximum version
+    let tlsMaxVersion = null;
+    if (process.env.TLS_MAX_VERSION) {
+      const maxVersion = process.env.TLS_MAX_VERSION.trim();
+      if (validVersions.includes(maxVersion)) {
+        tlsMaxVersion = maxVersion;
+      } else {
+        logger.warn(`Invalid TLS_MAX_VERSION: ${maxVersion}. Valid options: ${validVersions.join(', ')}`);
+      }
+    }
+
+    // Validate version order (min <= max)
+    if (tlsMinVersion && tlsMaxVersion) {
+      const minIdx = validVersions.indexOf(tlsMinVersion);
+      const maxIdx = validVersions.indexOf(tlsMaxVersion);
+      if (minIdx > maxIdx) {
+        logger.warn(`TLS_MIN_VERSION (${tlsMinVersion}) is greater than TLS_MAX_VERSION (${tlsMaxVersion}). Using defaults.`);
+        tlsMinVersion = null;
+        tlsMaxVersion = null;
+      }
+    }
+
+    // Parse TLS ciphers
+    let tlsCiphers = null;
+    if (process.env.TLS_CIPHERS) {
+      tlsCiphers = process.env.TLS_CIPHERS.trim();
+      if (tlsCiphers === '') {
+        tlsCiphers = null;
+      }
+    }
+
+    return { tlsMinVersion, tlsMaxVersion, tlsCiphers };
   }
 
   /**

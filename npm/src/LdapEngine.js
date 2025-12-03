@@ -15,6 +15,9 @@ class LdapEngine extends EventEmitter {
       port: options.port || 389,
       certificate: options.certificate || null,
       key: options.key || null,
+      tlsMinVersion: options.tlsMinVersion || null,
+      tlsMaxVersion: options.tlsMaxVersion || null,
+      tlsCiphers: options.tlsCiphers || null,
       requireAuthForSearch: options.requireAuthForSearch !== false,
       ...options
     };
@@ -42,6 +45,20 @@ class LdapEngine extends EventEmitter {
       serverOptions.certificate = this.config.certificate;
       serverOptions.key = this.config.key;
       this.logger.info("LDAP server configured with SSL/TLS certificates");
+      
+      // Apply TLS version and cipher configuration
+      if (this.config.tlsMinVersion) {
+        serverOptions.minVersion = this.config.tlsMinVersion;
+        this.logger.info(`TLS minimum version set to: ${this.config.tlsMinVersion}`);
+      }
+      if (this.config.tlsMaxVersion) {
+        serverOptions.maxVersion = this.config.tlsMaxVersion;
+        this.logger.info(`TLS maximum version set to: ${this.config.tlsMaxVersion}`);
+      }
+      if (this.config.tlsCiphers) {
+        serverOptions.ciphers = this.config.tlsCiphers;
+        this.logger.info(`TLS ciphers configured: ${this.config.tlsCiphers}`);
+      }
     } else {
       this.logger.warn("LDAP server running without SSL/TLS certificates");
     }

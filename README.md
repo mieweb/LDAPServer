@@ -188,6 +188,54 @@ ldapsearch -H ldaps://localhost:636 -x -D "uid=john,dc=company,dc=com" -w passwo
 
 **Recommendation:** Set to `true` for all production environments to prevent unauthorized directory enumeration.
 
+#### TLS Version and Cipher Configuration
+
+For LDAPS connections, you can configure which TLS versions and ciphers are allowed:
+
+```ini
+# Minimum TLS version (default: uses Node.js default, typically TLSv1.2)
+# Options: TLSv1.2, TLSv1.3
+TLS_MIN_VERSION=TLSv1.2
+
+# Maximum TLS version (default: uses Node.js default, typically TLSv1.3)
+# Options: TLSv1.2, TLSv1.3
+TLS_MAX_VERSION=TLSv1.3
+
+# Allowed ciphers (OpenSSL cipher list format)
+# Leave empty/unset to use Node.js defaults
+TLS_CIPHERS=TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:ECDHE-RSA-AES256-GCM-SHA384
+```
+
+**Recommended Settings for High Security:**
+```ini
+# Enforce TLS 1.3 only (most secure, but may not work with older clients)
+TLS_MIN_VERSION=TLSv1.3
+TLS_MAX_VERSION=TLSv1.3
+```
+
+**Recommended Settings for Compatibility:**
+```ini
+# Allow TLS 1.2 and 1.3 (good balance of security and compatibility)
+TLS_MIN_VERSION=TLSv1.2
+TLS_MAX_VERSION=TLSv1.3
+```
+
+**Testing TLS Configuration:**
+```bash
+# Check which TLS versions are supported
+openssl s_client -connect localhost:636 -tls1_2 </dev/null 2>&1 | grep "Protocol"
+openssl s_client -connect localhost:636 -tls1_3 </dev/null 2>&1 | grep "Protocol"
+
+# Check available ciphers
+openssl s_client -connect localhost:636 -cipher 'HIGH' </dev/null 2>&1 | grep "Cipher"
+```
+
+**Notes:**
+- TLS 1.0 and 1.1 are not supported (deprecated and insecure)
+- When both `TLS_MIN_VERSION` and `TLS_MAX_VERSION` are unset, Node.js defaults apply
+- Invalid version combinations (min > max) will be rejected with a warning
+- Invalid cipher strings may cause connection failures
+
 ### Start Service
 
 ```bash
