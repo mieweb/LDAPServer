@@ -152,7 +152,14 @@ class BackendLoader {
    * @returns {Function|null} Backend class or null if not found
    */
   getDirectoryBackend(name) {
-    return this.loadedBackends.directory.get(name) || null;
+    const directoryBackend = this.loadedBackends.directory.get(name);
+    if (!directoryBackend) {
+      const msg = `Directory backend not found: ${name}`;
+      logger.error(`[BackendLoader] ${msg}`);
+      throw new Error(msg);
+    }
+
+    return this.loadedBackends.directory.get(name);
   }
 
   /**

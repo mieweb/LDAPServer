@@ -16,7 +16,7 @@ function createLdapEntry(user, baseDn) {
   const entry = {
     dn: `uid=${user.username},${baseDn}`,
     attributes: {
-      objectClass: ["top", "posixAccount", "inetOrgPerson", "shadowAccount"],
+      objectClass: ["top", "posixAccount", "inetOrgPerson"],
       uid: user.username,
       uidNumber,
       gidNumber,
@@ -26,8 +26,6 @@ function createLdapEntry(user, baseDn) {
       mail: user.mail || `${user.username}@${extractDomainFromBaseDn(baseDn)}`,
       homeDirectory: user.home_directory || `/home/${user.username}`,
       loginShell: "/bin/bash",
-      shadowLastChange: "0",
-      userpassword: user?.password,
     },
   };
 

@@ -118,25 +118,34 @@ Create or edit `/etc/ldap-gateway/.env`:
 
 ```ini
 # Directory backend: where to find user/group information
-DIRECTORY_BACKEND=mysql  # mysql | mongodb | proxmox
+DIRECTORY_BACKEND=sql  # sql | mongodb | proxmox
 
 # Authentication backends: how to validate passwords (comma-separated for multiple)
-AUTH_BACKENDS=ldap      # mysql | mongodb | ldap | proxmox | notification | mysql,ldap | ldap,notification
+AUTH_BACKENDS=ldap      # sql | mongodb | ldap | proxmox | notification | sql,ldap | ldap,notification
 
 # LDAP Server Configuration
 LDAP_BASE_DN=dc=company,dc=com
+
+# SQL configuration (for any SQL-based system)
+SQL_URL=mysql://ldap_user:secure_password@localhost:3306/your_database
+SQL_QUERY_ONE_USER='SELECT * FROM users WHERE username = ?'
+SQL_QUERY_GROUPS_BY_MEMBER='SELECT * FROM groups g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))'
+SQL_QUERY_ALL_USERS='SELECT * FROM users'
+SQL_QUERY_ALL_GROUPS='SELECT
+    g.gid_number,
+    g.name,
+    g.gid_number AS id,
+    GROUP_CONCAT(u.username) AS member_uids
+FROM groups g
+LEFT JOIN user_groups ug ON g.gid_number = ug.group_id
+LEFT JOIN users u ON ug.user_id = u.id
+GROUP BY g.gid_number, g.name
+ORDER BY g.name'
 
 # Security: Require authentication for search operations
 # Default: true (authentication required for security)
 # Set to false only for development/testing if you need anonymous access
 REQUIRE_AUTH_FOR_SEARCH=true
-
-# MySQL configuration (for any MySQL-based system)
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=ldap_user
-MYSQL_PASSWORD=secure_password
-MYSQL_DATABASE=your_database
 
 # MongoDB configuration (for mongodb backends)
 MONGO_URI=mongodb://localhost:27017/ldap_user_db
@@ -203,17 +212,17 @@ The LDAP gateway separates **directory lookups** from **authentication**, allowi
 
 | Backend | Description | Use Case |
 |---------|-------------|----------|
-| `mysql` | MySQL/MariaDB databases | Any MySQL-based system (WebChart, custom schemas) |
+| `sql` | MySQL/MariaDB/SQLite3/PostgreSQL databases | Any SQL-based system (WebChart, custom schemas) |
 | `mongodb` | MongoDB collections | Modern web applications |
 | `proxmox` | Proxmox user.cfg/shadow.cfg files | Virtualization environments |
 
 ### Authentication Backends (`AUTH_BACKENDS`) 
 
-**Multiple backends supported** - Use comma-separated values (e.g., `AUTH_BACKENDS=mysql,ldap`) to try authentication providers in order.
+**Multiple backends supported** - Use comma-separated values (e.g., `AUTH_BACKENDS=sql,ldap`) to try authentication providers in order.
 
 | Backend | Description | Use Case |
 |---------|-------------|----------|
-| `mysql` | MySQL/MariaDB password hashes | Self-contained auth with MySQL databases |
+| `sql` | MySQL/MariaDB/SQLite3/PostgreSQL password hashes | Self-contained auth with SQL databases |
 | `mongodb` | MongoDB password hashes | Self-contained auth with MongoDB collections |
 | `ldap` | External LDAP/Active Directory | Enterprise SSO integration |
 | `proxmox` | Proxmox shadow file | Proxmox container authentication |
@@ -221,24 +230,46 @@ The LDAP gateway separates **directory lookups** from **authentication**, allowi
 
 ### Example Configurations
 
-#### MySQL + Active Directory
+#### SQL + Active Directory
 ```ini
-DIRECTORY_BACKEND=mysql   # User info from MySQL
+DIRECTORY_BACKEND=sql   # User info from MySQL
 AUTH_BACKENDS=ldap        # Passwords via AD
-MYSQL_HOST=your-mysql-host
-MYSQL_DATABASE=your_database
 AD_DOMAIN=your-domain.com
 LDAP_BIND_DN=CN=service,DC=your-domain,DC=com
+SQL_URL=mysql://ldap_user:secure_password@localhost:3306/your_database
+SQL_QUERY_ONE_USER='SELECT * FROM users WHERE username = ?'
+SQL_QUERY_GROUPS_BY_MEMBER='SELECT * FROM groups g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))'
+SQL_QUERY_ALL_USERS='SELECT * FROM users'
+SQL_QUERY_ALL_GROUPS='SELECT
+    g.gid_number,
+    g.name,
+    g.gid_number AS id,
+    GROUP_CONCAT(u.username) AS member_uids
+FROM groups g
+LEFT JOIN user_groups ug ON g.gid_number = ug.group_id
+LEFT JOIN users u ON ug.user_id = u.id
+GROUP BY g.gid_number, g.name
+ORDER BY g.name'
 ```
 
 #### MySQL Self-Contained
 ```ini
 DIRECTORY_BACKEND=mysql   # User info from MySQL
 AUTH_BACKENDS=mysql       # Passwords in MySQL
-MYSQL_HOST=localhost
-MYSQL_DATABASE=users
-MYSQL_USER=ldap_user
-MYSQL_PASSWORD=secure_password
+SQL_URL=mysql://ldap_user:secure_password@localhost:3306/your_database
+SQL_QUERY_ONE_USER='SELECT * FROM users WHERE username = ?'
+SQL_QUERY_GROUPS_BY_MEMBER='SELECT * FROM groups g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))'
+SQL_QUERY_ALL_USERS='SELECT * FROM users'
+SQL_QUERY_ALL_GROUPS='SELECT
+    g.gid_number,
+    g.name,
+    g.gid_number AS id,
+    GROUP_CONCAT(u.username) AS member_uids
+FROM groups g
+LEFT JOIN user_groups ug ON g.gid_number = ug.group_id
+LEFT JOIN users u ON ug.user_id = u.id
+GROUP BY g.gid_number, g.name
+ORDER BY g.name'
 ```
 
 #### MongoDB Self-Contained
@@ -262,22 +293,46 @@ PROXMOX_SHADOW_CFG=/etc/pve/shadow.cfg
 🎥 **[Multiple Backends Demo](https://youtube.com/shorts/4N-aov0wxZ4?si=AA9SN_s_EfpkM-MK)** - See how to configure multiple authentication backends
 
 ```ini
-DIRECTORY_BACKEND=mysql    # User info from MySQL
-AUTH_BACKENDS=mysql,ldap   # Try MySQL auth first, fallback to LDAP
-MYSQL_HOST=your-mysql-host
-MYSQL_DATABASE=your_database
+DIRECTORY_BACKEND=sql    # User info from SQL
+AUTH_BACKENDS=sql,ldap   # Try SQL auth first, fallback to LDAP
+SQL_URL=mysql://ldap_user:secure_password@localhost:3306/your_database
+SQL_QUERY_ONE_USER='SELECT * FROM users WHERE username = ?'
+SQL_QUERY_GROUPS_BY_MEMBER='SELECT * FROM groups g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))'
+SQL_QUERY_ALL_USERS='SELECT * FROM users'
+SQL_QUERY_ALL_GROUPS='SELECT
+    g.gid_number,
+    g.name,
+    g.gid_number AS id,
+    GROUP_CONCAT(u.username) AS member_uids
+FROM groups g
+LEFT JOIN user_groups ug ON g.gid_number = ug.group_id
+LEFT JOIN users u ON ug.user_id = u.id
+GROUP BY g.gid_number, g.name
+ORDER BY g.name'
 AD_DOMAIN=your-domain.com
 LDAP_BIND_DN=CN=service,DC=your-domain,DC=com
 ```
 
 #### MFA with Push Notifications
 ```ini
-DIRECTORY_BACKEND=mysql       # User info from MySQL
+DIRECTORY_BACKEND=sql       # User info from MySQL
 AUTH_BACKENDS=ldap,notification # LDAP auth + MFA push notifications
-MYSQL_HOST=your-mysql-host
-MYSQL_DATABASE=your_database
 AD_DOMAIN=your-domain.com
 LDAP_BIND_DN=CN=service,DC=your-domain,DC=com
+SQL_URL=mysql://ldap_user:secure_password@localhost:3306/your_database
+SQL_QUERY_ONE_USER='SELECT * FROM users WHERE username = ?'
+SQL_QUERY_GROUPS_BY_MEMBER='SELECT * FROM groups g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))'
+SQL_QUERY_ALL_USERS='SELECT * FROM users'
+SQL_QUERY_ALL_GROUPS='SELECT
+    g.gid_number,
+    g.name,
+    g.gid_number AS id,
+    GROUP_CONCAT(u.username) AS member_uids
+FROM groups g
+LEFT JOIN user_groups ug ON g.gid_number = ug.group_id
+LEFT JOIN users u ON ug.user_id = u.id
+GROUP BY g.gid_number, g.name
+ORDER BY g.name'
 
 # MFA Configuration (requires MIE Authenticator app)
 ENABLE_NOTIFICATION=true
@@ -367,15 +422,13 @@ ldap-gateway --config-test
 
 ## 🏥 WebChart Integration
 
-The LDAP Gateway integrates with [WebChart EHR](https://www.mieweb.com/) systems using the MySQL backend:
+The LDAP Gateway integrates with [WebChart EHR](https://www.mieweb.com/) systems using the SQL backend:
 
 ```ini
-DIRECTORY_BACKEND=mysql    # WebChart uses MySQL
-AUTH_BACKENDS=mysql
-MYSQL_HOST=webchart-host
-MYSQL_DATABASE=webchart
-MYSQL_USER=readonly_user
-MYSQL_PASSWORD=secure_password
+DIRECTORY_BACKEND=sql    # WebChart uses MySQL
+AUTH_BACKENDS=sql
+SQL_URL=mysql://ldap_user:secure_password@localhost:3306/your_database
+# TODO: implement queries matching the webchart schema
 ```
 
 WebChart users are mapped to standard LDAP objects with healthcare-specific attributes and group memberships based on WebChart realms.

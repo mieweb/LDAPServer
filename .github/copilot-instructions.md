@@ -110,7 +110,7 @@ This is a **modular LDAP gateway** built with Node.js and ldapjs that bridges LD
 - **Backend separation**: Always implement both auth and directory providers (see `npm/src/interfaces/`)
 - **Dynamic backend loading**: Backends can be loaded from `server/backends/*.js` at runtime without rebuilding (see `server/utils/backendLoader.js`)
 - **Provider factory**: Use `ProviderFactory` to instantiate backends; supports both compiled and dynamic providers
-- **Environment config**: All settings via `.env` (e.g., `AUTH_BACKEND=db`, `DIRECTORY_BACKEND=mysql`, `BACKEND_DIR=/custom/path`)
+- **Environment config**: All settings via `.env` (e.g., `AUTH_BACKENDS=sql`, `DIRECTORY_BACKEND=sql`, `BACKEND_DIR=/custom/path`, `SQL_URL=mysql://user:pass@host:port/db`)
 - **LDAP entry mapping**: Use `@ldap-gateway/core` utilities to create entries with standard attributes (posixAccount, inetOrgPerson)
 - **Database queries**: Use connection pooling in drivers (`server/src/db/drivers/`); groups store `member_uids` as JSON arrays
 - **UID/GID mapping**: For WebChart, `uidNumber` from "LDAP UID Number" observation or `user_id + 10000`; `gidNumber` from `realms.id`

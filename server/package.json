@@ -18,13 +18,18 @@
     "dependencies": {
         "@ldap-gateway/core": "file:../npm",
         "@ldapjs/controls": "git+https://github.com/mieweb/controls.git",
+        "argon2": "^0.31.2",
         "axios": "^1.12.0",
+        "bcrypt": "^5.1.1",
         "chokidar": "4.0.3",
         "dotenv": "^16.4.7",
         "express": "^4.21.2",
         "ldapjs": "git+https://github.com/mieweb/node-ldapjs.git",
         "mongodb": "^6.14.2",
         "mysql2": "^3.2.0",
+        "pg": "8.16.3",
+        "sequelize": "6.37.7",
+        "sqlite3": "5.1.7",
         "unixcrypt": "^1.2.0",
         "winston": "^3.17.0"
     }

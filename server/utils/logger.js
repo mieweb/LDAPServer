@@ -1,5 +1,4 @@
 const winston = require('winston');
-const path = require("path");
 
 const customLevels = {
   levels: {
@@ -18,13 +17,8 @@ const customLevels = {
   },
 };
 
-// Create logs directory if it doesn't exist
-const fs = require("fs");
-const logDir = "logs";
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir);
-}
-
+// Logger configured for systemd compatibility
+// Logs to stdout only - systemd journald captures and manages logs
 const logger = winston.createLogger({
   levels: customLevels.levels,
   transports: [
@@ -35,8 +29,6 @@ const logger = winston.createLogger({
         winston.format.simple()
       ),
     }),
-    new winston.transports.File({ filename: path.join(logDir, "error.log"), level: "error" }),
-    new winston.transports.File({ filename: path.join(logDir, "combined.log") }),
   ],
 });
 
