@@ -233,8 +233,14 @@ openssl s_client -connect localhost:636 -cipher 'HIGH' </dev/null 2>&1 | grep "C
 **Notes:**
 - TLS 1.0 and 1.1 are not supported (deprecated and insecure)
 - When both `TLS_MIN_VERSION` and `TLS_MAX_VERSION` are unset, Node.js defaults apply
-- Invalid version combinations (min > max) will be rejected with a warning
-- Invalid cipher strings may cause connection failures
+- Invalid version combinations (min > max) will be rejected with a warning and defaults will be used
+- **Cipher validation**: Invalid cipher strings are validated at startup and rejected with a warning
+  - If an invalid cipher string is provided, Node.js defaults will be used instead
+  - This prevents runtime connection failures from misconfigured ciphers
+- Common cipher string formats:
+  - Single cipher: `TLS_AES_256_GCM_SHA384`
+  - Multiple ciphers: `TLS_AES_256_GCM_SHA384:ECDHE-RSA-AES256-GCM-SHA384`
+  - Cipher expressions: `HIGH:!aNULL:!MD5` (excludes weak ciphers)
 
 ### Start Service
 

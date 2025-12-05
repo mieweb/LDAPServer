@@ -153,16 +153,45 @@ class ConfigurationLoader {
       }
     }
 
-    // Parse TLS ciphers
+    // Parse and validate TLS ciphers
     let tlsCiphers = null;
     if (process.env.TLS_CIPHERS) {
-      tlsCiphers = process.env.TLS_CIPHERS.trim();
-      if (tlsCiphers === '') {
+      const cipherString = process.env.TLS_CIPHERS.trim();
+      if (cipherString === '') {
         tlsCiphers = null;
+      } else {
+        // Validate cipher string by testing it with Node.js TLS
+        const validation = this._validateCipherString(cipherString);
+        if (validation.valid) {
+          tlsCiphers = cipherString;
+        } else {
+          logger.warn(`Invalid TLS_CIPHERS: ${cipherString}. Error: ${validation.error}. Using Node.js defaults.`);
+          tlsCiphers = null;
+        }
       }
     }
 
     return { tlsMinVersion, tlsMaxVersion, tlsCiphers };
+  }
+
+  /**
+   * Validate a TLS cipher string
+   * @private
+   * @param {string} cipherString - The cipher string to validate
+   * @returns {Object} { valid: boolean, error?: string }
+   */
+  _validateCipherString(cipherString) {
+    try {
+      const tls = require('tls');
+      // Try to create a secure context with the cipher string
+      tls.createSecureContext({
+        ciphers: cipherString,
+        minVersion: 'TLSv1.2' // Use a reasonable default for validation
+      });
+      return { valid: true };
+    } catch (error) {
+      return { valid: false, error: error.message };
+    }
   }
 
   /**

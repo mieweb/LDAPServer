@@ -156,7 +156,23 @@ function testCipherParsing() {
   process.env.TLS_CIPHERS = 'TLS_AES_256_GCM_SHA384:ECDHE-RSA-AES256-GCM-SHA384';
   let loader = createTestableLoader();
   let result = loader._loadTlsConfig();
-  assert.strictEqual(result.tlsCiphers, 'TLS_AES_256_GCM_SHA384:ECDHE-RSA-AES256-GCM-SHA384', 'Should parse cipher string');
+  assert.strictEqual(result.tlsCiphers, 'TLS_AES_256_GCM_SHA384:ECDHE-RSA-AES256-GCM-SHA384', 'Should parse valid cipher string');
+  
+  // Test valid cipher expression (HIGH)
+  resetEnv();
+  process.env.TLS_CIPHERS = 'HIGH';
+  loader = createTestableLoader();
+  result = loader._loadTlsConfig();
+  assert.strictEqual(result.tlsCiphers, 'HIGH', 'Should accept valid cipher expression');
+  
+  // Test invalid cipher string
+  resetEnv();
+  process.env.TLS_CIPHERS = 'random_invalid_string';
+  loader = createTestableLoader();
+  result = loader._loadTlsConfig();
+  assert.strictEqual(result.tlsCiphers, null, 'Should reject invalid cipher string');
+  assert(mockLogger.warnings.some(w => w.includes('Invalid TLS_CIPHERS') && w.includes('no cipher match')), 
+    'Should log warning with cipher error');
   
   // Test empty cipher string
   resetEnv();
@@ -197,12 +213,41 @@ function testNoTlsConfig() {
   console.log('✓ No TLS config tests passed');
 }
 
+// Test cipher string validation helper
+function testCipherValidation() {
+  console.log('Testing cipher validation helper...');
+  
+  resetEnv();
+  const loader = createTestableLoader();
+  
+  // Test valid ciphers
+  let result = loader._validateCipherString('TLS_AES_256_GCM_SHA384');
+  assert.strictEqual(result.valid, true, 'Should validate TLS 1.3 cipher');
+  
+  result = loader._validateCipherString('ECDHE-RSA-AES256-GCM-SHA384');
+  assert.strictEqual(result.valid, true, 'Should validate TLS 1.2 cipher');
+  
+  result = loader._validateCipherString('HIGH');
+  assert.strictEqual(result.valid, true, 'Should validate cipher expression');
+  
+  result = loader._validateCipherString('TLS_AES_256_GCM_SHA384:ECDHE-RSA-AES256-GCM-SHA384');
+  assert.strictEqual(result.valid, true, 'Should validate multiple ciphers');
+  
+  // Test invalid cipher
+  result = loader._validateCipherString('random_invalid_cipher');
+  assert.strictEqual(result.valid, false, 'Should reject invalid cipher');
+  assert(result.error.includes('no cipher match'), 'Should include error message');
+  
+  console.log('✓ Cipher validation helper tests passed');
+}
+
 // Run all tests
 function runTests() {
   console.log('\n=== TLS Configuration Tests ===\n');
   
   try {
     testNoTlsConfig();
+    testCipherValidation();
     testTlsMinVersionParsing();
     testTlsMaxVersionParsing();
     testVersionOrderValidation();
