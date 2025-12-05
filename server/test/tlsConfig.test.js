@@ -17,7 +17,6 @@ const mockLogger = {
 };
 
 // Store original env and logger
-const originalEnv = { ...process.env };
 
 // Helper to reset environment
 function resetEnv() {
