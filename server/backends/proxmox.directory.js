@@ -163,9 +163,10 @@ class ProxmoxDirectory extends DirectoryProvider {
 
       if (line.startsWith('group:')) {
         const [_, groupName, members] = line.split(':');
-        if (groupName === 'administrators' || groupName === 'interns') {
-          const memberUids = members ? members.split(',').map(u => u.split('@')[0]) : [];
+        const memberUids = members ? members.split(',').map(u => u.split('@')[0]) : [];
 
+        // Only include groups that have members (skip empty groups)
+        if (memberUids.length > 0) {
           groups.push({
             name: groupName,
             memberUids,
@@ -175,6 +176,8 @@ class ProxmoxDirectory extends DirectoryProvider {
             objectClass: ["posixGroup"],
           });
           gidBase++;
+        } else {
+          logger.debug(`[ProxmoxDirectory] Skipping empty group: ${groupName}`);
         }
       }
     }
