@@ -1,0 +1,228 @@
+/**
+ * Unit Tests for ldapUtils.js
+ * 
+ * Tests LDAP entry creation utilities without external dependencies
+ */
+
+const {
+  createLdapEntry,
+  createLdapGroupEntry,
+  extractDomainFromBaseDn
+} = require('../../../src/utils/ldapUtils');
+
+const { testUsers, testGroups, baseDN } = require('../../fixtures/testData');
+
+describe('ldapUtils', () => {
+  
+  describe('createLdapEntry', () => {
+    
+    test('should create valid LDAP user entry with all fields', () => {
+      const user = {
+        username: 'testuser',
+        uid_number: 1001,
+        gid_number: 1001,
+        full_name: 'Test User',
+        surname: 'User',
+        mail: 'testuser@example.com',
+        home_directory: '/home/testuser'
+      };
+      
+      const entry = createLdapEntry(user, baseDN);
+      
+      expect(entry).toBeDefined();
+      expect(entry.dn).toBe('uid=testuser,dc=example,dc=com');
+      expect(entry.attributes).toBeDefined();
+      expect(entry.attributes.objectClass).toEqual(['top', 'posixAccount', 'inetOrgPerson']);
+      expect(entry.attributes.uid).toBe('testuser');
+      expect(entry.attributes.uidNumber).toBe('1001');
+      expect(entry.attributes.gidNumber).toBe('1001');
+      expect(entry.attributes.cn).toBe('Test User');
+      expect(entry.attributes.sn).toBe('User');
+      expect(entry.attributes.mail).toBe('testuser@example.com');
+      expect(entry.attributes.homeDirectory).toBe('/home/testuser');
+      expect(entry.attributes.loginShell).toBe('/bin/bash');
+    });
+    
+    test('should handle missing optional fields with defaults', () => {
+      const user = {
+        username: 'minimal',
+        uid_number: 1500,
+        gid_number: 1500
+      };
+      
+      const entry = createLdapEntry(user, baseDN);
+      
+      expect(entry.attributes.cn).toBe('minimal'); // Defaults to username
+      expect(entry.attributes.sn).toBe('minimal'); // Defaults to username (no "Unknown")
+      expect(entry.attributes.mail).toBe(''); // Empty string if not provided
+      expect(entry.attributes.homeDirectory).toBe('/home/minimal'); // Generated home dir
+      expect(entry.attributes.loginShell).toBe('/bin/bash'); // Default shell
+    });
+    
+    test('should handle zero UID/GID numbers', () => {
+      const user = {
+        username: 'root',
+        uid_number: 0,
+        gid_number: 0,
+        full_name: 'Root User',
+        surname: 'Root'
+      };
+      
+      const entry = createLdapEntry(user, baseDN);
+      
+      expect(entry.attributes.uidNumber).toBe('0');
+      expect(entry.attributes.gidNumber).toBe('0');
+    });
+    
+    test('should handle null/undefined UID/GID numbers', () => {
+      const user = {
+        username: 'nouid',
+        uid_number: null,
+        gid_number: undefined
+      };
+      
+      const entry = createLdapEntry(user, baseDN);
+      
+      expect(entry.attributes.uidNumber).toBe('0');
+      expect(entry.attributes.gidNumber).toBe('0');
+    });
+    
+    test('should work with all test fixture users', () => {
+      testUsers.forEach(user => {
+        const entry = createLdapEntry({
+          username: user.username,
+          uid_number: user.uid,
+          gid_number: user.gidNumber,
+          full_name: user.cn,
+          surname: user.sn,
+          mail: user.mail,
+          home_directory: user.homeDirectory
+        }, baseDN);
+        
+        expect(entry.dn).toContain(user.username);
+        expect(entry.attributes.uid).toBe(user.username);
+        expect(entry.attributes.uidNumber).toBe(user.uid.toString());
+      });
+    });
+  });
+  
+  describe('createLdapGroupEntry', () => {
+    
+    test('should create valid LDAP group entry with members', () => {
+      const group = {
+        name: 'developers',
+        gid_number: 1002,
+        memberUids: ['alice', 'bob']
+      };
+      
+      const entry = createLdapGroupEntry(group, baseDN);
+      
+      expect(entry).toBeDefined();
+      expect(entry.dn).toBe('cn=developers,dc=example,dc=com');
+      expect(entry.attributes).toBeDefined();
+      expect(entry.attributes.objectClass).toEqual(['posixGroup']);
+      expect(entry.attributes.cn).toBe('developers');
+      expect(entry.attributes.gidNumber).toBe(1002);
+      expect(entry.attributes.memberUid).toEqual(['alice', 'bob']);
+    });
+    
+    test('should handle group with custom DN', () => {
+      const group = {
+        name: 'admins',
+        dn: 'cn=admins,ou=groups,dc=custom,dc=org',
+        gid_number: 1000,
+        memberUids: ['admin']
+      };
+      
+      const entry = createLdapGroupEntry(group, baseDN);
+      
+      expect(entry.dn).toBe('cn=admins,ou=groups,dc=custom,dc=org');
+    });
+    
+    test('should handle group with custom objectClass', () => {
+      const group = {
+        name: 'special',
+        gid_number: 2000,
+        objectClass: ['posixGroup', 'groupOfNames']
+      };
+      
+      const entry = createLdapGroupEntry(group, baseDN);
+      
+      expect(entry.attributes.objectClass).toEqual(['posixGroup', 'groupOfNames']);
+    });
+    
+    test('should handle empty member list', () => {
+      const group = {
+        name: 'empty',
+        gid_number: 3000,
+        memberUids: []
+      };
+      
+      const entry = createLdapGroupEntry(group, baseDN);
+      
+      expect(entry.attributes.memberUid).toBeUndefined();
+    });
+    
+    test('should handle group with member DNs', () => {
+      const group = {
+        name: 'ldapgroup',
+        gid_number: 4000,
+        members: ['uid=user1,ou=users,dc=example,dc=com', 'uid=user2,ou=users,dc=example,dc=com']
+      };
+      
+      const entry = createLdapGroupEntry(group, baseDN);
+      
+      expect(entry.attributes.member).toEqual([
+        'uid=user1,ou=users,dc=example,dc=com',
+        'uid=user2,ou=users,dc=example,dc=com'
+      ]);
+    });
+    
+    test('should work with all test fixture groups', () => {
+      testGroups.forEach(group => {
+        const entry = createLdapGroupEntry({
+          name: group.cn,
+          gid_number: group.gidNumber,
+          memberUids: group.memberUids
+        }, baseDN);
+        
+        expect(entry.dn).toContain(group.cn);
+        expect(entry.attributes.cn).toBe(group.cn);
+        expect(entry.attributes.gidNumber).toBe(group.gidNumber);
+      });
+    });
+  });
+  
+  describe('extractDomainFromBaseDn', () => {
+    
+    test('should extract domain from standard base DN', () => {
+      const domain = extractDomainFromBaseDn('dc=example,dc=com');
+      expect(domain).toBe('example.com');
+    });
+    
+    test('should handle multi-level domains', () => {
+      const domain = extractDomainFromBaseDn('dc=mail,dc=example,dc=com');
+      expect(domain).toBe('mail.example.com');
+    });
+    
+    test('should handle single-level domain', () => {
+      const domain = extractDomainFromBaseDn('dc=localhost');
+      expect(domain).toBe('localhost');
+    });
+    
+    test('should handle base DN with OU components', () => {
+      const domain = extractDomainFromBaseDn('ou=users,dc=company,dc=org');
+      expect(domain).toBe('company.org');
+    });
+    
+    test('should return localhost for invalid base DN', () => {
+      const domain = extractDomainFromBaseDn('invalid-dn');
+      expect(domain).toBe('localhost');
+    });
+    
+    test('should return localhost for empty base DN', () => {
+      const domain = extractDomainFromBaseDn('');
+      expect(domain).toBe('localhost');
+    });
+  });
+});

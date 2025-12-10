@@ -15,10 +15,10 @@ function createLdapEntry(user) {
       gidNumber,
       cn: user.full_name || user.username,
       gecos: user.full_name || user.username,
-      sn: user.surname || "Unknown",
-      mail: user.mail || `${user.username}@mieweb.com`, // Mandatory
+      sn: user.surname || user.username, // Use username if no surname provided
+      mail: user.mail || '',
       homeDirectory: user.home_directory,
-      loginShell: "/bin/bash",
+      loginShell: user.login_shell || "/bin/bash", // Default to bash if not specified
       shadowLastChange: "0",
       userpassword: user?.password,
     },

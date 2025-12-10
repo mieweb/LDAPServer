@@ -89,7 +89,9 @@ function isGroupSearchRequest(filterStr, attributes) {
  * @returns {boolean} True if this is a mixed search request
  */
 function isMixedSearchRequest(filterStr) {
-  return /objectClass=/i.test(filterStr) || filterStr.length === 0;
+  // cn= can match both users (common name) and groups (group name)
+  // so treat it as a mixed search unless it's clearly user-only (uid=) or group-only (objectClass=posixGroup)
+  return /objectClass=/i.test(filterStr) || /cn=/i.test(filterStr) || filterStr.length === 0;
 }
 
 /**

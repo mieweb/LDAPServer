@@ -22,10 +22,10 @@ function createLdapEntry(user, baseDn) {
       gidNumber,
       cn: user.full_name || user.username,
       gecos: user.full_name || user.username,
-      sn: user.surname || "Unknown",
-      mail: user.mail || `${user.username}@${extractDomainFromBaseDn(baseDn)}`,
+      sn: user.surname || user.username, // Use username if no surname provided
+      mail: user.mail || '',
       homeDirectory: user.home_directory || `/home/${user.username}`,
-      loginShell: "/bin/bash",
+      loginShell: user.login_shell || "/bin/bash", // Default to bash if not specified
     },
   };
 
