@@ -224,19 +224,19 @@ describe('filterUtils', () => {
       expect(result).toBe(false);
     });
     
-    test('should detect cn filter as mixed (can be user or group)', () => {
+    test('should treat cn filter as group-only (not mixed)', () => {
       const result = isMixedSearchRequest('(cn=admins)');
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
     
-    test('should detect cn wildcard as mixed', () => {
+    test('should treat cn wildcard as group-only (not mixed)', () => {
       const result = isMixedSearchRequest('(cn=*)');
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
     
-    test('should handle case-insensitive objectClass', () => {
+    test('should not treat generic OBJECTCLASS=top as mixed', () => {
       const result = isMixedSearchRequest('(OBJECTCLASS=top)');
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
   });
   
