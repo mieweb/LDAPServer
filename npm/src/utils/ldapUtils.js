@@ -23,7 +23,7 @@ function createLdapEntry(user, baseDn) {
       cn: user.full_name || user.username,
       gecos: user.full_name || user.username,
       sn: user.surname || user.username, // Use username if no surname provided
-      mail: user.mail || '',
+      mail: user.mail || user.email || '',  // Support both mail and email fields
       homeDirectory: user.home_directory || `/home/${user.username}`,
       loginShell: user.login_shell || "/bin/bash", // Default to bash if not specified
     },
@@ -39,18 +39,21 @@ function createLdapEntry(user, baseDn) {
  * @returns {Object} LDAP group entry object
  */
 function createLdapGroupEntry(group, baseDn) {
+  const gidNumber = group.gid_number || group.gidNumber;
   const entry = {
     dn: group.dn || `cn=${group.name},${baseDn}`,
     attributes: {
       objectClass: group.objectClass || ['posixGroup'],
       cn: group.name,
-      gidNumber: group.gid_number || group.gidNumber,
+      gidNumber: String(gidNumber),  // LDAP requires string values
     }
   };
 
-  // Add member UIDs if they exist
-  if (group.memberUids && group.memberUids.length > 0) {
-    entry.attributes.memberUid = group.memberUids;
+  // Add member UIDs if they exist (support both field names)
+  const memberUids = group.memberUids || group.member_uids;
+  if (memberUids && memberUids.length > 0) {
+    // Ensure it's always an array (LDAP requirement for multi-valued attributes)
+    entry.attributes.memberUid = Array.isArray(memberUids) ? memberUids : [memberUids];
   }
 
   // Add member DNs if they exist

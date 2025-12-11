@@ -13,12 +13,12 @@ const { ProviderFactory } = require('../providers');
 describe('Backend Loader', function() {
   let testBackendDir;
   
-  before(function() {
+  beforeAll(function() {
     // Create temporary directory for test backends
     testBackendDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ldap-backend-test-'));
   });
   
-  after(function() {
+  afterAll(function() {
     // Clean up test directory
     if (fs.existsSync(testBackendDir)) {
       fs.rmSync(testBackendDir, { recursive: true, force: true });

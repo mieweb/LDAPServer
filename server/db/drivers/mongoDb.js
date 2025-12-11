@@ -35,19 +35,44 @@ async function close() {
 
 async function findUserByUsername(username) {
   console.log("looking for user", username);
+  if (!db) {
+    throw new Error('MongoDB connection not established. Call connect() first.');
+  }
   return await db.collection("users").findOne({ username });
 }
 
 async function findGroupsByMemberUid(username) {
-  return await db.collection("groups").find({ member_uids: username }).toArray();
+  if (!db) {
+    throw new Error('MongoDB connection not established. Call connect() first.');
+  }
+  const groups = await db.collection("groups").find({ member_uids: username }).toArray();
+  
+  // Normalize the group structure to match expected format
+  return groups.map(group => {
+    const gidNumber = group.gid_number || group.gid;
+    return {
+      id: gidNumber,
+      name: group.name,
+      gid_number: gidNumber,
+      gidNumber: gidNumber,
+      memberUids: group.member_uids || [],
+      member_uids: group.member_uids || []
+    };
+  });
 }
 
 async function getAllUsers() {
+  if (!db) {
+    throw new Error('MongoDB connection not established. Call connect() first.');
+  }
   return await db.collection('users').find({}).toArray();
 }
 
 // Add this method to your DatabaseService class (MongoDB version)
 async function getAllGroups() {
+  if (!db) {
+    throw new Error('MongoDB connection not established. Call connect() first.');
+  }
   try {
     logger.debug('Getting all groups from MongoDB');
     
@@ -60,9 +85,12 @@ async function getAllGroups() {
     
     for (const group of groups) {
       try {
+        // Support both gid and gid_number fields
+        const gidNumber = group.gid_number || group.gid;
+        
         // Get additional members from user_groups collection (secondary groups)
         const userGroupLinks = await db.collection('user_groups').find({
-          group_id: group.gid
+          group_id: gidNumber
         }).toArray();
         
         // Get usernames for the linked users
@@ -83,19 +111,24 @@ async function getAllGroups() {
         const uniqueMembers = [...new Set(allMembers)];
         
         result.push({
-          id: group.gid,
+          id: gidNumber,
           name: group.name,
-          gid: group.gid,
-          member_uids: uniqueMembers
+          gid_number: gidNumber,
+          gidNumber: gidNumber,  // Support both field names
+          memberUids: uniqueMembers,  // Use camelCase for consistency with other backends
+          member_uids: uniqueMembers  // Also support snake_case
         });
         
       } catch (memberError) {
-        logger.error('Error getting members for group:', { groupGid: group.gid, error: memberError.message });
+        const gidNumber = group.gid_number || group.gid;
+        logger.error('Error getting members for group:', { groupGid: gidNumber, error: memberError.message });
         // Add group without additional members if member query fails
         result.push({
-          id: group.gid,
+          id: gidNumber,
           name: group.name,
-          gid: group.gid,
+          gid_number: gidNumber,
+          gidNumber: gidNumber,
+          memberUids: group.member_uids || [],
           member_uids: group.member_uids || []
         });
       }

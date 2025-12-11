@@ -228,40 +228,30 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
       expect(memberUids).toContain('admin');
     });
 
-    test('f. (cn=*) should return all entries with cn attribute', async () => {
-      // LDAP-compliant: (cn=*) searches all entries with any cn value
-      // This includes both users (cn=common name) and groups (cn=group name)
+    test('f. (cn=*) should return all groups', async () => {
+      // In LDAP, cn= in filter searches for groups (groups use cn= in their DN)
+      // Users use uid= in their DN, so cn=* returns groups only
       const results = await client.search(baseDN, {
         filter: acceptanceFilters.allGroupsWildcard,
         scope: 'sub'
       });
 
-      // Should return enabled users (3) + all groups (4) = 7 entries with cn
-      // (disabled user excluded by Proxmox backend)
-      expect(results.length).toBeGreaterThanOrEqual(7);
+      // Should return all groups (4: admins, developers, users, proxmox-sudo)
+      expect(results.length).toBe(4);
       
-      // All results should have cn attribute
+      // All results should be groups with cn attribute
       results.forEach(entry => {
+        expect(entry.dn).toMatch(/cn=/);
         expect(entry.attributes.cn).toBeDefined();
+        expect(entry.attributes.objectClass).toContain('posixGroup');
       });
       
-      // Verify groups are present
-      const groupEntries = results.filter(r => 
-        r.attributes.objectClass.includes('posixGroup')
-      );
-      expect(groupEntries.length).toBe(4); // 3 explicit + proxmox-sudo
-      
-      const groupNames = groupEntries.map(g => g.attributes.cn);
+      // Verify specific groups are present
+      const groupNames = results.map(g => g.attributes.cn);
       expect(groupNames).toContain('users');
       expect(groupNames).toContain('admins');
       expect(groupNames).toContain('developers');
       expect(groupNames).toContain('proxmox-sudo');
-      
-      // Verify users are also present (they have cn too)
-      const userEntries = results.filter(r => 
-        r.attributes.objectClass.includes('posixAccount')
-      );
-      expect(userEntries.length).toBeGreaterThanOrEqual(3); // At least 3 enabled users
     });
   });
 

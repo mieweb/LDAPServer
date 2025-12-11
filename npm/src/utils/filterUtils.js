@@ -75,6 +75,7 @@ function isGroupSearchRequest(filterStr, attributes) {
   const isGroupSearch =
     /(objectClass=posixGroup)|(objectClass=groupOfNames)|(memberUid=)/i.test(filterStr) ||
     /gidNumber=/i.test(filterStr) ||
+    /cn=/i.test(filterStr) ||  // cn= in filter is for groups (groups use cn= in DN)
     (filterStr.length === 0 && (attributes.includes('member') || attributes.includes('uniqueMember') || attributes.includes('memberOf'))) ||
     attributes.includes('gidNumber') ||
     attributes.includes('memberUid') ||
@@ -89,9 +90,9 @@ function isGroupSearchRequest(filterStr, attributes) {
  * @returns {boolean} True if this is a mixed search request
  */
 function isMixedSearchRequest(filterStr) {
-  // cn= can match both users (common name) and groups (group name)
-  // so treat it as a mixed search unless it's clearly user-only (uid=) or group-only (objectClass=posixGroup)
-  return /objectClass=/i.test(filterStr) || /cn=/i.test(filterStr) || filterStr.length === 0;
+  // Only objectClass=* is truly mixed (searches all entry types)
+  // cn= is for groups, uid= is for users
+  return /objectClass=\*/i.test(filterStr) || filterStr.length === 0;
 }
 
 /**

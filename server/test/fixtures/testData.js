@@ -163,6 +163,7 @@ const expectedGroupAttributes = [
 const testPorts = {
   sql: 3890,
   mongodb: 3891,
+  mongodbAuth: 3896,
   proxmox: 3892,
   proxmoxAuth: 3895,
   security: 3893,
