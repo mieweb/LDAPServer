@@ -1,5 +1,6 @@
 const fs = require('fs');
 const crypto = require('crypto');
+const chokidar = require('chokidar');
 const { DirectoryProvider, filterUtils } = require('@ldap-gateway/core');
 
 const logger = require('../utils/logger');
@@ -35,36 +36,46 @@ class ProxmoxDirectory extends DirectoryProvider {
     }
 
     try {
-      // Watch for file changes
-      this.watcher = fs.watch(this.configPath, (eventType, filename) => {
-        if (eventType === 'change' || eventType === 'rename') {
-          logger.info(`[ProxmoxDirectory] Config file ${eventType} detected: ${filename || this.configPath}`);
-          this.scheduleReload();
-        }
+      // Use chokidar for reliable file watching (same as auth backend)
+      this.watcher = chokidar.watch(this.configPath, {
+        persistent: true,
+        ignoreInitial: true,
+        awaitWriteFinish: {
+          stabilityThreshold: 500,
+          pollInterval: 100
+        },
+        // Important for mounted file systems like /mnt/pve
+        usePolling: true,
+        interval: 1000,
+        atomic: true,
+        followSymlinks: false
+      });
+
+      this.watcher.on('change', (path) => {
+        logger.info(`[ProxmoxDirectory] User config file changed: ${path}`);
+        this.scheduleReload();
+      });
+
+      this.watcher.on('add', (path) => {
+        logger.info(`[ProxmoxDirectory] User config file added: ${path}`);
+        this.scheduleReload();
+      });
+
+      this.watcher.on('unlink', (path) => {
+        logger.warn(`[ProxmoxDirectory] User config file removed: ${path}`);
+        this.users = [];
+        this.groups = [];
       });
 
       this.watcher.on('error', (error) => {
-        logger.error("[ProxmoxDirectory] File watcher error:", { error });
-        // Clean up failed watcher
-        if (this.watcher) {
-          try {
-            this.watcher.close();
-          } catch (e) {
-            // Ignore errors when closing
-          }
-          this.watcher = null;
-        }
-        
-        // Try to re-establish watcher after error
-        logger.info("[ProxmoxDirectory] Attempting to re-establish file watcher in 5 seconds...");
-        setTimeout(() => {
-          if (!this.watcher) { // Only if not already watching
-            this.setupFileWatcher();
-          }
-        }, 5000);
+        logger.error(`[ProxmoxDirectory] File watcher error:`, { error: error.message });
       });
 
-      logger.info(`[ProxmoxDirectory] File watcher established on ${this.configPath}`);
+      this.watcher.on('ready', () => {
+        logger.info(`[ProxmoxDirectory] Chokidar file watcher ready and monitoring: ${this.configPath}`);
+      });
+
+      logger.info(`[ProxmoxDirectory] Setting up chokidar file watcher for ${this.configPath}`);
     } catch (err) {
       logger.error("[ProxmoxDirectory] Failed to setup file watcher:", { error: err });
     }
@@ -74,7 +85,6 @@ class ProxmoxDirectory extends DirectoryProvider {
     // Clear existing timer to debounce rapid changes
     if (this.reloadTimer) {
       clearTimeout(this.reloadTimer);
-      logger.debug("[ProxmoxDirectory] Debouncing reload - clearing previous timer");
     }
 
     this.reloadTimer = setTimeout(() => {
@@ -83,6 +93,7 @@ class ProxmoxDirectory extends DirectoryProvider {
       // Check if file still exists before reloading
       if (fs.existsSync(this.configPath)) {
         this.loadConfig();
+        logger.info("[ProxmoxDirectory] User config file reloaded successfully after file change");
       } else {
         logger.warn(`[ProxmoxDirectory] Config file no longer exists: ${this.configPath}`);
       }
