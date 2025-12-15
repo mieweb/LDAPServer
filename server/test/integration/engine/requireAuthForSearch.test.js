@@ -73,6 +73,9 @@ describe('LdapEngine - REQUIRE_AUTH_FOR_SEARCH behavior', () => {
       client.bind(`uid=alice,${baseDn}`, 'password', (e) => (e ? reject(e) : resolve()))
     );
 
+    // Small delay to ensure bind state is fully propagated
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     const authResults = await new Promise((resolve, reject) => {
       const entries = [];
       client.search(baseDn, { filter: '(objectClass=posixAccount)', scope: 'sub' }, (err, res) => {

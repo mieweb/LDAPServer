@@ -10,13 +10,10 @@ let db;
 async function connect(config) {
   if (!client) {
     client = new MongoClient(config.uri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
       maxPoolSize: 10,
     });
     await client.connect();
     db = client.db(config.database);
-    console.log("MongoDB Connected with Connection Pooling");
   }
   return db;
 }
@@ -29,12 +26,10 @@ async function close() {
     await client.close();
     client = null;
     db = null;
-    console.log("MongoDB Connection Closed");
   }
 }
 
 async function findUserByUsername(username) {
-  console.log("looking for user", username);
   if (!db) {
     throw new Error('MongoDB connection not established. Call connect() first.');
   }
