@@ -33,8 +33,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies (force fresh install)
+        run: npm ci
 
       - name: Build core package
         run: npm run build:core
@@ -70,8 +70,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies (force fresh install)
+        run: npm ci
 
       - name: Run SSSD integration tests
         run: npm run test:sssd -w server
