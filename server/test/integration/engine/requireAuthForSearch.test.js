@@ -53,12 +53,11 @@ describe('LdapEngine - REQUIRE_AUTH_FOR_SEARCH behavior', () => {
     });
     await engine.start();
 
-    const client = ldap.createClient({ url: `ldap://127.0.0.1:${port}` });
-
-    // Unauthenticated (anonymous) search should fail
+    // Test 1: Unauthenticated (anonymous) search should fail
+    const anonClient = ldap.createClient({ url: `ldap://127.0.0.1:${port}` });
     const anonResult = await new Promise((resolve) => {
       const entries = [];
-      client.search(baseDn, { filter: '(objectClass=posixAccount)', scope: 'sub' }, (err, res) => {
+      anonClient.search(baseDn, { filter: '(objectClass=posixAccount)', scope: 'sub' }, (err, res) => {
         if (err) return resolve({ ok: false, err });
         res.on('searchEntry', (e) => entries.push(e.pojo));
         res.on('error', (e) => resolve({ ok: false, err: e }));
@@ -67,18 +66,20 @@ describe('LdapEngine - REQUIRE_AUTH_FOR_SEARCH behavior', () => {
     });
     expect(anonResult.ok).toBe(false);
     expect(String(anonResult.err)).toMatch(/InsufficientAccessRights|insufficient/i);
+    await new Promise((resolve) => anonClient.unbind(() => resolve()));
 
-    // Authenticated bind with username/password
+    // Test 2: Authenticated search should succeed (use fresh client)
+    const authClient = ldap.createClient({ url: `ldap://127.0.0.1:${port}` });
+    
+    // Bind with credentials
     await new Promise((resolve, reject) =>
-      client.bind(`uid=alice,${baseDn}`, 'password', (e) => (e ? reject(e) : resolve()))
+      authClient.bind(`uid=alice,${baseDn}`, 'password', (e) => (e ? reject(e) : resolve()))
     );
 
-    // Small delay to ensure bind state is fully propagated
-    await new Promise(resolve => setTimeout(resolve, 100));
-
+    // Search after successful bind
     const authResults = await new Promise((resolve, reject) => {
       const entries = [];
-      client.search(baseDn, { filter: '(objectClass=posixAccount)', scope: 'sub' }, (err, res) => {
+      authClient.search(baseDn, { filter: '(objectClass=posixAccount)', scope: 'sub' }, (err, res) => {
         if (err) return reject(err);
         res.on('searchEntry', (e) => entries.push(e.pojo));
         res.on('error', (e) => reject(e));
@@ -88,7 +89,7 @@ describe('LdapEngine - REQUIRE_AUTH_FOR_SEARCH behavior', () => {
     expect(Array.isArray(authResults)).toBe(true);
     expect(authResults.length).toBeGreaterThanOrEqual(1);
 
-    await new Promise((resolve) => client.unbind(() => resolve()));
+    await new Promise((resolve) => authClient.unbind(() => resolve()));
   });
 
   test('when false: unauthenticated and authenticated searches succeed', async () => {
