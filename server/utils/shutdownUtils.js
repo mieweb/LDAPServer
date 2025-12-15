@@ -28,13 +28,13 @@ function setupGracefulShutdown(resources) {
 
   // Handle application termination
   process.on('SIGTERM', async () => {
-    logger.debug('SIGTERM received, shutting down gracefully');
+    logger.info('SIGTERM received, shutting down gracefully (press Ctrl+C again to force exit)...');
     await gracefulShutdown();
   });
 
   // Handle Ctrl+C
   process.on('SIGINT', async () => {
-    logger.debug('SIGINT received, shutting down gracefully');
+    logger.info('SIGINT received, shutting down gracefully (press Ctrl+C again to force exit)...');
     await gracefulShutdown();
   });
 
@@ -55,10 +55,10 @@ function setupGracefulShutdown(resources) {
  * Performs graceful shutdown of application resources
  */
 async function gracefulShutdown() {
-  // Prevent multiple simultaneous shutdown attempts
+  // Second signal forces immediate exit
   if (shuttingDown) {
-    logger.debug('Shutdown already in progress, ignoring duplicate signal');
-    return;
+    logger.warn('Shutdown signal received again, forcing immediate exit!');
+    process.exit(1);
   }
   
   shuttingDown = true;
