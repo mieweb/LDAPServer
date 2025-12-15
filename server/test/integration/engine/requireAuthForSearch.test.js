@@ -42,7 +42,7 @@ describe('LdapEngine - REQUIRE_AUTH_FOR_SEARCH behavior', () => {
     if (engine) { await engine.stop(); engine = null; }
   });
 
-  test('when true: authenticated search succeeds; unauthenticated search fails', async () => {
+  test('when true: unauthenticated search fails', async () => {
     engine = new LdapEngine({
       baseDn,
       port,
@@ -53,43 +53,59 @@ describe('LdapEngine - REQUIRE_AUTH_FOR_SEARCH behavior', () => {
     });
     await engine.start();
 
-    // Test 1: Unauthenticated (anonymous) search should fail
-    const anonClient = ldap.createClient({ url: `ldap://127.0.0.1:${port}` });
-    const anonResult = await new Promise((resolve) => {
-      const entries = [];
-      anonClient.search(baseDn, { filter: '(objectClass=posixAccount)', scope: 'sub' }, (err, res) => {
-        if (err) return resolve({ ok: false, err });
-        res.on('searchEntry', (e) => entries.push(e.pojo));
-        res.on('error', (e) => resolve({ ok: false, err: e }));
-        res.on('end', () => resolve({ ok: true, entries }));
+    const client = ldap.createClient({ url: `ldap://127.0.0.1:${port}` });
+    try {
+      const anonResult = await new Promise((resolve) => {
+        const entries = [];
+        client.search(baseDn, { filter: '(objectClass=posixAccount)', scope: 'sub' }, (err, res) => {
+          if (err) return resolve({ ok: false, err });
+          res.on('searchEntry', (e) => entries.push(e.pojo));
+          res.on('error', (e) => resolve({ ok: false, err: e }));
+          res.on('end', () => resolve({ ok: true, entries }));
+        });
       });
+      expect(anonResult.ok).toBe(false);
+      expect(String(anonResult.err)).toMatch(/InsufficientAccessRights|insufficient/i);
+    } finally {
+      await new Promise((resolve) => client.unbind(() => resolve()));
+      client.destroy();
+    }
+  });
+
+  test('when true: authenticated search succeeds', async () => {
+    engine = new LdapEngine({
+      baseDn,
+      port,
+      requireAuthForSearch: true,
+      authProviders: [new MockAuthProvider()],
+      directoryProvider: new MockDirectoryProvider(),
+      logger,
     });
-    expect(anonResult.ok).toBe(false);
-    expect(String(anonResult.err)).toMatch(/InsufficientAccessRights|insufficient/i);
-    await new Promise((resolve) => anonClient.unbind(() => resolve()));
+    await engine.start();
 
-    // Test 2: Authenticated search should succeed (use fresh client)
-    const authClient = ldap.createClient({ url: `ldap://127.0.0.1:${port}` });
-    
-    // Bind with credentials
-    await new Promise((resolve, reject) =>
-      authClient.bind(`uid=alice,${baseDn}`, 'password', (e) => (e ? reject(e) : resolve()))
-    );
+    const client = ldap.createClient({ url: `ldap://127.0.0.1:${port}` });
+    try {
+      // Bind with credentials
+      await new Promise((resolve, reject) =>
+        client.bind(`uid=alice,${baseDn}`, 'password', (e) => (e ? reject(e) : resolve()))
+      );
 
-    // Search after successful bind
-    const authResults = await new Promise((resolve, reject) => {
-      const entries = [];
-      authClient.search(baseDn, { filter: '(objectClass=posixAccount)', scope: 'sub' }, (err, res) => {
-        if (err) return reject(err);
-        res.on('searchEntry', (e) => entries.push(e.pojo));
-        res.on('error', (e) => reject(e));
-        res.on('end', () => resolve(entries));
+      // Search after successful bind
+      const authResults = await new Promise((resolve, reject) => {
+        const entries = [];
+        client.search(baseDn, { filter: '(objectClass=posixAccount)', scope: 'sub' }, (err, res) => {
+          if (err) return reject(err);
+          res.on('searchEntry', (e) => entries.push(e.pojo));
+          res.on('error', (e) => reject(e));
+          res.on('end', () => resolve(entries));
+        });
       });
-    });
-    expect(Array.isArray(authResults)).toBe(true);
-    expect(authResults.length).toBeGreaterThanOrEqual(1);
-
-    await new Promise((resolve) => authClient.unbind(() => resolve()));
+      expect(Array.isArray(authResults)).toBe(true);
+      expect(authResults.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      await new Promise((resolve) => client.unbind(() => resolve()));
+      client.destroy();
+    }
   });
 
   test('when false: unauthenticated and authenticated searches succeed', async () => {
