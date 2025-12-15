@@ -13,6 +13,16 @@ jobs:
   test:
     name: Test Build Process
     runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,6 +44,15 @@ jobs:
 
       - name: Build server package
         run: npm run build:server
+
+      - name: Generate test certificates
+        run: |
+          mkdir -p server/cert
+          openssl req -x509 -newkey rsa:2048 -nodes -sha256 \
+            -subj "/CN=localhost" \
+            -keyout server/cert/server.key \
+            -out server/cert/server.crt \
+            -days 1
 
       - name: Test server package
         run: npm run test:server

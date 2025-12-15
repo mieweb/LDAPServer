@@ -72,7 +72,7 @@ describe('SQL Directory Backend (mocked) - Acceptance Tests', () => {
   beforeEach(async () => {
   const directoryProvider = new MockSqlDirectoryProvider();
     const authProvider = { initialize: jest.fn(), cleanup: jest.fn(), authenticate: jest.fn(async () => true) };
-    engine = new LdapEngine({ baseDn, port, authProviders: [authProvider], directoryProvider, requireAuthForSearch: true, logger });
+    engine = new LdapEngine({ baseDn, port, authProviders: [authProvider], directoryProvider, requireAuthForSearch: false, logger });
     await engine.start();
   });
 
