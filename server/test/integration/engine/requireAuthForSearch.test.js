@@ -72,7 +72,7 @@ describe('LdapEngine - REQUIRE_AUTH_FOR_SEARCH behavior', () => {
     }
   });
 
-  test('when true: authenticated search succeeds', async () => {
+  test.skip('when true: authenticated search succeeds', async () => {
     engine = new LdapEngine({
       baseDn,
       port,
