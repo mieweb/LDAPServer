@@ -2,7 +2,7 @@ name: CI Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, dev, tests ]
   pull_request:
     branches: [ main ]
 
@@ -37,3 +37,6 @@ jobs:
 
       - name: Test server package
         run: npm run test:server
+
+      - name: SSSD integration tests (Docker)
+        run: npm run test:sssd -w server

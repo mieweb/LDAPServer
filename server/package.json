@@ -13,11 +13,12 @@
         "start": "node index.js",
         "dev": "node index.js",
         "build": "node build.js",
-        "test": "jest",
+    "test": "jest && bash test/integration-sssd/run-sssd-integration.sh",
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage",
         "test:integration": "jest test/integration",
-        "test:security": "jest test/integration/security"
+    "test:security": "jest test/integration/security",
+    "test:sssd": "bash test/integration-sssd/run-sssd-integration.sh"
     },
     "dependencies": {
         "@ldap-gateway/core": "file:../npm",
