@@ -20,9 +20,16 @@ function createLdapEntry(user) {
       homeDirectory: user.home_directory,
       loginShell: "/bin/bash",
       shadowLastChange: "0",
-      userpassword: user?.password,
     },
   };
+
+  // Add givenName if available (but not if empty string)
+  if (user.given_name && user.given_name.trim()) {
+    entry.attributes.givenName = user.given_name;
+  }
+
+  // Note: userpassword should NOT be exposed in directory entries for security
+  // Password authentication is handled separately by auth providers
 
   return entry;
 }

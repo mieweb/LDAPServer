@@ -154,13 +154,14 @@ class ProxmoxDirectory extends DirectoryProvider {
     for (const line of lines) {
       if (line.startsWith('user:')) {
         const [_, rest] = line.split('user:');
-        const [usernameWithRealm, , , , firstName, lastName, email] = rest.split(':');
+        // Proxmox user.cfg format: username@realm:enable:expire:firstname:lastname:email:comment:keys:groups
+        const [usernameWithRealm, , , firstName, lastName, email] = rest.split(':');
         const cleanUsername = usernameWithRealm.split('@')[0];
 
         // Generate stable UID based on username hash
         const stableUid = this.generateStableUid(cleanUsername);
 
-        users.push({
+        const userObj = {
           username: cleanUsername,
           full_name: `${firstName || ''} ${lastName || ''}`.trim() || cleanUsername,
           surname: lastName || "Unknown",
@@ -169,7 +170,14 @@ class ProxmoxDirectory extends DirectoryProvider {
           gid_number: stableUid, // User's primary group
           home_directory: `/home/${cleanUsername}`,
           password: undefined
-        });
+        };
+
+        // Only add given_name if firstName is available
+        if (firstName) {
+          userObj.given_name = firstName;
+        }
+
+        users.push(userObj);
       }
 
       if (line.startsWith('group:')) {
