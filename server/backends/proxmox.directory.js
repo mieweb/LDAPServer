@@ -161,17 +161,23 @@ class ProxmoxDirectory extends DirectoryProvider {
         // Generate stable UID based on username hash
         const stableUid = this.generateStableUid(cleanUsername);
 
-        users.push({
+        const userObj = {
           username: cleanUsername,
           full_name: `${firstName || ''} ${lastName || ''}`.trim() || cleanUsername,
-          given_name: firstName || undefined,
           surname: lastName || "Unknown",
           mail: email || `${cleanUsername}@mieweb.com`,
           uid_number: stableUid,
           gid_number: stableUid, // User's primary group
           home_directory: `/home/${cleanUsername}`,
           password: undefined
-        });
+        };
+
+        // Only add given_name if firstName is available
+        if (firstName) {
+          userObj.given_name = firstName;
+        }
+
+        users.push(userObj);
       }
 
       if (line.startsWith('group:')) {

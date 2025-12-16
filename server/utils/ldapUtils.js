@@ -23,8 +23,8 @@ function createLdapEntry(user) {
     },
   };
 
-  // Add givenName if available
-  if (user.given_name) {
+  // Add givenName if available (but not if empty string)
+  if (user.given_name && user.given_name.trim()) {
     entry.attributes.givenName = user.given_name;
   }
 
