@@ -163,19 +163,19 @@ class ProxmoxDirectory extends DirectoryProvider {
 
         const userObj = {
           username: cleanUsername,
-          full_name: `${firstName || ''} ${lastName || ''}`.trim() || cleanUsername,
-          surname: lastName || "Unknown",
-          mail: email || `${cleanUsername}@mieweb.com`,
           uid_number: stableUid,
-          gid_number: stableUid, // User's primary group
-          home_directory: `/home/${cleanUsername}`,
-          password: undefined
+          gid_number: stableUid
         };
 
-        // Only add given_name if firstName is available
-        if (firstName) {
-          userObj.given_name = firstName;
-        }
+        // Add optional attributes
+        if (firstName)
+          userObj.first_name = firstName;
+
+        if (lastName)
+          userObj.last_name = lastName;
+
+        if (email)
+          userObj.mail = email;
 
         users.push(userObj);
       }

@@ -1,5 +1,12 @@
 const ldap = require('ldapjs');
 const { EventEmitter } = require('events');
+const { createLdapEntry, createLdapGroupEntry } = require('./utils/ldapUtils');
+const { 
+  getUsernameFromFilter, 
+  isAllUsersRequest, 
+  isGroupSearchRequest, 
+  isMixedSearchRequest 
+} = require('./utils/filterUtils');
 
 /**
  * Core LDAP Engine for the LDAP Gateway
@@ -303,14 +310,6 @@ class LdapEngine extends EventEmitter {
    * @returns {number} Number of entries sent
    */
   async _handleSearch(filterStr, attributes, res) {
-    const { 
-      getUsernameFromFilter, 
-      isAllUsersRequest, 
-      isGroupSearchRequest, 
-      isMixedSearchRequest 
-    } = require('./utils/filterUtils');
-    const { createLdapEntry, createLdapGroupEntry } = require('./utils/ldapUtils');
-
     let entryCount = 0;
     const username = getUsernameFromFilter(filterStr);
 
