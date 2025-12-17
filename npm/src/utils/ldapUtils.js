@@ -53,7 +53,7 @@ function createLdapEntry(user, baseDn) {
       objectClass: ["top", "posixAccount", "inetOrgPerson"],
       uid: user.username,
       uidNumber: user.uid_number,
-      gidNumber: user.uid_number,
+      gidNumber: user.gid_number ?? user.uid_number,
       cn: fullName || user.username,  // required attribute
       mail: user.mail || `${user.username}@${extractDomainFromBaseDn(baseDn)}`,
       homeDirectory: user.home_directory || `/home/${user.username}`,
