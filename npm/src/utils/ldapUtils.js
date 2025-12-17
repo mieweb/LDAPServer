@@ -3,31 +3,73 @@
  */
 
 /**
+ * An object representing an LDAP entry
+ * @typedef {Object} LdapUser
+ * @property {string} username - Posix style username
+ * @property {number} uid_number - User ID number
+ * @property {number} gid_number - Group ID number
+ * @property {string} [first_name] - User's given name
+ * @property {string} [last_name] - User's family name
+ * @property {string} [full_name] - User's full name
+ * @property {string} [mail] - User's email address
+ * @property {string} [home_directory] - User's home directory
+ */
+
+/**
+ * Generate the user's Full Name from first and/or last name, depending
+ * on which are provided.
+ * @param {LdapUser} user - User object
+ * @returns {string|null} Full name
+ */
+function generateFullName(user) {
+  if (user.full_name)
+    return user.full_name;
+  
+  if (user.first_name && user.last_name)
+    return `${user.first_name} ${user.last_name}`;
+  
+  if (user.first_name)
+    return user.first_name;
+  
+  if (user.last_name)
+    return user.last_name;
+
+  return null;
+}
+
+/**
  * Create an LDAP entry for a user
- * @param {Object} user - User object from directory provider
+ * @param {LdapUser} user - User object from directory provider
  * @param {string} baseDn - Base DN for the LDAP directory
  * @returns {Object} LDAP entry object
  */
 function createLdapEntry(user, baseDn) {
-  // Handle UID and GID numbers
-  const uidNumber = user.uid_number !== undefined && user.uid_number !== null ? user.uid_number.toString() : "0";
-  const gidNumber = user.gid_number !== undefined && user.gid_number !== null ? user.gid_number.toString() : "0";
+  const fullName = generateFullName(user);
 
+  // mandatory and generated attributes
   const entry = {
     dn: `uid=${user.username},${baseDn}`,
     attributes: {
       objectClass: ["top", "posixAccount", "inetOrgPerson"],
       uid: user.username,
-      uidNumber,
-      gidNumber,
-      cn: user.full_name || user.username,
-      gecos: user.full_name || user.username,
-      sn: user.surname || user.username, // Use username if no surname provided
-      mail: user.mail || user.email || '',  // Support both mail and email fields
+      uidNumber: user.uid_number,
+      gidNumber: user.uid_number,
+      cn: fullName || user.username,  // required attribute
+      mail: user.mail || `${user.username}@${extractDomainFromBaseDn(baseDn)}`,
       homeDirectory: user.home_directory || `/home/${user.username}`,
       loginShell: user.login_shell || "/bin/bash", // Default to bash if not specified
     },
   };
+
+  // optional attributes
+  if (user.first_name)
+    entry.attributes.givenName = user.first_name;
+
+  if (user.last_name)
+    entry.attributes.sn = user.last_name;
+
+  if (fullName)
+    entry.attributes.gecos = fullName;
 
   return entry;
 }
