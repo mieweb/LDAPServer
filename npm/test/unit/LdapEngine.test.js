@@ -7,7 +7,7 @@
 
 const LdapEngine = require('../../src/LdapEngine');
 const { MockAuthProvider, MockDirectoryProvider } = require('../fixtures/mockProviders');
-const { testUsers, testGroups, baseDN } = require('../fixtures/testData');
+const { baseDN } = require('../fixtures/testData');
 
 // Mock logger to suppress console output during tests
 const mockLogger = {
