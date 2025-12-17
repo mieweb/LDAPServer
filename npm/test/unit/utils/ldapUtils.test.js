@@ -104,6 +104,55 @@ describe('ldapUtils', () => {
         expect(entry.attributes.uidNumber).toBe(user.uid);
       });
     });
+
+    test('should generate full name from first and last name', () => {
+      const user = {
+        username: 'jdoe',
+        uid_number: 2000,
+        gid_number: 2000,
+        first_name: 'John',
+        last_name: 'Doe'
+      };
+      
+      const entry = createLdapEntry(user, baseDN);
+      
+      expect(entry.attributes.cn).toBe('John Doe');
+      expect(entry.attributes.givenName).toBe('John');
+      expect(entry.attributes.sn).toBe('Doe');
+      expect(entry.attributes.gecos).toBe('John Doe');
+    });
+
+    test('should use first name only when last name is missing', () => {
+      const user = {
+        username: 'jane',
+        uid_number: 2001,
+        gid_number: 2001,
+        first_name: 'Jane'
+      };
+      
+      const entry = createLdapEntry(user, baseDN);
+      
+      expect(entry.attributes.cn).toBe('Jane');
+      expect(entry.attributes.givenName).toBe('Jane');
+      expect(entry.attributes.sn).toBeUndefined();
+      expect(entry.attributes.gecos).toBe('Jane');
+    });
+
+    test('should use last name only when first name is missing', () => {
+      const user = {
+        username: 'smith',
+        uid_number: 2002,
+        gid_number: 2002,
+        last_name: 'Smith'
+      };
+      
+      const entry = createLdapEntry(user, baseDN);
+      
+      expect(entry.attributes.cn).toBe('Smith');
+      expect(entry.attributes.givenName).toBeUndefined();
+      expect(entry.attributes.sn).toBe('Smith');
+      expect(entry.attributes.gecos).toBe('Smith');
+    });
   });
   
   describe('createLdapGroupEntry', () => {
