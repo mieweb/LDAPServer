@@ -22,7 +22,7 @@ describe('ldapUtils', () => {
         uid_number: 1001,
         gid_number: 1001,
         full_name: 'Test User',
-        surname: 'User',
+        last_name: 'User',
         mail: 'testuser@example.com',
         home_directory: '/home/testuser'
       };
@@ -34,8 +34,8 @@ describe('ldapUtils', () => {
       expect(entry.attributes).toBeDefined();
       expect(entry.attributes.objectClass).toEqual(['top', 'posixAccount', 'inetOrgPerson']);
       expect(entry.attributes.uid).toBe('testuser');
-      expect(entry.attributes.uidNumber).toBe('1001');
-      expect(entry.attributes.gidNumber).toBe('1001');
+      expect(entry.attributes.uidNumber).toBe(1001);
+      expect(entry.attributes.gidNumber).toBe(1001);
       expect(entry.attributes.cn).toBe('Test User');
       expect(entry.attributes.sn).toBe('User');
       expect(entry.attributes.mail).toBe('testuser@example.com');
@@ -53,8 +53,8 @@ describe('ldapUtils', () => {
       const entry = createLdapEntry(user, baseDN);
       
       expect(entry.attributes.cn).toBe('minimal'); // Defaults to username
-      expect(entry.attributes.sn).toBe('minimal'); // Defaults to username (no "Unknown")
-      expect(entry.attributes.mail).toBe(''); // Empty string if not provided
+      expect(entry.attributes.sn).toBeUndefined(); // Optional attribute, not set when missing
+      expect(entry.attributes.mail).toBe('minimal@example.com'); // Generated from username and baseDN
       expect(entry.attributes.homeDirectory).toBe('/home/minimal'); // Generated home dir
       expect(entry.attributes.loginShell).toBe('/bin/bash'); // Default shell
     });
@@ -65,13 +65,13 @@ describe('ldapUtils', () => {
         uid_number: 0,
         gid_number: 0,
         full_name: 'Root User',
-        surname: 'Root'
+        last_name: 'Root'
       };
       
       const entry = createLdapEntry(user, baseDN);
       
-      expect(entry.attributes.uidNumber).toBe('0');
-      expect(entry.attributes.gidNumber).toBe('0');
+      expect(entry.attributes.uidNumber).toBe(0);
+      expect(entry.attributes.gidNumber).toBe(0);
     });
     
     test('should handle null/undefined UID/GID numbers', () => {
@@ -83,8 +83,8 @@ describe('ldapUtils', () => {
       
       const entry = createLdapEntry(user, baseDN);
       
-      expect(entry.attributes.uidNumber).toBe('0');
-      expect(entry.attributes.gidNumber).toBe('0');
+      expect(entry.attributes.uidNumber).toBeNull();
+      expect(entry.attributes.uidNumber).toBeNull(); // gidNumber uses uid_number when not provided
     });
     
     test('should work with all test fixture users', () => {
@@ -94,14 +94,14 @@ describe('ldapUtils', () => {
           uid_number: user.uid,
           gid_number: user.gidNumber,
           full_name: user.cn,
-          surname: user.sn,
+          last_name: user.sn,
           mail: user.mail,
           home_directory: user.homeDirectory
         }, baseDN);
         
         expect(entry.dn).toContain(user.username);
         expect(entry.attributes.uid).toBe(user.username);
-        expect(entry.attributes.uidNumber).toBe(user.uid.toString());
+        expect(entry.attributes.uidNumber).toBe(user.uid);
       });
     });
   });
