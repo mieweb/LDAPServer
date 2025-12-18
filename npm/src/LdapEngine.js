@@ -204,8 +204,6 @@ class LdapEngine extends EventEmitter {
           return next(error);
         }
 
-        // Set bindDN for this connection to enable authenticated searches
-        req.connection.ldap.bindDN = req.dn;
         
         this.emit('bindSuccess', { username, anonymous: false });
         res.end();
