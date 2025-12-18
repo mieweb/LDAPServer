@@ -183,6 +183,7 @@ class LdapEngine extends EventEmitter {
       this.emit('bindRequest', { username: 'anonymous', anonymous: true });
       this.emit('bindSuccess', { username: 'anonymous', anonymous: true });
       res.end();
+      return next();
     });
 
     // Authenticated bind - catch all DNs under our base
@@ -193,7 +194,7 @@ class LdapEngine extends EventEmitter {
       this.emit('bindRequest', { username, anonymous: false });
       
       // Authenticate against all auth providers - all must return true
-      Promise.all(
+      return Promise.all(
         this.authProviders.map(provider => provider.authenticate(username, password, req))
       ).then(authResults => {
         const isAuthenticated = authResults.every(result => result === true);
@@ -204,9 +205,9 @@ class LdapEngine extends EventEmitter {
           return next(error);
         }
 
-        
         this.emit('bindSuccess', { username, anonymous: false });
         res.end();
+        return next();
       }).catch(error => {
         this.logger.error("Bind error", { error, username });
         const { normalizeAuthError } = require('./utils/errorUtils');
