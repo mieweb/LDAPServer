@@ -171,7 +171,7 @@ describe('ldapUtils', () => {
       expect(entry.attributes).toBeDefined();
       expect(entry.attributes.objectClass).toEqual(['posixGroup']);
       expect(entry.attributes.cn).toBe('developers');
-  expect(entry.attributes.gidNumber).toBe('1002');
+      expect(entry.attributes.gidNumber).toBe(1002);
       expect(entry.attributes.memberUid).toEqual(['alice', 'bob']);
     });
     
@@ -237,7 +237,7 @@ describe('ldapUtils', () => {
         
         expect(entry.dn).toContain(group.cn);
         expect(entry.attributes.cn).toBe(group.cn);
-  expect(entry.attributes.gidNumber).toBe(String(group.gidNumber));
+        expect(entry.attributes.gidNumber).toBe(group.gidNumber);
       });
     });
   });

@@ -87,7 +87,7 @@ function createLdapGroupEntry(group, baseDn) {
     attributes: {
       objectClass: group.objectClass || ['posixGroup'],
       cn: group.name,
-      gidNumber: String(gidNumber),  // LDAP requires string values
+      gidNumber: gidNumber,
     }
   };
 

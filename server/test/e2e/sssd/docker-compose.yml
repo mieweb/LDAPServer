@@ -1,8 +1,8 @@
 services:
   ldap-gateway:
     build:
-      context: ../../../
-      dockerfile: server/test/integration-sssd/Dockerfile.server
+      context: ../../../../
+      dockerfile: server/test/e2e/sssd/Dockerfile.server
     environment:
       - AUTH_BACKENDS=sql
       - DIRECTORY_BACKEND=sql

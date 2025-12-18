@@ -57,8 +57,8 @@ jobs:
       - name: Test server package
         run: npm run test:server
 
-  sssd-integration:
-    name: SSSD Integration Tests
+  sssd-e2e:
+    name: SSSD End-to-End Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -73,5 +73,5 @@ jobs:
       - name: Install dependencies (force fresh install)
         run: npm ci
 
-      - name: Run SSSD integration tests
-        run: npm run test:sssd -w server
+      - name: Run SSSD E2E tests
+        run: npm run test:e2e:sssd -w server
