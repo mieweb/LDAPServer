@@ -18,7 +18,7 @@
         "test:coverage": "jest --coverage",
         "test:integration": "jest test/integration",
         "test:security": "jest test/integration/security",
-        "test:e2e:sssd": "bash test/e2e/sssd/run-sssd-integration.sh"
+        "test:e2e": "bash test/e2e/run-sssd-integration.sh"
     },
     "dependencies": {
         "@ldap-gateway/core": "file:../npm",

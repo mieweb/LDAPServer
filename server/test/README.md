@@ -97,7 +97,7 @@ e2e/
 - ldapsearch queries returning correct user/group data
 - Full workflow: client → LDAP Gateway → MySQL → response
 
-**Run**: `npm run test:e2e:sssd`
+**Run**: `npm run test:e2e`
 
 ---
 
@@ -134,8 +134,8 @@ npm run test:integration
 # Run security tests
 npm run test:security
 
-# Run E2E SSSD tests
-npm run test:e2e:sssd
+# Run E2E tests
+npm run test:e2e
 
 # Run with coverage
 npm run test:coverage

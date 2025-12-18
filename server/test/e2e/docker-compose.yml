@@ -1,8 +1,8 @@
 services:
   ldap-gateway:
     build:
-      context: ../../../../
-      dockerfile: server/test/e2e/sssd/Dockerfile.server
+      context: ../../../
+      dockerfile: server/test/e2e/Dockerfile.server
     environment:
       - AUTH_BACKENDS=sql
       - DIRECTORY_BACKEND=sql
@@ -44,7 +44,7 @@ services:
       timeout: 5s
       retries: 20
     volumes:
-      - ../../data/e2e.sssd.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ../data/e2e.sssd.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
   sssd-client:
     build:
