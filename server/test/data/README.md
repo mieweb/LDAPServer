@@ -140,12 +140,13 @@ function loadLDAPAuthData() {
 **Before** (scattered data):
 - `npm/test/fixtures/testData.js` - Hardcoded JS
 - `server/test/fixtures/testData.js` - Duplicate hardcoded JS
-- `test/e2e/sql/init.sql` - E2E specific SQL
+- `test/e2e/sssd/sql/init.sql` - E2E specific SQL (now moved to `test/e2e/sql/init.sql`)
 - Each test creates its own data
 
 **After** (centralized):
 - `test/data/*.json` - Common test data
 - `test/data/*.sql` - Backend-specific schemas
+- `test/e2e/sql/init.sql` - E2E SQL test data
 - `test/utils/dataLoader.js` - Load from files
 - `test/utils/dbSeeder.js` - Uses dataLoader
 

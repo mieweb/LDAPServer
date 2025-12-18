@@ -83,12 +83,11 @@ integration/
 **Structure**:
 ```
 e2e/
-└── sssd/                   # SSSD client authentication tests
-    ├── client/             # SSSD client container config
-    ├── tester/             # Test runner container
-    ├── sql/                # Test database initialization
-    ├── docker-compose.yml  # Full system setup
-    └── run-sssd-integration.sh
+├── client/             # SSSD client container config
+├── tester/             # Test runner container
+├── sql/                # Test database initialization
+├── docker-compose.yml  # Full system setup
+└── run-sssd-integration.sh
 ```
 
 **Examples**:

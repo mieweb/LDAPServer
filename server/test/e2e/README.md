@@ -28,6 +28,12 @@ cd server/test/e2e
 ./run-sssd-integration.sh
 ```
 
+Or use the npm script:
+
+```bash
+npm run test:e2e -w server
+```
+
 On success, the script prints "All assertions passed." and tears down the stack.
 
 ## Notes
