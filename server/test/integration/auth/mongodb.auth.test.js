@@ -158,12 +158,6 @@ describe('MongoDB Auth Backend - Acceptance Tests', () => {
     if (server) {
       await server.stop();
     }
-    if (authProvider) {
-      await authProvider.cleanup();
-    }
-    if (directoryProvider) {
-      await directoryProvider.cleanup();
-    }
     
     // Clean up test database
     if (testDb) {

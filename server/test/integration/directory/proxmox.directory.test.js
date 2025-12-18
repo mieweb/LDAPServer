@@ -305,16 +305,6 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
       expect(memberUids).not.toContain('admin'); // Not in this group
     });
 
-    test.skip('should return empty group without members - Backend skips empty groups', async () => {
-      // Proxmox backend explicitly skips groups with no members
-      const results = await client.search(baseDN, {
-        filter: '(cn=empty)',
-        scope: 'sub'
-      });
-
-      expect(results.length).toBe(0); // Empty groups are not included
-    });
-
     test('should include disabled users in results', async () => {
       const results = await client.search(baseDN, {
         filter: '(uid=disabled)',
