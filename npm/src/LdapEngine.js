@@ -186,17 +186,16 @@ class LdapEngine extends EventEmitter {
     });
 
     // Authenticated bind - catch all DNs under our base
-    this.server.bind(this.config.baseDn, async (req, res, next) => {
+    this.server.bind(this.config.baseDn, (req, res, next) => {
       const { username, password } = this._extractCredentials(req);
       this.logger.debug("Authenticated bind request", { username, dn: req.dn.toString() });
 
-      try {
-        this.emit('bindRequest', { username, anonymous: false });
-        
-        // Authenticate against all auth providers - all must return true
-        const authResults = await Promise.all(
-          this.authProviders.map(provider => provider.authenticate(username, password, req))
-        );
+      this.emit('bindRequest', { username, anonymous: false });
+      
+      // Authenticate against all auth providers - all must return true
+      Promise.all(
+        this.authProviders.map(provider => provider.authenticate(username, password, req))
+      ).then(authResults => {
         const isAuthenticated = authResults.every(result => result === true);
         
         if (!isAuthenticated) {
@@ -205,22 +204,18 @@ class LdapEngine extends EventEmitter {
           return next(error);
         }
 
-        // Set bindDN BEFORE responding to ensure state is available for subsequent operations
-        // Use setImmediate to guarantee the connection state propagates in the event loop
-        // This prevents race conditions in CI environments where timing can vary
+        // Set bindDN for this connection to enable authenticated searches
         req.connection.ldap.bindDN = req.dn;
         
-        await new Promise(resolve => setImmediate(resolve));
-
         this.emit('bindSuccess', { username, anonymous: false });
         res.end();
-      } catch (error) {
+      }).catch(error => {
         this.logger.error("Bind error", { error, username });
         const { normalizeAuthError } = require('./utils/errorUtils');
         const normalizedError = normalizeAuthError(error);
         this.emit('bindError', { username, error: normalizedError });
         return next(normalizedError);
-      }
+      });
     });
   }
 
