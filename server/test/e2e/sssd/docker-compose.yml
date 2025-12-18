@@ -44,7 +44,7 @@ services:
       timeout: 5s
       retries: 20
     volumes:
-      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ../../data/e2e.sssd.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
   sssd-client:
     build:

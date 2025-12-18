@@ -11,10 +11,11 @@ const { MongoClient } = require('mongodb');
 const TestServer = require('../../utils/testServer');
 const LdapTestClient = require('../../utils/ldapClient');
 const mockLogger = require('../../utils/mockLogger');
-const { 
-  baseDN,
-  testPorts 
-} = require('../../fixtures/testData');
+const { loadCommonUsers, loadCommonGroups } = require('../../utils/dataLoader');
+
+// Test data and config
+const baseDN = 'dc=example,dc=com';
+const testPorts = { ldap: 1389 };
 
 // Import backends
 const { provider: MongoDBAuthProvider } = require('../../../backends/mongodb.auth');

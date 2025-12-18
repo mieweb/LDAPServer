@@ -5,7 +5,7 @@
  * Supports MySQL, SQLite, and MongoDB
  */
 
-const { testUsers, testGroups } = require('../fixtures/testData');
+const { loadCommonUsers, loadCommonGroups } = require('./dataLoader');
 const bcrypt = require('bcrypt');
 
 /**
@@ -45,6 +45,10 @@ class SQLiteSeeder {
         member_uids TEXT
       )
     `);
+
+    // Load test data from centralized data files
+    const testUsers = loadCommonUsers();
+    const testGroups = loadCommonGroups();
 
     // Insert users
     for (const user of testUsers) {
@@ -129,6 +133,10 @@ class MySQLSeeder {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
 
+    // Load test data from centralized data files
+    const testUsers = loadCommonUsers();
+    const testGroups = loadCommonGroups();
+
     // Insert users
     for (const user of testUsers) {
       const hash = await bcrypt.hash(user.password, 10);
@@ -192,6 +200,10 @@ class MongoDBSeeder {
     // Get collections
     const usersCollection = this.db.collection('users');
     const groupsCollection = this.db.collection('groups');
+
+    // Load test data from centralized data files
+    const testUsers = loadCommonUsers();
+    const testGroups = loadCommonGroups();
 
     // Insert users
     const usersToInsert = await Promise.all(

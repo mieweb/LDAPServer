@@ -205,6 +205,13 @@ class LdapEngine extends EventEmitter {
           return next(error);
         }
 
+        // Set bindDN BEFORE responding to ensure state is available for subsequent operations
+        // Use setImmediate to guarantee the connection state propagates in the event loop
+        // This prevents race conditions in CI environments where timing can vary
+        req.connection.ldap.bindDN = req.dn;
+        
+        await new Promise(resolve => setImmediate(resolve));
+
         this.emit('bindSuccess', { username, anonymous: false });
         res.end();
       } catch (error) {

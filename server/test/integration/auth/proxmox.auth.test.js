@@ -13,10 +13,10 @@ const unixcrypt = require('unixcrypt');
 const TestServer = require('../../utils/testServer');
 const LdapTestClient = require('../../utils/ldapClient');
 const mockLogger = require('../../utils/mockLogger');
-const { 
-  baseDN,
-  testPorts 
-} = require('../../fixtures/testData');
+
+// Test data and config
+const baseDN = 'dc=example,dc=com';
+const testPorts = { ldap: 1389 };
 
 // Import backends
 const { provider: ProxmoxAuthProvider } = require('../../../backends/proxmox.auth');
