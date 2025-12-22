@@ -10,19 +10,10 @@ env:
   NODE_VERSION: '18'
 
 jobs:
-  test:
-    name: Test Build Process
+  # Stage 1: Fast unit tests (fail fast)
+  unit-tests:
+    name: Unit Tests
     runs-on: ubuntu-latest
-    services:
-      mongodb:
-        image: mongo:7
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,13 +24,13 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies (force fresh install)
+      - name: Install dependencies
         run: npm ci
 
       - name: Build core package
         run: npm run build:core
 
-      - name: Test core package
+      - name: Test core package (unit tests)
         run: npm run test:core
 
       - name: Build server package
@@ -54,12 +45,14 @@ jobs:
             -out server/cert/server.crt \
             -days 1
 
-      - name: Test server package
+      - name: Test server package (unit/integration tests)
         run: npm run test:server
 
+  # Stage 2: Database integration tests (parallel, after unit tests pass)
   mysql-integration:
     name: MySQL Integration Tests
     runs-on: ubuntu-latest
+    needs: unit-tests
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -70,7 +63,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies (force fresh install)
+      - name: Install dependencies
         run: npm ci
 
       - name: Build core package
@@ -85,6 +78,7 @@ jobs:
   postgres-integration:
     name: PostgreSQL Integration Tests
     runs-on: ubuntu-latest
+    needs: unit-tests
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -95,7 +89,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies (force fresh install)
+      - name: Install dependencies
         run: npm ci
 
       - name: Build core package
@@ -110,6 +104,7 @@ jobs:
   mongodb-integration:
     name: MongoDB Integration Tests
     runs-on: ubuntu-latest
+    needs: unit-tests
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -120,7 +115,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies (force fresh install)
+      - name: Install dependencies
         run: npm ci
 
       - name: Build core package
@@ -132,10 +127,11 @@ jobs:
       - name: Run MongoDB integration tests
         run: npm run test:db:mongodb -w server
 
+  # Stage 3: End-to-End tests (only after all unit and integration tests pass)
   e2e:
     name: End-to-End Tests
     runs-on: ubuntu-latest
-    needs: [test, mysql-integration, postgres-integration, mongodb-integration]
+    needs: [unit-tests, mysql-integration, postgres-integration, mongodb-integration]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -146,7 +142,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies (force fresh install)
+      - name: Install dependencies
         run: npm ci
 
       - name: Run E2E tests
