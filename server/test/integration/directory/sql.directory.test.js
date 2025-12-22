@@ -21,31 +21,31 @@ class MockSqlDirectoryProvider extends DirectoryProvider {
   async cleanup() { /* no-op */ }
   async findUser(username) {
     const u = users.find(x => x.username === username);
-    return u ? ldapUtils.createLdapEntry(u, baseDn) : null;
+    return u || null;
   }
-  async getAllUsers() { return users.map(u => ldapUtils.createLdapEntry(u, baseDn)); }
+  async getAllUsers() { return users; }
   async findGroups(filter) {
     // naive filter emulation using simple parse
     if (filter.includes('(cn=')) {
       const m = filter.match(/\(cn=([^\)]+)\)/);
-      if (m && m[1] !== '*') return groups.filter(g => g.name === m[1]).map(g => ldapUtils.createLdapGroupEntry({ name: g.name, gid_number: g.gid_number, member_uids: g.member_uids }, baseDn));
-      return groups.map(g => ldapUtils.createLdapGroupEntry({ name: g.name, gid_number: g.gid_number, member_uids: g.member_uids }, baseDn));
+      if (m && m[1] !== '*') return groups.filter(g => g.name === m[1]);
+      return groups;
     }
     if (filter.includes('(memberUid=')) {
       const m = filter.match(/\(memberUid=([^\)]+)\)/);
       const val = m ? m[1] : null;
-      if (val && val !== '*') return groups.filter(g => (g.member_uids||[]).includes(val)).map(g => ldapUtils.createLdapGroupEntry({ name: g.name, gid_number: g.gid_number, member_uids: g.member_uids }, baseDn));
+      if (val && val !== '*') return groups.filter(g => (g.member_uids||[]).includes(val));
       return [];
     }
     if (filter.includes('(gidNumber=')) {
       const m = filter.match(/\(gidNumber=([^\)]+)\)/);
       const val = m ? m[1] : null;
-      if (val && val !== '*') return groups.filter(g => String(g.gid_number) === String(val)).map(g => ldapUtils.createLdapGroupEntry({ name: g.name, gid_number: g.gid_number, member_uids: g.member_uids }, baseDn));
-      return groups.map(g => ldapUtils.createLdapGroupEntry({ name: g.name, gid_number: g.gid_number, member_uids: g.member_uids }, baseDn));
+      if (val && val !== '*') return groups.filter(g => String(g.gid_number) === String(val));
+      return groups;
     }
-    return groups.map(g => ldapUtils.createLdapGroupEntry({ name: g.name, gid_number: g.gid_number, member_uids: g.member_uids }, baseDn));
+    return groups;
   }
-  async getAllGroups() { return groups.map(g => ldapUtils.createLdapGroupEntry({ name: g.name, gid_number: g.gid_number, member_uids: g.member_uids }, baseDn)); }
+  async getAllGroups() { return groups; }
 }
 
 const createClient = () => ldap.createClient({ url: `ldap://127.0.0.1:${port}` });

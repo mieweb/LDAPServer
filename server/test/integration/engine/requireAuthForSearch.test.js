@@ -16,12 +16,12 @@ class MockDirectoryProvider extends DirectoryProvider {
   initialize() {}
   async findUser(username) {
     if (username === 'alice') {
-      return { username: 'alice', firstname: 'Alice', lastname: 'Tester', uidNumber: '10001', gidNumber: '100', email: 'alice@example.com' };
+      return { username: 'alice', firstname: 'Alice', lastname: 'Tester', uid_number: 10001, gid_number: 100, email: 'alice@example.com' };
     }
     return null;
   }
   async getAllUsers() {
-    return [ { username: 'alice', firstname: 'Alice', lastname: 'Tester', uidNumber: '10001', gidNumber: '100', email: 'alice@example.com' } ];
+    return [ { username: 'alice', firstname: 'Alice', lastname: 'Tester', uid_number: 10001, gid_number: 100, email: 'alice@example.com' } ];
   }
   async getAllGroups() { return []; }
   async findGroups() { return []; }
