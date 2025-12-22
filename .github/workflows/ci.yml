@@ -73,6 +73,12 @@ jobs:
       - name: Install dependencies (force fresh install)
         run: npm ci
 
+      - name: Build core package
+        run: npm run build:core
+
+      - name: Build server package
+        run: npm run build:server
+
       - name: Run MySQL integration tests
         run: npm run test:db:mysql -w server
 
@@ -92,6 +98,12 @@ jobs:
       - name: Install dependencies (force fresh install)
         run: npm ci
 
+      - name: Build core package
+        run: npm run build:core
+
+      - name: Build server package
+        run: npm run build:server
+
       - name: Run PostgreSQL integration tests
         run: npm run test:db:postgres -w server
 
@@ -110,6 +122,12 @@ jobs:
 
       - name: Install dependencies (force fresh install)
         run: npm ci
+
+      - name: Build core package
+        run: npm run build:core
+
+      - name: Build server package
+        run: npm run build:server
 
       - name: Run MongoDB integration tests
         run: npm run test:db:mongodb -w server
