@@ -74,17 +74,44 @@ describe('ldapUtils', () => {
       expect(entry.attributes.gidNumber).toBe(0);
     });
     
-    test('should handle null/undefined UID/GID numbers', () => {
+    test('should throw error when uid_number is null', () => {
       const user = {
         username: 'nouid',
         uid_number: null,
-        gid_number: undefined
+        gid_number: 1000
       };
       
-      const entry = createLdapEntry(user, baseDN);
+      expect(() => createLdapEntry(user, baseDN)).toThrow('uid_number is required for user nouid');
+    });
+    
+    test('should throw error when uid_number is undefined', () => {
+      const user = {
+        username: 'nouid',
+        gid_number: 1000
+        // uid_number not provided
+      };
       
-      expect(entry.attributes.uidNumber).toBeNull();
-      expect(entry.attributes.uidNumber).toBeNull(); // gidNumber uses uid_number when not provided
+      expect(() => createLdapEntry(user, baseDN)).toThrow('uid_number is required for user nouid');
+    });
+    
+    test('should throw error when gid_number is null', () => {
+      const user = {
+        username: 'nogid',
+        uid_number: 1000,
+        gid_number: null
+      };
+      
+      expect(() => createLdapEntry(user, baseDN)).toThrow('gid_number is required for user nogid');
+    });
+    
+    test('should throw error when gid_number is undefined', () => {
+      const user = {
+        username: 'nogid',
+        uid_number: 1000
+        // gid_number not provided
+      };
+      
+      expect(() => createLdapEntry(user, baseDN)).toThrow('gid_number is required for user nogid');
     });
     
     test('should work with all test fixture users', () => {

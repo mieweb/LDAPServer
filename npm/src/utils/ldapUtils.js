@@ -42,8 +42,17 @@ function generateFullName(user) {
  * @param {LdapUser} user - User object from directory provider
  * @param {string} baseDn - Base DN for the LDAP directory
  * @returns {Object} LDAP entry object
+ * @throws {Error} If uid_number or gid_number is missing
  */
 function createLdapEntry(user, baseDn) {
+  // Validate required numeric identifiers
+  if (user.uid_number === null || user.uid_number === undefined) {
+    throw new Error(`uid_number is required for user ${user.username}`);
+  }
+  if (user.gid_number === null || user.gid_number === undefined) {
+    throw new Error(`gid_number is required for user ${user.username}`);
+  }
+
   const fullName = generateFullName(user);
 
   // mandatory and generated attributes
@@ -53,7 +62,7 @@ function createLdapEntry(user, baseDn) {
       objectClass: ["top", "posixAccount", "inetOrgPerson"],
       uid: user.username,
       uidNumber: user.uid_number,
-      gidNumber: user.gid_number ?? user.uid_number,
+      gidNumber: user.gid_number,
       cn: fullName || user.username,  // required attribute
       mail: user.mail || `${user.username}@${extractDomainFromBaseDn(baseDn)}`,
       homeDirectory: user.home_directory || `/home/${user.username}`,
