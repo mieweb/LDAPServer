@@ -20,6 +20,10 @@
     "dev": "npm run dev -w server",
     "start": "npm run start -w server"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "mysql2": "^3.2.0",
+    "pg": "8.16.3",
+    "sqlite3": "5.1.7"
+  },
   "description": "LDAP Gateway - Monorepo with reusable core and standalone server"
 }

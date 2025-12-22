@@ -11,7 +11,9 @@ const { MongoClient } = require('mongodb');
 const TestServer = require('../../utils/testServer');
 const LdapTestClient = require('../../utils/ldapClient');
 const mockLogger = require('../../utils/mockLogger');
-const { loadCommonUsers, loadCommonGroups } = require('../../utils/dataLoader');
+
+const RUN = process.env.RUN_DB_TESTS === '1';
+const maybeDescribe = RUN ? describe : describe.skip;
 
 // Test data and config
 const baseDN = 'dc=example,dc=com';
@@ -27,7 +29,7 @@ const mongoConfig = {
   database: 'ldap_test_auth_db'
 };
 
-describe('MongoDB Auth Backend - Acceptance Tests', () => {
+maybeDescribe('MongoDB Auth Backend - Acceptance Tests', () => {
   let server;
   let client;
   let authProvider;
@@ -157,6 +159,12 @@ describe('MongoDB Auth Backend - Acceptance Tests', () => {
     }
     if (server) {
       await server.stop();
+    }
+    if (authProvider) {
+      await authProvider.cleanup();
+    }
+    if (directoryProvider) {
+      await directoryProvider.cleanup();
     }
     
     // Clean up test database

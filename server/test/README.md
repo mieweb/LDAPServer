@@ -49,22 +49,46 @@ server/test/
 ```
 integration/
 ├── auth/                   # Authentication provider tests
-│   ├── sql.auth.test.js
+│   ├── sqlite.auth.test.js
+│   ├── mysql.auth.test.js
+│   ├── postgres.auth.test.js
 │   ├── mongodb.auth.test.js
 │   └── proxmox.auth.test.js
 ├── directory/              # Directory provider tests
-│   ├── sql.directory.test.js
+│   ├── sqlite.directory.test.js
+│   ├── mysql.directory.test.js
+│   ├── postgres.directory.test.js
 │   └── mongodb.directory.test.js
 ├── engine/                 # LDAP engine integration tests
-└── security/               # Security and TLS tests
+├── security/               # Security and TLS tests
+├── sql/                    # MySQL and PostgreSQL Docker runners
+│   ├── docker-compose.mysql.yml
+│   ├── docker-compose.postgres.yml
+│   ├── run-mysql.sh
+│   └── run-postgres.sh
+└── mongodb/                # MongoDB Docker runner
+    ├── docker-compose.mongodb.yml
+    └── run-mongodb.sh
 ```
 
 **Examples**:
-- Testing MySQL auth provider connects and validates credentials
+- Testing SQLite/MySQL/PostgreSQL auth providers with real databases
 - Testing MongoDB directory provider queries users and groups
 - Testing Proxmox file parsing and authentication
 
-**Run**: `npm run test:integration`
+**Database Integration Tests**:
+- **SQLite**: In-memory database, runs without Docker
+- **MySQL**: Dockerized MySQL 8.0 (port 23306)
+- **PostgreSQL**: Dockerized PostgreSQL 16 (port 25432)
+- **MongoDB**: Dockerized MongoDB 7.0 (port 27017)
+
+**Run**:
+```bash
+npm run test:integration          # All integration tests
+npm run test:db:mysql            # MySQL only (with Docker)
+npm run test:db:postgres         # PostgreSQL only (with Docker)
+npm run test:db:mongodb          # MongoDB only (with Docker)
+```
 
 ---
 
@@ -130,6 +154,11 @@ npm test -- test/unit
 # Run integration tests
 npm run test:integration
 
+# Run database integration tests with Docker
+npm run test:db:mysql
+npm run test:db:postgres
+npm run test:db:mongodb
+
 # Run security tests
 npm run test:security
 
@@ -150,7 +179,7 @@ Tests use environment variables for configuration:
 ```bash
 # Database connections
 SQL_URI=mysql://user:pass@localhost:3306/testdb
-MONGODB_URI=mongodb://localhost:27017/testdb
+MONGO_TEST_URI=mongodb://localhost:27017
 
 # LDAP configuration
 LDAP_BASE_DN=dc=test,dc=base

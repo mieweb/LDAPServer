@@ -452,13 +452,17 @@ npm run test:unit           # Fast, isolated unit tests
 npm run test:integration    # Integration tests with real backends
 npm run test:e2e            # End-to-end tests with SSSD client
 
+# Run database integration tests with Docker
+npm run test:db:mysql       # MySQL integration tests
+npm run test:db:postgres    # PostgreSQL integration tests
+npm run test:db:mongodb     # MongoDB integration tests
 ```
 
 ### Test Organization
 
-- **Unit Tests** : Fast, isolated tests with mocked dependencies
-- **Integration Tests** : Tests with real backends (MySQL, MongoDB, Proxmox)
-- **E2E Tests** : Full system tests with real LDAP clients (SSSD, SSH)
+- **Unit Tests**: Fast, isolated tests with mocked dependencies
+- **Integration Tests**: Tests with real backends (SQLite, MySQL, PostgreSQL, MongoDB, Proxmox)
+- **E2E Tests**: Full system tests with real LDAP clients (SSSD, SSH)
 
 See [server/test/README.md](server/test/README.md) for detailed documentation.
 

@@ -22,6 +22,9 @@ const {
   testPorts 
 } = require('../../fixtures/testData');
 
+const RUN = process.env.RUN_DB_TESTS === '1';
+const maybeDescribe = RUN ? describe : describe.skip;
+
 // Import backends
 const { provider: MongoDBDirectoryProvider } = require('../../../backends/mongodb.directory');
 const { MockAuthProvider } = require('../../../../npm/test/fixtures/mockProviders');
@@ -32,7 +35,7 @@ const mongoConfig = {
   database: 'ldap_test_directory_db'
 };
 
-describe('MongoDB Directory Backend - Acceptance Tests', () => {
+maybeDescribe('MongoDB Directory Backend - Acceptance Tests', () => {
   let server;
   let client;
   let directoryProvider;
