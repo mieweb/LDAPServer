@@ -15,6 +15,9 @@ until docker compose -f docker-compose.mysql.yml ps | grep -q "healthy"; do
   sleep 1
 done
 
+echo "MySQL is healthy, waiting additional 2 seconds for full readiness..."
+sleep 2
+
 export RUN_DB_TESTS=1
 export SQL_URI="mysql://testuser:testpass@127.0.0.1:23306/testdb"
 

@@ -15,6 +15,9 @@ until docker compose -f docker-compose.mongodb.yml ps | grep -q "healthy"; do
   sleep 1
 done
 
+echo "MongoDB is healthy, waiting additional 2 seconds for full readiness..."
+sleep 2
+
 export RUN_DB_TESTS=1
 export MONGO_TEST_URI="mongodb://127.0.0.1:27017"
 
