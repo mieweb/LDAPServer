@@ -1,16 +1,12 @@
-/**
- * Database Seeder for Integration Tests
- * 
- * Seeds test databases with users and groups
- * Supports MySQL, SQLite, and MongoDB
- */
+// Database Seeder for Integration Tests
+// 
+// Seeds test databases with users and groups
+// Supports MySQL, SQLite, and MongoDB
 
 const { loadCommonUsers, loadCommonGroups } = require('./dataLoader');
 const bcrypt = require('bcrypt');
 
-/**
- * SQLite Database Seeder
- */
+// SQLite Database Seeder
 class SQLiteSeeder {
   constructor(db) {
     this.db = db;
@@ -91,9 +87,7 @@ class SQLiteSeeder {
   }
 }
 
-/**
- * MySQL Database Seeder
- */
+// MySQL Database Seeder
 class MySQLSeeder {
   constructor(connection) {
     this.connection = connection;
@@ -188,9 +182,7 @@ class MySQLSeeder {
   }
 }
 
-/**
- * MongoDB Database Seeder
- */
+// MongoDB Database Seeder
 class MongoDBSeeder {
   constructor(db) {
     this.db = db;

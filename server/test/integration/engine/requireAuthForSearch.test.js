@@ -28,9 +28,7 @@ class MockDirectoryProvider extends DirectoryProvider {
   async cleanup() {}
 }
 
-/**
- * Tests for REQUIRE_AUTH_FOR_SEARCH behavior at the engine level
- */
+// Tests for REQUIRE_AUTH_FOR_SEARCH behavior at the engine level
 jest.setTimeout(20000);
 
 describe('LdapEngine - REQUIRE_AUTH_FOR_SEARCH behavior', () => {

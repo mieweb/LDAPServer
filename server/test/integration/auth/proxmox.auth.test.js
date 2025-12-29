@@ -1,11 +1,9 @@
-/**
- * Integration Tests: Proxmox Auth Backend
- * 
- * Tests acceptance criteria for Proxmox authentication provider:
- * 1. Bind with valid credentials → success
- * 2. Bind with invalid credentials → fail
- * 3. Bind with non-existent user → fail
- */
+// Integration Tests: Proxmox Auth Backend
+// 
+// Tests acceptance criteria for Proxmox authentication provider:
+// 1. Bind with valid credentials → success
+// 2. Bind with invalid credentials → fail
+// 3. Bind with non-existent user → fail
 
 const fs = require('fs');
 const path = require('path');

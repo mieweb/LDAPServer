@@ -1,50 +1,33 @@
-/**
- * Shared Test Fixtures for Server Integration Tests
- * 
- * Database-compatible test data for SQL/MongoDB/Proxmox backends
- * 
- * NOTE: User and group data now loaded from centralized test/data/ directory
- * This file now only contains test utilities, filters, and configuration
- */
+// Shared Test Fixtures for Server Integration Tests
+// 
+// Database-compatible test data for SQL/MongoDB/Proxmox backends
 
 const { loadCommonUsers, loadCommonGroups } = require('../utils/dataLoader');
 
-/**
- * Test users for database seeding
- * Loaded from test/data/common.users.json
- */
+// Test users for database seeding
+// Loaded from test/data/common.users.json
 const testUsers = loadCommonUsers();
 
-/**
- * Test groups for database seeding
- * Loaded from test/data/common.groups.json
- */
+// Test groups for database seeding
+// Loaded from test/data/common.groups.json
 const testGroups = loadCommonGroups();
 
-/**
- * Base DN for tests
- */
+// Base DN for tests
 const baseDN = 'dc=example,dc=com';
 const usersDN = `ou=users,${baseDN}`;
 const groupsDN = `ou=groups,${baseDN}`;
 
-/**
- * Generate full DN for a user
- */
+// Generate full DN for a user
 function getUserDN(username) {
   return `uid=${username},${usersDN}`;
 }
 
-/**
- * Generate full DN for a group
- */
+// Generate full DN for a group
 function getGroupDN(groupname) {
   return `cn=${groupname},${groupsDN}`;
 }
 
-/**
- * Test LDAP filters (acceptance criteria)
- */
+// Test LDAP filters (acceptance criteria)
 const acceptanceFilters = {
   // Directory backend tests
   allObjects: '(objectClass=*)',
@@ -62,9 +45,7 @@ const acceptanceFilters = {
   compoundGroup: (groupname) => `(&(objectClass=posixGroup)(cn=${groupname}))`
 };
 
-/**
- * Expected LDAP attributes for validation
- */
+// Expected LDAP attributes for validation
 const expectedUserAttributes = [
   'objectClass',
   'uid',
@@ -85,9 +66,7 @@ const expectedGroupAttributes = [
   'memberUid'
 ];
 
-/**
- * Test server ports (to avoid conflicts)
- */
+// Test server ports (to avoid conflicts)
 const testPorts = {
   sql: 3890,
   mongodb: 3891,

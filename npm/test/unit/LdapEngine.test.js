@@ -1,8 +1,6 @@
-/**
- * Unit Tests for LdapEngine.js
- * 
- * Tests the core LDAP server engine with mocked providers
- */
+// Unit Tests for LdapEngine.js
+// 
+// Tests the core LDAP server engine with mocked providers
 
 const LdapEngine = require('../../src/LdapEngine');
 const { MockAuthProvider, MockDirectoryProvider } = require('../fixtures/mockProviders');

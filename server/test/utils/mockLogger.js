@@ -1,6 +1,4 @@
-/**
- * Mock logger for tests to avoid console noise
- */
+// Mock logger for tests to avoid console noise
 
 const mockLogger = {
   info: jest.fn(),

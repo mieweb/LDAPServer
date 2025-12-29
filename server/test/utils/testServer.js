@@ -1,9 +1,7 @@
-/**
- * Test Server Utility
- * 
- * Helper to start/stop LDAP server with test configuration
- * Manages server lifecycle for integration tests
- */
+// Test Server Utility
+// 
+// Helper to start/stop LDAP server with test configuration
+// Manages server lifecycle for integration tests
 
 const { LdapEngine } = require('@ldap-gateway/core');
 
@@ -29,9 +27,7 @@ class TestServer {
     this.events = [];
   }
 
-  /**
-   * Start the LDAP server
-   */
+  // Start the LDAP server
   async start() {
     if (this.engine) {
       throw new Error('Server already started');
@@ -66,9 +62,7 @@ class TestServer {
     await new Promise(resolve => setTimeout(resolve, 100));
   }
 
-  /**
-   * Stop the LDAP server
-   */
+  // Stop the LDAP server
   async stop() {
     if (!this.engine) {
       return;
@@ -81,17 +75,13 @@ class TestServer {
     await new Promise(resolve => setTimeout(resolve, 100));
   }
 
-  /**
-   * Get server URL
-   */
+  // Get server URL
   getUrl() {
     const protocol = this.certificate ? 'ldaps' : 'ldap';
     return `${protocol}://127.0.0.1:${this.port}`;
   }
 
-  /**
-   * Get captured events
-   */
+  // Get captured events
   getEvents(type = null) {
     if (type) {
       return this.events.filter(e => e.type === type);
@@ -99,16 +89,12 @@ class TestServer {
     return this.events;
   }
 
-  /**
-   * Clear captured events
-   */
+  // Clear captured events
   clearEvents() {
     this.events = [];
   }
 
-  /**
-   * Check if server is running
-   */
+  // Check if server is running
   isRunning() {
     return this.engine !== null;
   }

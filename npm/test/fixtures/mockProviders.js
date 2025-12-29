@@ -1,18 +1,14 @@
-/**
- * Mock Providers for Testing
- * 
- * Reusable mock implementations of AuthProvider and DirectoryProvider
- * Used by LdapEngine tests and future integration tests
- */
+// Mock Providers for Testing
+// 
+// Reusable mock implementations of AuthProvider and DirectoryProvider
+// Used by LdapEngine tests and future integration tests
 
 const AuthProvider = require('../../src/AuthProvider');
 const DirectoryProvider = require('../../src/DirectoryProvider');
 const { testUsers, testGroups } = require('./testData');
 
-/**
- * Mock Authentication Provider
- * Simple implementation for testing auth flows
- */
+// Mock Authentication Provider
+// Simple implementation for testing auth flows
 class MockAuthProvider extends AuthProvider {
   constructor(options = {}) {
     super();
@@ -61,10 +57,8 @@ class MockAuthProvider extends AuthProvider {
   }
 }
 
-/**
- * Mock Directory Provider
- * Simple implementation for testing directory lookups
- */
+// Mock Directory Provider
+// Simple implementation for testing directory lookups
 class MockDirectoryProvider extends DirectoryProvider {
   constructor(options = {}) {
     super();
@@ -162,10 +156,8 @@ class MockDirectoryProvider extends DirectoryProvider {
   }
 }
 
-/**
- * Mock Notification Auth Provider (for MFA testing)
- * Always succeeds if notification succeeds, regardless of password
- */
+// Mock Notification Auth Provider (for MFA testing)
+// Always succeeds if notification succeeds, regardless of password
 class MockNotificationAuthProvider extends AuthProvider {
   constructor(options = {}) {
     super();

@@ -1,9 +1,7 @@
-/**
- * Data Loader Utility for Test Data
- * 
- * Loads test data from centralized test/data/ directory
- * Supports JSON, SQL, and text file formats
- */
+// Data Loader Utility for Test Data
+// 
+// Loads test data from centralized test/data/ directory
+// Supports JSON, SQL, and text file formats
 
 const fs = require('fs');
 const path = require('path');

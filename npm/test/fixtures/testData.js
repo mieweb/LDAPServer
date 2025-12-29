@@ -1,13 +1,9 @@
-/**
- * Shared Test Fixtures
- * 
- * Single source of truth for test data across all tests (DRY principle)
- * Used by both npm unit tests and server integration tests
- */
+// Shared Test Fixtures
+// 
+// Single source of truth for test data across all tests (DRY principle)
+// Used by both npm unit tests and server integration tests
 
-/**
- * Standard test users
- */
+// Standard test users
 const testUsers = [
   {
     username: 'testuser',
@@ -45,9 +41,7 @@ const testUsers = [
   }
 ];
 
-/**
- * Standard test groups
- */
+// Standard test groups
 const testGroups = [
   {
     cn: 'users',
@@ -69,30 +63,22 @@ const testGroups = [
   }
 ];
 
-/**
- * Base DN for tests
- */
+// Base DN for tests
 const baseDN = 'dc=example,dc=com';
 const usersDN = `ou=users,${baseDN}`;
 const groupsDN = `ou=groups,${baseDN}`;
 
-/**
- * Generate LDAP DN for a user
- */
+// Generate LDAP DN for a user
 function getUserDN(username) {
   return `uid=${username},${usersDN}`;
 }
 
-/**
- * Generate LDAP DN for a group
- */
+// Generate LDAP DN for a group
 function getGroupDN(groupname) {
   return `cn=${groupname},${groupsDN}`;
 }
 
-/**
- * Create a mock LDAP user entry (following posixAccount schema)
- */
+// Create a mock LDAP user entry (following posixAccount schema)
 function createMockUserEntry(user) {
   return {
     dn: getUserDN(user.username),
@@ -112,9 +98,7 @@ function createMockUserEntry(user) {
   };
 }
 
-/**
- * Create a mock LDAP group entry (following posixGroup schema)
- */
+// Create a mock LDAP group entry (following posixGroup schema)
 function createMockGroupEntry(group) {
   return {
     dn: getGroupDN(group.cn),
@@ -128,13 +112,11 @@ function createMockGroupEntry(group) {
   };
 }
 
-/**
- * Common LDAP filters for testing
- * 
- * NOTE: Follows LDAP standards where cn= is ambiguous:
- * - (cn=value) searches ALL entries (users have cn=common name, groups have cn=group name)
- * - To search ONLY groups, use: (&(objectClass=posixGroup)(cn=value))
- */
+// Common LDAP filters for testing
+// 
+// NOTE: Follows LDAP standards where cn= is ambiguous:
+// - (cn=value) searches ALL entries (users have cn=common name, groups have cn=group name)
+// - To search ONLY groups, use: (&(objectClass=posixGroup)(cn=value))
 const testFilters = {
   allObjects: '(objectClass=*)',
   allUsers: '(objectClass=posixAccount)',
@@ -147,9 +129,7 @@ const testFilters = {
   complexOr: '(|(uid=testuser)(uid=admin))'
 };
 
-/**
- * Test LDAP server configuration
- */
+// Test LDAP server configuration
 const testServerConfig = {
   port: 3890, // Non-standard port to avoid conflicts
   bindDN: 'cn=admin,dc=example,dc=com',

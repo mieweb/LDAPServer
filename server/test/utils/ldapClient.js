@@ -1,9 +1,7 @@
-/**
- * LDAP Client Test Utility
- * 
- * Wrapper around ldapjs client for testing LDAP operations
- * Provides promise-based API and automatic cleanup
- */
+// LDAP Client Test Utility
+// 
+// Wrapper around ldapjs client for testing LDAP operations
+// Provides promise-based API and automatic cleanup
 
 const ldap = require('ldapjs');
 
@@ -15,9 +13,7 @@ class LdapTestClient {
     this.bound = false;
   }
 
-  /**
-   * Connect to LDAP server
-   */
+  // Connect to LDAP server
   async connect() {
     return new Promise((resolve, reject) => {
       this.client = ldap.createClient({
@@ -124,9 +120,7 @@ class LdapTestClient {
     });
   }
 
-  /**
-   * Unbind and disconnect from LDAP server
-   */
+  // Unbind and disconnect from LDAP server
   async unbind() {
     if (!this.client) {
       return;
@@ -142,16 +136,12 @@ class LdapTestClient {
     });
   }
 
-  /**
-   * Check if client is bound (authenticated)
-   */
+  // Check if client is bound (authenticated)
   isBound() {
     return this.bound;
   }
 
-  /**
-   * Destroy client connection (for cleanup)
-   */
+  // Destroy client connection (for cleanup)
   async destroy() {
     if (this.client) {
       try {

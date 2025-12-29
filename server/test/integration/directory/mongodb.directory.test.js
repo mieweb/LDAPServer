@@ -1,16 +1,14 @@
-/**
- * Integration Tests: MongoDB Directory Backend
- * 
- * Tests acceptance criteria for MongoDB directory provider:
- * a. (objectClass=*) all object filter
- * b. (objectClass=posixAccount) all users filter
- * c. (objectClass=posixGroup) all group filter
- * d. (uid=username) specific user
- * e. (cn=groupname) specific group
- * f. (cn=*) all groups filter
- * g. (memberUid=username) groups containing specific user
- * h. (gidNumber=123) groups by GID
- */
+// Integration Tests: MongoDB Directory Backend
+// 
+// Tests acceptance criteria for MongoDB directory provider:
+// a. (objectClass=*) all object filter
+// b. (objectClass=posixAccount) all users filter
+// c. (objectClass=posixGroup) all group filter
+// d. (uid=username) specific user
+// e. (cn=groupname) specific group
+// f. (cn=*) all groups filter
+// g. (memberUid=username) groups containing specific user
+// h. (gidNumber=123) groups by GID
 
 const { MongoClient } = require('mongodb');
 const TestServer = require('../../utils/testServer');

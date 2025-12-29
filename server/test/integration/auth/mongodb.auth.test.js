@@ -1,11 +1,9 @@
-/**
- * Integration Tests: MongoDB Auth Backend
- * 
- * Tests acceptance criteria for MongoDB authentication provider:
- * 1. Bind with valid credentials → success
- * 2. Bind with invalid credentials → fail
- * 3. Bind with non-existent user → fail
- */
+// Integration Tests: MongoDB Auth Backend
+// 
+// Tests acceptance criteria for MongoDB authentication provider:
+// 1. Bind with valid credentials → success
+// 2. Bind with invalid credentials → fail
+// 3. Bind with non-existent user → fail
 
 const { MongoClient } = require('mongodb');
 const TestServer = require('../../utils/testServer');

@@ -1,8 +1,6 @@
-/**
- * Unit Tests for filterUtils.js
- * 
- * Tests LDAP filter parsing and request analysis utilities
- */
+// Unit Tests for filterUtils.js
+// 
+// Tests LDAP filter parsing and request analysis utilities
 
 const {
   extractCredentials,

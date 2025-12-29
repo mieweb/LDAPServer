@@ -1,8 +1,6 @@
-/**
- * Backend Loader Tests
- * 
- * Tests for dynamic backend loading functionality
- */
+// Backend Loader Tests
+// 
+// Tests for dynamic backend loading functionality
 
 const assert = require('assert');
 const path = require('path');

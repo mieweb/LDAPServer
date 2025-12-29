@@ -1,14 +1,12 @@
-/**
- * Integration Tests: Proxmox Directory Backend
- * 
- * Tests acceptance criteria for Proxmox directory provider:
- * a. (objectClass=*) all object filter
- * b. (objectClass=posixAccount) all users filter
- * c. (objectClass=posixGroup) all group filter
- * d. (uid=username) specific user
- * e. (cn=groupname) specific group
- * f. (cn=*) all groups filter
- */
+// Integration Tests: Proxmox Directory Backend
+// 
+// Tests acceptance criteria for Proxmox directory provider:
+// a. (objectClass=*) all object filter
+// b. (objectClass=posixAccount) all users filter
+// c. (objectClass=posixGroup) all group filter
+// d. (uid=username) specific user
+// e. (cn=groupname) specific group
+// f. (cn=*) all groups filter
 
 const fs = require('fs');
 const path = require('path');

@@ -1,8 +1,6 @@
-/**
- * Unit Tests for ldapUtils.js
- * 
- * Tests LDAP entry creation utilities without external dependencies
- */
+// Unit Tests for ldapUtils.js
+// 
+// Tests LDAP entry creation utilities without external dependencies
 
 const {
   createLdapEntry,

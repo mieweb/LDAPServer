@@ -1,8 +1,6 @@
-/**
- * Jest Setup for Server Integration Tests
- * 
- * Runs before each test file
- */
+// Jest Setup for Server Integration Tests
+// 
+// Runs before each test file
 
 // Increase timeout for integration tests
 jest.setTimeout(30000);
