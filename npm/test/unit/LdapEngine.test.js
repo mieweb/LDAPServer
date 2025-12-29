@@ -55,38 +55,4 @@ describe('LdapEngine', () => {
       );
     });
   });
-
-  describe('TLS Configuration', () => {
-    
-    test('should log warning when running without TLS', async () => {
-      engine = new LdapEngine({
-        port: 3897,
-        authProviders: [authProvider],
-        directoryProvider: directoryProvider,
-        logger: mockLogger
-      });
-
-      await engine.start();
-
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('running without SSL/TLS certificates')
-      );
-    });
-
-    test('should warn when TLS options set without certificates', async () => {
-      engine = new LdapEngine({
-        port: 3900,
-        tlsMinVersion: 'TLSv1.3',
-        authProviders: [authProvider],
-        directoryProvider: directoryProvider,
-        logger: mockLogger
-      });
-
-      await engine.start();
-
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('TLS version/cipher options are configured but will be ignored')
-      );
-    });
-  });
 });

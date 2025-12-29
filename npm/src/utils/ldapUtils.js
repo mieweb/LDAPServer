@@ -13,6 +13,7 @@
  * @property {string} [full_name] - User's full name
  * @property {string} [mail] - User's email address
  * @property {string} [home_directory] - User's home directory
+ * @property {string} [login_shell] - User's login shell (e.g. "/bin/bash")
  */
 
 /**
