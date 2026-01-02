@@ -232,8 +232,104 @@ class MongoDBSeeder {
   }
 }
 
+// PostgreSQL Database Seeder
+class PostgreSQLSeeder {
+  constructor(client) {
+    this.client = client;
+  }
+
+  async seed() {
+    // Create users table
+    await this.client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        uid_number INT NOT NULL,
+        gid_number INT NOT NULL,
+        full_name TEXT,
+        surname TEXT,
+        given_name TEXT,
+        mail TEXT,
+        home_directory TEXT,
+        login_shell TEXT,
+        enabled BOOLEAN DEFAULT TRUE
+      )
+    `);
+
+    // Create groups table
+    await this.client.query(`
+      CREATE TABLE IF NOT EXISTS groups (
+        id SERIAL PRIMARY KEY,
+        cn TEXT UNIQUE NOT NULL,
+        gid_number INT NOT NULL,
+        description TEXT,
+        member_uids JSONB
+      )
+    `);
+
+    // Load test data from centralized data files
+    const testUsers = loadCommonUsers();
+    const testGroups = loadCommonGroups();
+
+    // Clear existing data
+    await this.client.query('DELETE FROM users');
+    await this.client.query('DELETE FROM groups');
+
+    // Insert users
+    for (const user of testUsers) {
+      const hash = await bcrypt.hash(user.password, 10);
+      await this.client.query(`
+        INSERT INTO users 
+        (username, password_hash, uid_number, gid_number, full_name, surname, given_name, mail, home_directory, login_shell, enabled)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ON CONFLICT (username) DO UPDATE SET
+        password_hash = EXCLUDED.password_hash,
+        uid_number = EXCLUDED.uid_number,
+        gid_number = EXCLUDED.gid_number
+      `, [
+        user.username,
+        hash,
+        user.uid_number,
+        user.gid_number,
+        user.full_name,
+        user.surname,
+        user.given_name,
+        user.mail,
+        user.home_directory,
+        user.login_shell,
+        user.enabled
+      ]);
+    }
+
+    // Insert groups
+    for (const group of testGroups) {
+      await this.client.query(`
+        INSERT INTO groups
+        (cn, gid_number, description, member_uids)
+        VALUES ($1, $2, $3, $4::jsonb)
+        ON CONFLICT (cn) DO UPDATE SET
+        gid_number = EXCLUDED.gid_number,
+        description = EXCLUDED.description,
+        member_uids = EXCLUDED.member_uids
+      `, [
+        group.cn,
+        group.gid_number,
+        group.description,
+        JSON.stringify(group.member_uids)
+      ]);
+    }
+  }
+
+  async clean() {
+    await this.client.query('DELETE FROM users');
+    await this.client.query('DELETE FROM groups');
+  }
+}
+
 module.exports = {
   SQLiteSeeder,
   MySQLSeeder,
-  MongoDBSeeder
+  MongoDBSeeder,
+  PostgreSQLSeeder
 };

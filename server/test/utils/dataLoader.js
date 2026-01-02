@@ -65,38 +65,6 @@ function loadCommonGroups() {
 }
 
 /**
- * Load SQL authentication data
- * @returns {string} SQL script content
- */
-function loadSQLAuthData() {
-  return loadSQL('auth.sql.sql');
-}
-
-/**
- * Load SQL directory data
- * @returns {string} SQL script content
- */
-function loadSQLDirectoryData() {
-  return loadSQL('directory.sql.sql');
-}
-
-/**
- * Load MongoDB authentication data
- * @returns {Object} MongoDB data with users array
- */
-function loadMongoDBAuthData() {
-  return loadJSON('auth.mongodb.json');
-}
-
-/**
- * Load MongoDB directory data
- * @returns {Object} MongoDB data with users and groups arrays
- */
-function loadMongoDBDirectoryData() {
-  return loadJSON('directory.mongodb.json');
-}
-
-/**
  * Load Proxmox user.cfg data
  * @returns {string} User configuration content
  */
@@ -113,28 +81,15 @@ function loadProxmoxShadowData() {
 }
 
 /**
- * Load SQLite directory data
- * @returns {string} SQL script content
- */
-function loadSQLiteDirectoryData() {
-  return loadSQL('directory.sqlite.sql');
-}
-
-/**
  * Get test data for specific backend and purpose
- * @param {string} backend - Backend type ('sql', 'mongodb', 'proxmox', 'sqlite')
+ * @param {string} backend - Backend type ('proxmox')
  * @param {string} purpose - Purpose ('auth', 'directory')
  * @returns {any} Test data in appropriate format
  */
 function getTestData(backend, purpose) {
   const loaderMap = {
-    'sql.auth': loadSQLAuthData,
-    'sql.directory': loadSQLDirectoryData,
-    'mongodb.auth': loadMongoDBAuthData,
-    'mongodb.directory': loadMongoDBDirectoryData,
     'proxmox.auth': loadProxmoxShadowData,
     'proxmox.directory': loadProxmoxUserData,
-    'sqlite.directory': loadSQLiteDirectoryData,
   };
 
   const key = `${backend}.${purpose}`;
@@ -161,13 +116,8 @@ module.exports = {
   loadText,
   loadCommonUsers,
   loadCommonGroups,
-  loadSQLAuthData,
-  loadSQLDirectoryData,
-  loadMongoDBAuthData,
-  loadMongoDBDirectoryData,
   loadProxmoxUserData,
   loadProxmoxShadowData,
-  loadSQLiteDirectoryData,
   getTestData,
   listDataFiles,
   DATA_DIR

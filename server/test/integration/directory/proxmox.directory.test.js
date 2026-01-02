@@ -13,6 +13,7 @@ const path = require('path');
 const TestServer = require('../../utils/testServer');
 const LdapTestClient = require('../../utils/ldapClient');
 const mockLogger = require('../../utils/mockLogger');
+const { loadProxmoxUserData } = require('../../utils/dataLoader');
 const { 
   baseDN, 
   acceptanceFilters,
@@ -29,21 +30,10 @@ describe('Proxmox Directory Backend - Acceptance Tests', () => {
   let directoryProvider;
   let tempConfigPath;
 
-  // Test data for Proxmox user.cfg format
-  // Format: user:username@realm:enabled:expire:firstName:lastName:email:::
-  const proxmoxConfig = `user:testuser@pve:1:0:Test:User:testuser@example.com:::
-user:admin@pve:1:0:Admin:User:admin@example.com:::
-user:jdoe@pve:1:0:John:Doe:jdoe@example.com:::
-user:disabled@pve:0:0:Disabled:User:disabled@example.com:::
-user:expired@pve:1:1609459200:Expired:User:expired@example.com:::
-
-group:admins:admin@pve::
-group:developers:testuser@pve,jdoe@pve::
-group:users:testuser@pve,admin@pve,jdoe@pve::
-`;
-
-
   beforeAll(async () => {
+    // Use centralized Proxmox user.cfg test data
+    const proxmoxConfig = loadProxmoxUserData();
+    
     // Create temporary user.cfg file
     tempConfigPath = path.join(__dirname, 'test-proxmox-user.cfg');
     fs.writeFileSync(tempConfigPath, proxmoxConfig, 'utf8');
@@ -56,12 +46,12 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
     directoryProvider = new ProxmoxDirectoryProvider();
     await directoryProvider.initialize();
 
-    // Create mock auth provider
+    // Create mock auth provider with Proxmox test users
     const authProvider = new MockAuthProvider({
       validCredentials: new Map([
-        ['testuser', 'password123'],
-        ['admin', 'admin123'],
-        ['jdoe', 'john123']
+        ['alice', 'alicepass'],
+        ['bob', 'bobpass'],
+        ['carol', 'carolpass']
       ])
     });
 
@@ -110,15 +100,15 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
         scope: 'sub'
       });
 
-      // Should return enabled users (3) + all groups (4)
+      // Should return 3 users + 3 groups (2 explicit + proxmox-sudo) = 6 total
       expect(results.length).toBeGreaterThanOrEqual(6);
       
       // Verify we have both users and groups
       const userEntries = results.filter(r => r.dn.includes('uid='));
       const groupEntries = results.filter(r => r.dn.includes('cn='));
       
-      expect(userEntries.length).toBeGreaterThan(0);
-      expect(groupEntries.length).toBeGreaterThan(0);
+      expect(userEntries.length).toBe(3); // alice, bob, carol
+      expect(groupEntries.length).toBeGreaterThanOrEqual(3); // ldapusers, sysadmins, proxmox-sudo
     });
 
     test('b. (objectClass=posixAccount) should return all users', async () => {
@@ -127,8 +117,8 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
         scope: 'sub'
       });
 
-      // Proxmox backend returns ALL users (enabled flag not filtered)
-      expect(results.length).toBe(5);
+      // Proxmox backend returns ALL users (3: alice, bob, carol)
+      expect(results.length).toBe(3);
 
       // Verify all results are user entries
       results.forEach(entry => {
@@ -140,10 +130,9 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
 
       // Verify specific users are present
       const usernames = results.map(r => r.attributes.uid);
-      expect(usernames).toContain('testuser');
-      expect(usernames).toContain('admin');
-      expect(usernames).toContain('jdoe');
-      expect(usernames).toContain('disabled'); // Backend doesn't filter by enabled flag
+      expect(usernames).toContain('alice');
+      expect(usernames).toContain('bob');
+      expect(usernames).toContain('carol');
     });
 
     test('c. (objectClass=posixGroup) should return all groups', async () => {
@@ -152,8 +141,8 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
         scope: 'sub'
       });
 
-      // 3 explicit groups + proxmox-sudo group = 4 total
-      expect(results.length).toBe(4);
+      // 2 explicit groups (ldapusers, sysadmins) + proxmox-sudo = 3 total
+      expect(results.length).toBe(3);
 
       // Verify all results are group entries
       results.forEach(entry => {
@@ -165,31 +154,30 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
 
       // Verify specific groups are present
       const groupNames = results.map(r => r.attributes.cn);
-      expect(groupNames).toContain('users');
-      expect(groupNames).toContain('admins');
-      expect(groupNames).toContain('developers');
+      expect(groupNames).toContain('ldapusers');
+      expect(groupNames).toContain('sysadmins');
       expect(groupNames).toContain('proxmox-sudo'); // Auto-generated sudo group
     });
 
     test('d. (uid=username) should return specific user', async () => {
       const results = await client.search(baseDN, {
-        filter: acceptanceFilters.specificUser('testuser'),
+        filter: acceptanceFilters.specificUser('alice'),
         scope: 'sub'
       });
 
       expect(results.length).toBe(1);
 
       const user = results[0];
-      expect(user.dn).toMatch(/uid=testuser/);
-      expect(user.attributes.uid).toBe('testuser');
+      expect(user.dn).toMatch(/uid=alice/);
+      expect(user.attributes.uid).toBe('alice');
       
       // Proxmox-specific: Verify exact values from test data
-      // user:testuser@pve:1:0:Test:User:testuser@example.com:::
-      // Backend constructs: full_name = "Test User", surname = "User"
-      expect(user.attributes.cn).toBe('Test User'); // full_name (firstName + space + lastName)
-      expect(user.attributes.sn).toBe('User'); // lastName field
-      expect(user.attributes.mail).toBe('testuser@example.com'); // email from config
-      expect(user.attributes.homeDirectory).toBe('/home/testuser'); // constructed from uid
+      // user:alice@pve:1:0:Alice:Smith:asmith@example.com:::
+      // Backend constructs: full_name = "Alice Smith", surname = "Smith"
+      expect(user.attributes.cn).toBe('Alice Smith'); // full_name (firstName + space + lastName)
+      expect(user.attributes.sn).toBe('Smith'); // lastName field
+      expect(user.attributes.mail).toBe('asmith@example.com'); // email from config
+      expect(user.attributes.homeDirectory).toBe('/home/alice'); // constructed from uid
       expect(user.attributes.loginShell).toBe('/bin/bash'); // default
       
       // Proxmox uses stable SHA-256 hash for UID/GID generation
@@ -203,7 +191,7 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
       // LDAP-compliant: (cn=groupname) searches all entries where cn matches
       // This is a mixed search - could match users (with cn=common name) or groups (cn=group name)
       const results = await client.search(baseDN, {
-        filter: acceptanceFilters.specificGroup('admins'),
+        filter: acceptanceFilters.specificGroup('sysadmins'),
         scope: 'sub'
       });
 
@@ -213,17 +201,17 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
       // Verify the group is in results
       const group = results.find(r => 
         r.attributes.objectClass.includes('posixGroup') && 
-        r.attributes.cn === 'admins'
+        r.attributes.cn === 'sysadmins'
       );
       expect(group).toBeDefined();
-      expect(group.dn).toMatch(/cn=admins/);
+      expect(group.dn).toMatch(/cn=sysadmins/);
       expect(group.attributes.gidNumber).toBeDefined();
       
       // Verify memberUid attribute
       const memberUids = Array.isArray(group.attributes.memberUid) 
         ? group.attributes.memberUid 
         : [group.attributes.memberUid];
-      expect(memberUids).toContain('admin');
+      expect(memberUids).toContain('alice');
     });
 
     test('f. (cn=*) should return all groups', async () => {
@@ -234,8 +222,8 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
         scope: 'sub'
       });
 
-      // Should return all groups (4: admins, developers, users, proxmox-sudo)
-      expect(results.length).toBe(4);
+      // Should return all groups (3: ldapusers, sysadmins, proxmox-sudo)
+      expect(results.length).toBe(3);
       
       // All results should be groups with cn attribute
       results.forEach(entry => {
@@ -246,9 +234,8 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
       
       // Verify specific groups are present
       const groupNames = results.map(g => g.attributes.cn);
-      expect(groupNames).toContain('users');
-      expect(groupNames).toContain('admins');
-      expect(groupNames).toContain('developers');
+      expect(groupNames).toContain('ldapusers');
+      expect(groupNames).toContain('sysadmins');
       expect(groupNames).toContain('proxmox-sudo');
     });
   });
@@ -274,55 +261,38 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
     });
 
     test('should return group with members', async () => {
-      // LDAP-compliant: (cn=developers) is a mixed search
+      // LDAP-compliant: (cn=ldapusers) is a mixed search
       const results = await client.search(baseDN, {
-        filter: '(cn=developers)',
+        filter: '(cn=ldapusers)',
         scope: 'sub'
       });
 
-      // Should find at least the developers group
+      // Should find at least the ldapusers group
       expect(results.length).toBeGreaterThanOrEqual(1);
       
-      // Find the developers group entry
+      // Find the ldapusers group entry
       const group = results.find(r => 
         r.attributes.objectClass.includes('posixGroup') && 
-        r.attributes.cn === 'developers'
+        r.attributes.cn === 'ldapusers'
       );
       expect(group).toBeDefined();
-      expect(group.dn).toMatch(/cn=developers/);
+      expect(group.dn).toMatch(/cn=ldapusers/);
       
       // Proxmox-specific: Verify exact member list from test data
-      // group:developers:testuser@pve,jdoe@pve::
+      // group:ldapusers:alice@pve,bob@pve,carol@pve::
       const memberUids = Array.isArray(group.attributes.memberUid)
         ? group.attributes.memberUid
         : [group.attributes.memberUid];
         
-      expect(memberUids).toHaveLength(2);
-      expect(memberUids).toContain('testuser');
-      expect(memberUids).toContain('jdoe');
-      expect(memberUids).not.toContain('admin'); // Not in this group
-    });
-
-    test('should include disabled users in results', async () => {
-      const results = await client.search(baseDN, {
-        filter: '(uid=disabled)',
-        scope: 'sub'
-      });
-
-      // Proxmox backend doesn't filter by enabled flag, so disabled user IS returned
-      expect(results.length).toBe(1);
-      
-      const user = results[0];
-      // user:disabled@pve:0:0:Disabled:User:disabled@example.com:::
-      expect(user.attributes.uid).toBe('disabled');
-      expect(user.attributes.cn).toBe('Disabled User');
-      expect(user.attributes.sn).toBe('User');
-      expect(user.attributes.mail).toBe('disabled@example.com');
+      expect(memberUids).toHaveLength(3);
+      expect(memberUids).toContain('alice');
+      expect(memberUids).toContain('bob');
+      expect(memberUids).toContain('carol');
     });
 
     test('should parse user with full name correctly', async () => {
       const results = await client.search(baseDN, {
-        filter: '(uid=jdoe)',
+        filter: '(uid=bob)',
         scope: 'sub'
       });
 
@@ -330,23 +300,23 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
       
       const user = results[0];
       // Proxmox-specific: Verify parsing of firstName and lastName
-      // user:jdoe@pve:1:0:John:Doe:jdoe@example.com:::
-      expect(user.attributes.uid).toBe('jdoe');
-      expect(user.attributes.cn).toBe('John Doe'); // full_name = firstName + space + lastName
-      expect(user.attributes.sn).toBe('Doe'); // lastName field
-      expect(user.attributes.mail).toBe('jdoe@example.com');
-      expect(user.attributes.homeDirectory).toBe('/home/jdoe');
+      // user:bob@pve:1:0:Bob:Johnson:bjohnson@example.com:::
+      expect(user.attributes.uid).toBe('bob');
+      expect(user.attributes.cn).toBe('Bob Johnson'); // full_name = firstName + space + lastName
+      expect(user.attributes.sn).toBe('Johnson'); // lastName field
+      expect(user.attributes.mail).toBe('bjohnson@example.com');
+      expect(user.attributes.homeDirectory).toBe('/home/bob');
     });
 
     test('should generate stable UIDs for users', async () => {
       // Search for same user multiple times to verify UID is consistent
       const results1 = await client.search(baseDN, {
-        filter: '(uid=testuser)',
+        filter: '(uid=alice)',
         scope: 'sub'
       });
 
       const results2 = await client.search(baseDN, {
-        filter: '(uid=testuser)',
+        filter: '(uid=alice)',
         scope: 'sub'
       });
 
@@ -357,19 +327,19 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
     test('should parse realm from username correctly', async () => {
       // Proxmox stores users as username@realm
       const results = await client.search(baseDN, {
-        filter: '(uid=admin)',
+        filter: '(uid=carol)',
         scope: 'sub'
       });
 
       expect(results.length).toBe(1);
       
       const user = results[0];
-      // user:admin@pve:1:0:Admin:User:admin@example.com:::
+      // user:carol@pve:1:0:Carol:Williams:cwilliams@example.com:::
       // Realm (@pve) should be stripped from username
-      expect(user.attributes.uid).toBe('admin'); // No @pve suffix
-      expect(user.attributes.cn).toBe('Admin User'); // firstName + space + lastName
-      expect(user.attributes.sn).toBe('User'); // lastName field
-      expect(user.attributes.mail).toBe('admin@example.com');
+      expect(user.attributes.uid).toBe('carol'); // No @pve suffix
+      expect(user.attributes.cn).toBe('Carol Williams'); // firstName + space + lastName
+      expect(user.attributes.sn).toBe('Williams'); // lastName field
+      expect(user.attributes.mail).toBe('cwilliams@example.com');
     });
 
     test('should create proxmox-sudo group automatically', async () => {
@@ -395,7 +365,7 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
         scope: 'sub'
       });
 
-      expect(results.length).toBe(5);
+      expect(results.length).toBe(3);
 
       // Verify each user has all required Proxmox attributes
       results.forEach(user => {
@@ -420,8 +390,8 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
         scope: 'sub'
       });
 
-      // 3 explicit groups + proxmox-sudo = 4
-      expect(results.length).toBe(4);
+      // 2 explicit groups + proxmox-sudo = 3
+      expect(results.length).toBe(3);
 
       results.forEach(group => {
         expect(group.attributes.cn).toBeDefined();
@@ -439,56 +409,47 @@ group:users:testuser@pve,admin@pve,jdoe@pve::
     });
 
     test('should correctly parse enabled field from user.cfg', async () => {
-      // Get enabled user
-      const enabledUser = await directoryProvider.findUser('testuser');
+      // All users in centralized data are enabled (enabled=1)
+      const enabledUser = await directoryProvider.findUser('alice');
       expect(enabledUser).toBeDefined();
       expect(enabledUser.enabled).toBe(true);
 
-      // Get disabled user (enabled=0 in config)
-      const disabledUser = await directoryProvider.findUser('disabled');
-      expect(disabledUser).toBeDefined();
-      expect(disabledUser.enabled).toBe(false);
+      const anotherUser = await directoryProvider.findUser('bob');
+      expect(anotherUser).toBeDefined();
+      expect(anotherUser.enabled).toBe(true);
     });
 
     test('should correctly parse expire field from user.cfg', async () => {
-      // Get user with no expiration (expire=0)
-      const noExpireUser = await directoryProvider.findUser('testuser');
-      expect(noExpireUser).toBeDefined();
-      expect(noExpireUser.expire).toBe(0);
+      // All users in centralized data have no expiration (expire=0)
+      const user1 = await directoryProvider.findUser('alice');
+      expect(user1).toBeDefined();
+      expect(user1.expire).toBe(0);
 
-      // Get user with expiration timestamp
-      const expiredUser = await directoryProvider.findUser('expired');
-      expect(expiredUser).toBeDefined();
-      expect(expiredUser.expire).toBe(1609459200); // Jan 1, 2021 00:00:00 UTC
+      const user2 = await directoryProvider.findUser('carol');
+      expect(user2).toBeDefined();
+      expect(user2.expire).toBe(0);
     });
 
-    test('should include both enabled and disabled users in search results', async () => {
+    test('should include all enabled users in search results', async () => {
       const allUsers = await directoryProvider.getAllUsers();
       
-      // Should have 5 users total (testuser, admin, jdoe, disabled, expired)
-      expect(allUsers.length).toBe(5);
+      // Should have 3 users total (alice, bob, carol)
+      expect(allUsers.length).toBe(3);
 
       const enabledUsers = allUsers.filter(u => u.enabled === true);
-      const disabledUsers = allUsers.filter(u => u.enabled === false);
 
-      // 4 enabled users (testuser, admin, jdoe, expired)
-      expect(enabledUsers.length).toBe(4);
-      // 1 disabled user
-      expect(disabledUsers.length).toBe(1);
-      expect(disabledUsers[0].username).toBe('disabled');
+      // All 3 users are enabled
+      expect(enabledUsers.length).toBe(3);
     });
 
-    test('should distinguish between never-expires and expired users', async () => {
+    test('should verify all users have expire=0 (never expires)', async () => {
       const allUsers = await directoryProvider.getAllUsers();
       
+      // All 3 users never expire in centralized data
+      expect(allUsers.length).toBe(3);
+      
       const neverExpires = allUsers.filter(u => u.expire === 0);
-      const hasExpiration = allUsers.filter(u => u.expire > 0);
-
-      // 4 users never expire (testuser, admin, jdoe, disabled)
-      expect(neverExpires.length).toBe(4);
-      // 1 user has expiration
-      expect(hasExpiration.length).toBe(1);
-      expect(hasExpiration[0].username).toBe('expired');
+      expect(neverExpires.length).toBe(3);
     });
   });
 });

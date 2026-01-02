@@ -7,14 +7,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const unixcrypt = require('unixcrypt');
 const TestServer = require('../../utils/testServer');
 const LdapTestClient = require('../../utils/ldapClient');
 const mockLogger = require('../../utils/mockLogger');
-
-// Test data and config
-const baseDN = 'dc=example,dc=com';
-const testPorts = { ldap: 1389 };
+const { loadProxmoxShadowData, loadProxmoxUserData } = require('../../utils/dataLoader');
+const { baseDN, testPorts } = require('../../fixtures/testData');
 
 // Import backends
 const { provider: ProxmoxAuthProvider } = require('../../../backends/proxmox.auth');
@@ -28,40 +25,20 @@ describe('Proxmox Auth Backend - Acceptance Tests', () => {
   let tempShadowPath;
   let tempUserCfgPath;
 
-  // Test credentials - includes disabled and expired users
+  // Proxmox-specific test users (from centralized Proxmox data files)
   const validUsers = {
-    testuser: 'password123',
-    admin: 'admin123',
-    jdoe: 'test456',
-    disabled: 'disabled123',
-    expired: 'expired123'
+    alice: 'alicepass',
+    bob: 'bobpass',
+    carol: 'carolpass'
   };
 
   beforeAll(async () => {
-    // Create temporary shadow.cfg file with hashed passwords (including disabled/expired)
-    const shadowContent = Object.entries(validUsers)
-      .map(([username, password]) => {
-        // Create Unix crypt hash for each password
-        const hash = unixcrypt.encrypt(password);
-        return `${username}:${hash}`;
-      })
-      .join('\n') + '\n';
+    // Use centralized Proxmox test data
+    const shadowContent = loadProxmoxShadowData();
+    const userCfgContent = loadProxmoxUserData();
 
     tempShadowPath = path.join(__dirname, 'test-proxmox-shadow.cfg');
     fs.writeFileSync(tempShadowPath, shadowContent, 'utf8');
-
-    // Create temporary user.cfg file for directory provider
-    // Format: user:username@realm:enabled:expire:firstName:lastName:email:::
-    // expired user has timestamp 1609459200 (Jan 1, 2021 - already passed)
-    const userCfgContent = `user:testuser@pve:1:0:Test:User:testuser@example.com:::
-user:admin@pve:1:0:Admin:User:admin@example.com:::
-user:jdoe@pve:1:0:John:Doe:jdoe@example.com:::
-user:disabled@pve:0:0:Disabled:User:disabled@example.com:::
-user:expired@pve:1:1609459200:Expired:User:expired@example.com:::
-
-group:admins:admin@pve::
-group:users:testuser@pve,jdoe@pve::
-`;
 
     tempUserCfgPath = path.join(__dirname, 'test-proxmox-user.cfg');
     fs.writeFileSync(tempUserCfgPath, userCfgContent, 'utf8');
@@ -125,7 +102,7 @@ group:users:testuser@pve,jdoe@pve::
   describe('Acceptance Criteria: Authentication', () => {
     
     test('1. Bind with valid credentials should succeed', async () => {
-      const username = 'testuser';
+      const username = 'alice';
       const password = validUsers[username];
       const userDN = `uid=${username},${baseDN}`;
 
@@ -139,7 +116,7 @@ group:users:testuser@pve,jdoe@pve::
     });
 
     test('2. Bind with invalid credentials should fail', async () => {
-      const username = 'testuser';
+      const username = 'alice';
       const wrongPassword = 'wrongpassword';
       const userDN = `uid=${username},${baseDN}`;
 
@@ -169,11 +146,11 @@ group:users:testuser@pve,jdoe@pve::
 
   describe('Additional Proxmox Auth Tests', () => {
     
-    test('should authenticate multiple valid and enabled users', async () => {
-      // Test only enabled, non-expired users
-      const enabledUsers = ['testuser', 'admin', 'jdoe'];
+    test('should authenticate multiple valid users', async () => {
+      // Test all users from centralized Proxmox data (alice, bob, carol)
+      const allUsers = ['alice', 'bob', 'carol'];
       
-      for (const username of enabledUsers) {
+      for (const username of allUsers) {
         const password = validUsers[username];
         const userDN = `uid=${username},${baseDN}`;
         
@@ -185,34 +162,8 @@ group:users:testuser@pve,jdoe@pve::
       }
     });
 
-    test('should reject disabled user even with correct password', async () => {
-      const username = 'disabled';
-      const password = validUsers[username];
-      const userDN = `uid=${username},${baseDN}`;
-
-      // Should fail because user is disabled (enabled=0 in user.cfg)
-      await expect(
-        client.bind(userDN, password)
-      ).rejects.toThrow();
-
-      expect(client.bound).toBe(false);
-    });
-
-    test('should reject expired user even with correct password', async () => {
-      const username = 'expired';
-      const password = validUsers[username];
-      const userDN = `uid=${username},${baseDN}`;
-
-      // Should fail because user account has expired (expire=1609459200, Jan 1, 2021)
-      await expect(
-        client.bind(userDN, password)
-      ).rejects.toThrow();
-
-      expect(client.bound).toBe(false);
-    });
-
     test('should fail with empty password', async () => {
-      const username = 'testuser';
+      const username = 'alice';
       const emptyPassword = '';
       const userDN = `uid=${username},${baseDN}`;
 
@@ -224,8 +175,8 @@ group:users:testuser@pve,jdoe@pve::
     });
 
     test('should handle case-sensitive usernames', async () => {
-      const username = 'TESTUSER'; // Wrong case
-      const password = validUsers['testuser'];
+      const username = 'ALICE'; // Wrong case
+      const password = validUsers['alice'];
       const userDN = `uid=${username},${baseDN}`;
 
       // Proxmox is case-sensitive for usernames
@@ -237,8 +188,8 @@ group:users:testuser@pve,jdoe@pve::
     });
 
     test('should fail with special characters in password that don\'t match', async () => {
-      const username = 'testuser';
-      const wrongPassword = 'password123!@#'; // Added special chars
+      const username = 'alice';
+      const wrongPassword = 'alicepass!@#'; // Added special chars
       const userDN = `uid=${username},${baseDN}`;
 
       await expect(

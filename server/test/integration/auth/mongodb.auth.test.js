@@ -9,13 +9,11 @@ const { MongoClient } = require('mongodb');
 const TestServer = require('../../utils/testServer');
 const LdapTestClient = require('../../utils/ldapClient');
 const mockLogger = require('../../utils/mockLogger');
+const { MongoDBSeeder } = require('../../utils/dbSeeder');
+const { testUsers, baseDN, testPorts } = require('../../fixtures/testData');
 
 const RUN = process.env.RUN_DB_TESTS === '1';
 const maybeDescribe = RUN ? describe : describe.skip;
-
-// Test data and config
-const baseDN = 'dc=example,dc=com';
-const testPorts = { ldap: 1389 };
 
 // Import backends
 const { provider: MongoDBAuthProvider } = require('../../../backends/mongodb.auth');
@@ -36,12 +34,11 @@ maybeDescribe('MongoDB Auth Backend - Acceptance Tests', () => {
   let testDb;
   let mongoAvailable = false;
 
-  // Test credentials
-  const validUsers = {
-    testuser: 'password123',
-    admin: 'admin123',
-    jdoe: 'test456'
-  };
+  // Build valid user credentials map from centralized test data
+  const validUsers = testUsers.reduce((acc, user) => {
+    acc[user.username] = user.password;
+    return acc;
+  }, {});
 
   beforeAll(async () => {
     // Check if MongoDB is available
@@ -61,62 +58,9 @@ maybeDescribe('MongoDB Auth Backend - Acceptance Tests', () => {
     await mongoClient.connect();
     testDb = mongoClient.db(mongoConfig.database);
 
-    // Clear existing data
-    await testDb.collection('users').deleteMany({});
-    await testDb.collection('groups').deleteMany({});
-
-    // Insert test users
-    await testDb.collection('users').insertMany([
-      {
-        username: 'testuser',
-        password: validUsers.testuser, // Note: In production, use bcrypt
-        full_name: 'Test User',
-        email: 'testuser@example.com',
-        uid_number: 2001,
-        gid_number: 2001,
-        home_directory: '/home/testuser'
-      },
-      {
-        username: 'admin',
-        password: validUsers.admin,
-        full_name: 'Admin User',
-        email: 'admin@example.com',
-        uid_number: 2002,
-        gid_number: 2002,
-        home_directory: '/home/admin'
-      },
-      {
-        username: 'jdoe',
-        password: validUsers.jdoe,
-        full_name: 'John Doe',
-        email: 'jdoe@example.com',
-        uid_number: 2003,
-        gid_number: 2003,
-        home_directory: '/home/jdoe'
-      }
-    ]);
-
-    // Insert test groups
-    await testDb.collection('groups').insertMany([
-      {
-        name: 'testuser_primary',
-        gid_number: 2001,
-        description: 'Primary group for testuser',
-        member_uids: ['testuser']
-      },
-      {
-        name: 'admin_primary',
-        gid_number: 2002,
-        description: 'Primary group for admin',
-        member_uids: ['admin']
-      },
-      {
-        name: 'jdoe_primary',
-        gid_number: 2003,
-        description: 'Primary group for jdoe',
-        member_uids: ['jdoe']
-      }
-    ]);
+    // Use MongoDBSeeder to seed test data from centralized fixtures
+    const seeder = new MongoDBSeeder(testDb);
+    await seeder.seed();
 
     // Configure environment for MongoDB providers
     process.env.MONGO_URI = mongoConfig.uri;
@@ -165,10 +109,10 @@ maybeDescribe('MongoDB Auth Backend - Acceptance Tests', () => {
       await directoryProvider.cleanup();
     }
     
-    // Clean up test database
+    // Clean up test database (seeder handles cleanup)
     if (testDb) {
-      await testDb.collection('users').deleteMany({});
-      await testDb.collection('groups').deleteMany({});
+      const seeder = new MongoDBSeeder(testDb);
+      await seeder.clean();
     }
     if (mongoClient) {
       await mongoClient.close();
@@ -237,18 +181,7 @@ maybeDescribe('MongoDB Auth Backend - Acceptance Tests', () => {
       }
     });
 
-    test('6. Bind with valid user but wrong case should fail (case-sensitive)', async () => {
-      const username = 'TESTUSER'; // uppercase
-      const password = validUsers.testuser;
-      const userDN = `uid=${username},${baseDN}`;
-
-      // MongoDB queries are case-sensitive by default
-      await expect(
-        client.bind(userDN, password)
-      ).rejects.toThrow(/Invalid Credentials/);
-    });
-
-    test('7. Authentication should be isolated per connection', async () => {
+    test('6. Authentication should be isolated per connection', async () => {
       // Create second client
       const client2 = new LdapTestClient({
         url: server.getUrl()

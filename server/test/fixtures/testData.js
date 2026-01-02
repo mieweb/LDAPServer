@@ -1,5 +1,4 @@
 // Shared Test Fixtures for Server Integration Tests
-// 
 // Database-compatible test data for SQL/MongoDB/Proxmox backends
 
 const { loadCommonUsers, loadCommonGroups } = require('../utils/dataLoader');

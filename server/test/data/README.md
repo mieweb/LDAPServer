@@ -12,26 +12,19 @@ Files follow the pattern: `{purpose}.{backend}.{format}`
 
 ## 📋 Available Test Data Files
 
-### Common Data (Backend-agnostic)
-- **`common.users.json`** - Standard test users with plain passwords
-- **`common.groups.json`** - Standard test groups with member lists
+### Common Data (Used by all SQL/MongoDB backends via seeders)
+- **`common.users.json`** - Standard test users with plain passwords (testuser, admin, jdoe, disabled)
+- **`common.groups.json`** - Standard test groups with member lists (users, admins, developers, empty)
 
-### SQL/MySQL Backend
-- **`auth.sql.sql`** - User table with bcrypt password hashes for auth tests
-- **`directory.sql.sql`** - Users and groups tables for directory tests
+### Proxmox Backend (File-based configuration format)
+- **`auth.proxmox.shadow.cfg`** - Proxmox shadow file format with Unix crypt password hashes (alice, bob, carol)
+- **`directory.proxmox.user.cfg`** - Proxmox user.cfg format with user/group definitions (alice, bob, carol)
 
-### MongoDB Backend
-- **`auth.mongodb.json`** - User documents with password hashes for auth tests
-- **`directory.mongodb.json`** - User and group documents for directory tests
+### E2E Test Data
+- **`e2e.sssd.sql`** - MySQL initialization script for SSSD end-to-end tests
 
-### SQLite Backend
-- **`directory.sqlite.sql`** - SQLite-specific schema and data
-- **`directory.sqlite.env`** - SQLite configuration
-
-### Proxmox Backend
-- **`auth.proxmox.shadow.cfg`** - Proxmox shadow file format (password hashes)
-- **`directory.proxmox.user.cfg`** - Proxmox user configuration format
-- **`proxmox.env`** - Proxmox-specific configuration
+### Configuration Files
+- **`directory.sqlite.env`** - Environment variables for SQLite shell script tests (`test001-sqlite.sh`)
 
 ## 🔧 Usage in Tests
 
@@ -41,16 +34,17 @@ Files follow the pattern: `{purpose}.{backend}.{format}`
 const { 
   loadCommonUsers,
   loadCommonGroups,
-  getTestData 
+  loadProxmoxUserData,
+  loadProxmoxShadowData
 } = require('../utils/dataLoader');
 
-// Load common test data
+// Load common test data (for SQL/MongoDB backends)
 const users = loadCommonUsers();
 const groups = loadCommonGroups();
 
-// Load backend-specific data
-const sqlAuthData = getTestData('sql', 'auth');
-const mongoDirectoryData = getTestData('mongodb', 'directory');
+// Load Proxmox-specific data
+const proxmoxUsers = loadProxmoxUserData();
+const proxmoxShadow = loadProxmoxShadowData();
 ```
 
 ### Using with DB Seeder
@@ -58,14 +52,14 @@ const mongoDirectoryData = getTestData('mongodb', 'directory');
 ```javascript
 const { MySQLSeeder } = require('../utils/dbSeeder');
 
-// Seeder automatically loads from data/ directory
+// Seeder automatically loads from common.users.json and common.groups.json
 const seeder = new MySQLSeeder(connection);
-await seeder.seed(); // Uses common.users.json and common.groups.json
+await seeder.seed(); // Hashes passwords with bcrypt and inserts into DB
 ```
 
 ## 👥 Test Users
 
-All test data files include these standard users:
+### SQL/MongoDB Backends (from common.users.json)
 
 | Username | Password | UID | GID | Purpose |
 |----------|----------|-----|-----|---------|
@@ -74,9 +68,17 @@ All test data files include these standard users:
 | `jdoe` | `test123` | 1002 | 1001 | Additional user |
 | `disabled` | `password` | 1003 | 1001 | Disabled account test |
 
+### Proxmox Backend (from directory.proxmox.user.cfg)
+
+| Username | Password | Realm | Purpose |
+|----------|----------|-------|---------|
+| `alice` | `alicepass` | pve | Standard test user |
+| `bob` | `bobpass` | pve | Additional user |
+| `carol` | `carolpass` | pve | Additional user |
+
 ## 👥 Test Groups
 
-All test data files include these standard groups:
+### SQL/MongoDB Backends (from common.groups.json)
 
 | Group | GID | Members | Purpose |
 |-------|-----|---------|---------|
@@ -85,9 +87,18 @@ All test data files include these standard groups:
 | `developers` | 1002 | testuser, jdoe | Development team |
 | `empty` | 1003 | (none) | Empty group test |
 
+### Proxmox Backend (from directory.proxmox.user.cfg)
+
+| Group | Members | Purpose |
+|-------|---------|---------|
+| `ldapusers` | alice, bob, carol | All LDAP users |
+| `sysadmins` | alice | System administrators |
+
 ## 🔐 Password Hashes
 
-For authentication tests, passwords are pre-hashed using bcrypt:
+### SQL/MongoDB Backends
+
+Passwords from `common.users.json` are hashed at runtime by DB seeders using bcrypt:
 
 ```javascript
 // Plain passwords (in common.users.json)
@@ -96,24 +107,50 @@ For authentication tests, passwords are pre-hashed using bcrypt:
   "password": "password123"  // Plain text for reference
 }
 
-// Hashed passwords (in auth.*.json/sql)
-{
-  "username": "testuser",
-  "password": "$2b$10$..."  // Bcrypt hash
-}
+// Hashed at runtime by seeder
+const hash = await bcrypt.hash(user.password, 10);
+// INSERT INTO users ... password_hash = '$2b$10$...'
+```
+
+### Proxmox Backend
+
+Passwords are pre-hashed using Unix crypt (SHA-256) in `auth.proxmox.shadow.cfg`:
+
+```
+alice:$5$h3.sbsBS2v7BXkld$A2PnAw43NHbHCSl/FSm.vmcbwrZNH5MQLoSz45c3NTB:
+bob:$5$9wSWJ4H1XqDuqpmS$9OpkAWryhFvB5IrR7yR/3e4y4lWanMmwPJjUisueX75:
+carol:$5$dOfGEOt4S4g10frO$jUER2m34iBgLzzHzUvYJ4A4.rrobUAHp5rragC/fQc0:
 ```
 
 ## 📝 Adding New Test Data
 
-1. **Create the file** following naming convention
-2. **Use existing data as template** for consistency
-3. **Update dataLoader.js** to add loader function
-4. **Document in this README** with purpose and usage
+### Adding Users/Groups to SQL/MongoDB Backends
 
-Example for new backend:
+1. **Edit `common.users.json`** or **`common.groups.json`**
+2. DB seeders automatically hash passwords and insert data
+3. No need to update multiple files!
+
+### Adding Proxmox Users
+
+1. **Edit `directory.proxmox.user.cfg`** for user metadata
+   ```
+   user:newuser@pve:1:0:First:Last:email@example.com:::
+   ```
+
+2. **Edit `auth.proxmox.shadow.cfg`** for password hash
+   ```bash
+   # Generate hash
+   mkpasswd -m sha-256 yourpassword
+   # Add to file
+   newuser:$5$...hash...:
+   ```
+
+### Adding a New Backend Type
+
+If you need test data for a completely new backend:
 
 ```bash
-# Add LDAP backend test data
+# Example: Adding LDAP backend test data
 touch data/auth.ldap.ldif
 touch data/directory.ldap.ldif
 ```
@@ -128,27 +165,38 @@ function loadLDAPAuthData() {
 
 ## ✅ Benefits of This Approach
 
-1. **Single source of truth**: No duplicate test data
-2. **Easy to maintain**: Update once, used everywhere
-3. **Backend-specific**: Each backend gets appropriate format
-4. **Discoverable**: Clear naming makes finding data easy
-5. **Reusable**: Same data for unit, integration, and E2E tests
-6. **Realistic**: Uses actual file formats (SQL, JSON, config files)
+1. **Single source of truth**: Common data in one place (common.users.json)
+2. **Easy to maintain**: Update users once, seeders handle backend-specific format
+3. **Runtime hashing**: Passwords hashed during seeding, not stored in files
+4. **Backend-specific when needed**: Proxmox uses .cfg files due to format requirements
+5. **Discoverable**: Clear naming makes finding data easy
+6. **Reusable**: Same data for unit, integration, and E2E tests
 
-## 🔄 Migration from Old Approach
+## 🔄 Why This Design?
 
-**Before** (scattered data):
-- `npm/test/fixtures/testData.js` - Hardcoded JS
-- `server/test/fixtures/testData.js` - Duplicate hardcoded JS
-- `test/e2e/sssd/sql/init.sql` - E2E specific SQL (now moved to `test/e2e/sql/init.sql`)
-- Each test creates its own data
+### Evolution from Backend-Specific Files
 
-**After** (centralized):
-- `test/data/*.json` - Common test data
-- `test/data/*.sql` - Backend-specific schemas
-- `test/e2e/sql/init.sql` - E2E SQL test data
-- `test/utils/dataLoader.js` - Load from files
-- `test/utils/dbSeeder.js` - Uses dataLoader
+**Old approach** (removed):
+- `auth.sql.sql`, `directory.sql.sql` - SQL with pre-hashed passwords
+- `auth.mongodb.json`, `directory.mongodb.json` - MongoDB with pre-hashed passwords
+- `directory.sqlite.sql` - SQLite with pre-hashed passwords
+
+**Problems**:
+- ❌ Duplicate user data across multiple files
+- ❌ Password hashes duplicated and out of sync
+- ❌ Hard to add/modify test users
+- ❌ Backend-specific logic mixed with data
+
+**Current approach**:
+- ✅ `common.users.json` + `common.groups.json` (single source)
+- ✅ DB Seeders transform data to backend-specific format
+- ✅ Runtime bcrypt hashing (no pre-hashed files)
+- ✅ Easy to maintain and extend
+
+**Exception**: Proxmox keeps separate files because:
+- Requires specific file format (user.cfg, shadow.cfg)
+- Uses Unix crypt hashing (different from bcrypt)
+- Different user set (alice/bob/carol vs testuser/admin/jdoe)
 
 ## 📚 Related Files
 
