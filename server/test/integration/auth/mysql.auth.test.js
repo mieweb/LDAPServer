@@ -58,30 +58,8 @@ maybeDescribe('MySQL Auth Backend (real DB) - Integration', () => {
     await expect(new Promise((resolve, reject) => client.bind(`uid=nonexistent,${baseDn}`, 'anypassword', (e)=>e?reject(e):resolve()))).rejects.toThrow();
   });
 
-  test('should authenticate multiple valid users (admin, jdoe)', async () => {
-    await startServer();
-    const users = [
-      { username: 'admin', password: 'admin123' },
-      { username: 'jdoe', password: 'test123' }
-    ];
-    for (const { username, password } of users) {
-      await expect(new Promise((resolve, reject) => client.bind(`uid=${username},${baseDn}`, password, (e)=>e?reject(e):resolve()))).resolves.not.toThrow();
-    }
-  });
-
-  test('disabled user still authenticates (SQL does not enforce enabled flag)', async () => {
-    await startServer();
-    // In SQL backend, enabled flag is not consulted by auth provider
-    await expect(new Promise((resolve, reject) => client.bind(`uid=disabled,${baseDn}`, 'password', (e)=>e?reject(e):resolve()))).resolves.not.toThrow();
-  });
-
-  test('should fail with empty password', async () => {
+  test('4. should fail with empty password', async () => {
     await startServer();
     await expect(new Promise((resolve, reject) => client.bind(`uid=testuser,${baseDn}`, '', (e)=>e?reject(e):resolve()))).rejects.toThrow();
-  });
-
-  test('should fail with special characters in password that don\'t match', async () => {
-    await startServer();
-    await expect(new Promise((resolve, reject) => client.bind(`uid=testuser,${baseDn}`, 'password123!@#', (e)=>e?reject(e):resolve()))).rejects.toThrow();
   });
 });

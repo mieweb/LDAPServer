@@ -219,10 +219,24 @@ class MongoDBSeeder {
     await usersCollection.createIndex({ username: 1 }, { unique: true });
     await usersCollection.createIndex({ uid_number: 1 });
 
-    // Insert groups
+    // Insert groups - transform cn to name for MongoDB
+    const groupsToInsert = testGroups.map(group => ({
+      name: group.cn,  // MongoDB uses 'name', not 'cn'
+      gid_number: group.gid_number,
+      description: group.description,
+      member_uids: group.member_uids
+    }));
+    
+    // Clean up: drop old indexes that might conflict
+    try {
+      await groupsCollection.dropIndex('cn_1');
+    } catch (e) {
+      // Index might not exist, that's ok
+    }
+    
     await groupsCollection.deleteMany({}); // Clean first
-    await groupsCollection.insertMany(testGroups);
-    await groupsCollection.createIndex({ cn: 1 }, { unique: true });
+    await groupsCollection.insertMany(groupsToInsert);
+    await groupsCollection.createIndex({ name: 1 }, { unique: true });
     await groupsCollection.createIndex({ gid_number: 1 });
   }
 

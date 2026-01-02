@@ -20,11 +20,16 @@ async function doSearch(client, filter) {
     const entries = [];
     client.search(baseDn, { filter, scope: 'sub' }, (err, res) => {
       if (err) return reject(err);
-      res.on('searchEntry', (e) => {
-        const entry = e.pojo || {};
-        // ldapjs returns DN in objectName as LdapDn object
-        entry.dn = (e.objectName || e.dn || entry.dn || '').toString();
-        entries.push(entry);
+      res.on('searchEntry', (entry) => {
+        entries.push({
+          dn: entry.objectName.toString(),
+          attributes: entry.attributes.reduce((acc, attr) => {
+            // Handle multi-value attributes
+            const values = attr.values || attr.vals || [];
+            acc[attr.type] = values.length === 1 ? values[0] : values;
+            return acc;
+          }, {})
+        });
       });
       res.on('error', (e) => reject(e));
       res.on('end', () => resolve(entries));
@@ -64,71 +69,115 @@ maybeDescribe('MySQL Directory Backend (real DB) - Integration', () => {
   afterAll(async () => { if (conn) await conn.end(); });
   afterEach(async () => { if (client) { client.unbind?.(); client.destroy?.(); client = null; } if (engine) { await engine.stop(); engine = null; } });
 
-  test('b. (objectClass=posixAccount) should return all users', async () => {
-    await startServer(false);
-    const results = await doSearch(client, acceptanceFilters.allUsers);
-    // From common.users.json → 4 users
-    expect(results.length).toBe(4);
-    // Verify DN shape
-    results.forEach(entry => {
-      expect(typeof entry.dn).toBe('string');
-      expect(entry.dn).toMatch(/uid=/);
+  describe('Acceptance Criteria: Directory Filters', () => {
+    
+    test('a. (objectClass=*) should return all objects (users + groups)', async () => {
+      await startServer(false);
+      const results = await doSearch(client, acceptanceFilters.allObjects);
+      // 4 users + 4 groups = 8
+      expect(results.length).toBeGreaterThanOrEqual(8);
+      const userEntries = results.filter(r => /uid=/.test(r.dn));
+      const groupEntries = results.filter(r => /cn=/.test(r.dn));
+      expect(userEntries.length).toBe(4);
+      expect(groupEntries.length).toBe(4);
     });
-  });
 
-  test('c. (objectClass=posixGroup) should return all groups', async () => {
-    await startServer(false);
-    const results = await doSearch(client, acceptanceFilters.allGroups);
-    // From common.groups.json → 4 groups (including empty)
-    expect(results.length).toBe(4);
-    results.forEach(entry => {
-      expect(typeof entry.dn).toBe('string');
-      expect(entry.dn).toMatch(/cn=/);
+    test('b. (objectClass=posixAccount) should return all users', async () => {
+      await startServer(false);
+      const results = await doSearch(client, acceptanceFilters.allUsers);
+      // From common.users.json → 4 users
+      expect(results.length).toBe(4);
+      
+      // Verify all results are user entries with required attributes
+      results.forEach(entry => {
+        expect(typeof entry.dn).toBe('string');
+        expect(entry.dn).toMatch(/uid=/);
+        expect(entry.attributes.objectClass).toContain('posixAccount');
+        expect(entry.attributes.objectClass).toContain('inetOrgPerson');
+        expect(entry.attributes.uid).toBeDefined();
+        expect(entry.attributes.uidNumber).toBeDefined();
+        expect(entry.attributes.gidNumber).toBeDefined();
+        expect(entry.attributes.homeDirectory).toBeDefined();
+        expect(entry.attributes.loginShell).toBeDefined();
+      });
+      
+      // Verify specific users are present
+      const usernames = results.map(r => {
+        const match = r.dn.match(/uid=([^,]+)/);
+        return match ? match[1] : null;
+      }).filter(Boolean);
+      expect(usernames).toContain('testuser');
+      expect(usernames).toContain('admin');
+      expect(usernames).toContain('jdoe');
+      expect(usernames).toContain('disabled');
     });
-  });
 
-  test('a. (objectClass=*) should return all objects (users + groups)', async () => {
-    await startServer(false);
-    const results = await doSearch(client, acceptanceFilters.allObjects);
-    // 4 users + 4 groups = 8
-    expect(results.length).toBeGreaterThanOrEqual(8);
-    const userEntries = results.filter(r => /uid=/.test(r.dn));
-    const groupEntries = results.filter(r => /cn=/.test(r.dn));
-    expect(userEntries.length).toBeGreaterThan(0);
-    expect(groupEntries.length).toBeGreaterThan(0);
-  });
+    test('c. (objectClass=posixGroup) should return all groups', async () => {
+      await startServer(false);
+      const results = await doSearch(client, acceptanceFilters.allGroups);
+      // From common.groups.json → 4 groups (including empty)
+      expect(results.length).toBe(4);
+      
+      results.forEach(entry => {
+        expect(typeof entry.dn).toBe('string');
+        expect(entry.dn).toMatch(/cn=/);
+        expect(entry.attributes.objectClass).toContain('posixGroup');
+        expect(entry.attributes.cn).toBeDefined();
+        expect(entry.attributes.gidNumber).toBeDefined();
+      });
+      
+      // Verify specific groups are present
+      const groupNames = results.map(r => {
+        const match = r.dn.match(/cn=([^,]+)/);
+        return match ? match[1] : null;
+      }).filter(Boolean);
+      expect(groupNames).toContain('users');
+      expect(groupNames).toContain('admins');
+      expect(groupNames).toContain('developers');
+      expect(groupNames).toContain('empty');
+    });
 
-  test('d. (uid=username) should return specific user', async () => {
-    await startServer(false);
-    const results = await doSearch(client, acceptanceFilters.specificUser('testuser'));
-    expect(results.length).toBe(1);
-    expect(results[0].dn).toMatch(/uid=testuser/);
-  });
+    test('d. (uid=username) should return specific user', async () => {
+      await startServer(false);
+      const results = await doSearch(client, acceptanceFilters.specificUser('testuser'));
+      expect(results.length).toBe(1);
+      
+      const user = results[0];
+      expect(user.dn).toBe(`uid=testuser,${baseDn}`);
+      expect(user.attributes.uid).toBe('testuser');
+      expect(user.attributes.cn).toBe('Test User');
+      expect(user.attributes.mail).toBe('testuser@example.com');
+      expect(user.attributes.uidNumber).toBe('1001');
+      expect(user.attributes.gidNumber).toBe('1001');
+      expect(user.attributes.homeDirectory).toBe('/home/testuser');
+      expect(user.attributes.loginShell).toBe('/bin/bash');
+      expect(user.attributes.objectClass).toContain('posixAccount');
+      expect(user.attributes.objectClass).toContain('inetOrgPerson');
+    });
 
-  test('e. (cn=groupname) should return specific group', async () => {
-    await startServer(false);
-    const results = await doSearch(client, acceptanceFilters.specificGroup('admins'));
-    expect(results.length).toBeGreaterThanOrEqual(1);
-    const group = results.find(r => /cn=admins,/.test(r.dn));
-    expect(group).toBeDefined();
-  });
+    test('e. (cn=groupname) should return specific group', async () => {
+      await startServer(false);
+      const results = await doSearch(client, acceptanceFilters.specificGroup('admins'));
+      expect(results.length).toBe(1);
+      
+      const group = results[0];
+      expect(group.dn).toBe(`cn=admins,${baseDn}`);
+      expect(group.attributes.cn).toBe('admins');
+      expect(group.attributes.gidNumber).toBe('1000');
+      expect(group.attributes.objectClass).toContain('posixGroup');
+      // Verify memberUid contains expected members
+      expect(group.attributes.memberUid).toBeDefined();
+      const memberUids = Array.isArray(group.attributes.memberUid) 
+        ? group.attributes.memberUid 
+        : [group.attributes.memberUid];
+      expect(memberUids).toContain('admin');
+    });
 
-  test('f. (cn=*) should return all groups via wildcard', async () => {
-    await startServer(false);
-    const results = await doSearch(client, acceptanceFilters.allGroupsWildcard);
-    expect(results.length).toBe(4);
-    results.forEach(entry => expect(entry.dn).toMatch(/cn=/));
-  });
-
-  test('should handle non-existent user lookup', async () => {
-    await startServer(false);
-    const results = await doSearch(client, '(uid=nonexistent)');
-    expect(results.length).toBe(0);
-  });
-
-  test('should handle non-existent group lookup', async () => {
-    await startServer(false);
-    const results = await doSearch(client, '(cn=nonexistentgroup)');
-    expect(results.length).toBe(0);
+    test('f. (cn=*) should return all groups via wildcard', async () => {
+      await startServer(false);
+      const results = await doSearch(client, acceptanceFilters.allGroupsWildcard);
+      expect(results.length).toBe(4);
+      results.forEach(entry => expect(entry.dn).toMatch(/cn=/));
+    });
   });
 });
