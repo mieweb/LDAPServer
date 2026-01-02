@@ -122,12 +122,20 @@ function createLdapGroupEntry(group, baseDn) {
  * @returns {string} Domain name
  */
 function extractDomainFromBaseDn(baseDn) {
-  const dcParts = baseDn.match(/dc=([^,]+)/g);
-  if (dcParts) {
-    return dcParts.map(part => part.replace('dc=', '')).join('.');
+  if (!baseDn || String(baseDn).trim().length === 0) {
+    throw new Error('Invalid base DN');
   }
-  return 'localhost';
+
+  const dcParts = String(baseDn).match(/dc=([^,]+)/gi);
+  if (!dcParts) {
+    throw new Error(`Invalid base DN: ${baseDn}`);
+  }
+
+  return dcParts
+    .map(part => part.split('=')[1].trim())
+    .join('.');
 }
+
 
 module.exports = {
   createLdapEntry,
