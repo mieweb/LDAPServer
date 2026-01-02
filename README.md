@@ -444,15 +444,15 @@ The LDAP Gateway has a comprehensive test suite organized following the **Testin
 ### Quick Start
 
 ```bash
-# Run all tests
+# Run all tests (from workspace root)
 npm test
 
-# Run specific test types
-npm run test:unit           # Fast, isolated unit tests
-npm run test:integration    # Integration tests with real backends
-npm run test:e2e            # End-to-end tests with SSSD client
+# Run specific test suites
+npm run test:core           # Core package tests
+npm run test:server         # Server package tests
 
-# Run database integration tests with Docker
+# Run database integration tests with Docker (from server/ directory)
+cd server
 npm run test:db:mysql       # MySQL integration tests
 npm run test:db:postgres    # PostgreSQL integration tests
 npm run test:db:mongodb     # MongoDB integration tests
