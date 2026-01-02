@@ -10,8 +10,8 @@
 function extractCredentials(req) {
   const dnParts = req.dn.toString().split(",");
   const username = dnParts[0].split("=")[1];
-  // Strip out non-printables
-  const password = req.credentials.replace(/[^\x20-\x7E]/g, '');
+  const password = req.credentials;
+
   return { username, password };
 }
 
