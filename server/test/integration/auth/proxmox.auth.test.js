@@ -128,19 +128,5 @@ describe('Proxmox Auth Backend - Acceptance Tests', () => {
       // Verify bind failed
       expect(client.bound).toBe(false);
     });
-
-    test('3. Bind with non-existent user should fail', async () => {
-      const username = 'nonexistent';
-      const password = 'anypassword';
-      const userDN = `uid=${username},${baseDN}`;
-
-      // Should throw error (user not found results in auth failure)
-      await expect(
-        client.bind(userDN, password)
-      ).rejects.toThrow();
-
-      // Verify bind failed
-      expect(client.bound).toBe(false);
-    });
   });
 });

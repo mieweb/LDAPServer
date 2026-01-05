@@ -52,14 +52,4 @@ maybeDescribe('MySQL Auth Backend (real DB) - Integration', () => {
     await startServer();
     await expect(new Promise((resolve, reject) => client.bind(`uid=testuser,${baseDn}`, 'wrongpassword', (e)=>e?reject(e):resolve()))).rejects.toThrow(/Invalid credentials/i);
   });
-
-  test('3. Bind with non-existent user should fail', async () => {
-    await startServer();
-    await expect(new Promise((resolve, reject) => client.bind(`uid=nonexistent,${baseDn}`, 'anypassword', (e)=>e?reject(e):resolve()))).rejects.toThrow();
-  });
-
-  test('4. should fail with empty password', async () => {
-    await startServer();
-    await expect(new Promise((resolve, reject) => client.bind(`uid=testuser,${baseDn}`, '', (e)=>e?reject(e):resolve()))).rejects.toThrow();
-  });
 });

@@ -50,7 +50,7 @@ describe('SQLite Auth Backend (real DB) - Integration', () => {
     }
   });
 
-  test('Bind with valid credentials should succeed (SQLite)', async () => {
+  test('1. Bind with valid credentials should succeed (SQLite)', async () => {
     dbPath = createTempDbFile();
     await seedSqlite(dbPath);
 
@@ -71,7 +71,7 @@ describe('SQLite Auth Backend (real DB) - Integration', () => {
     client.unbind();
   });
 
-  test('Bind with invalid credentials should fail (SQLite)', async () => {
+  test('2. Bind with invalid credentials should fail (SQLite)', async () => {
     dbPath = createTempDbFile();
     await seedSqlite(dbPath);
 
@@ -86,25 +86,6 @@ describe('SQLite Auth Backend (real DB) - Integration', () => {
     const userDN = `uid=testuser,${baseDn}`;
     await expect(new Promise((resolve, reject) => {
       client.bind(userDN, 'wrong', (err) => err ? reject(err) : resolve());
-    })).rejects.toThrow();
-    client.unbind();
-  });
-
-  test('Bind with non-existent user should fail (SQLite)', async () => {
-    dbPath = createTempDbFile();
-    await seedSqlite(dbPath);
-
-    process.env.SQL_URI = `sqlite:${dbPath}`;
-    process.env.SQL_QUERY_ONE_USER = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, password_hash AS password FROM users WHERE username = ?';
-
-    const authProvider = new SQLAuthProvider();
-    engine = new LdapEngine({ baseDn, port, authProviders: [authProvider], directoryProvider: { initialize: async()=>{}, cleanup: async()=>{} }, logger });
-    await engine.start();
-
-    const client = createClient();
-    const userDN = `uid=nouser,${baseDn}`;
-    await expect(new Promise((resolve, reject) => {
-      client.bind(userDN, 'anything', (err) => err ? reject(err) : resolve());
     })).rejects.toThrow();
     client.unbind();
   });

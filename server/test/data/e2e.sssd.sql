@@ -26,10 +26,12 @@ CREATE TABLE IF NOT EXISTS `groups` (
 );
 
 -- Test user for SSSD authentication
--- Password: 'password' (bcrypt hashed)
+-- Password: 'password123' (bcrypt hashed with 10 rounds)
+-- Pre-hashed because this SQL is loaded directly by MySQL, not processed by Node.js
+-- Hash generated with: bcrypt.hash('password123', 10)
 INSERT INTO users (uid, cn, sn, mail, userPassword, uidNumber, gidNumber, homeDirectory)
 VALUES
-  ('testuser', 'Test User', 'User', 'testuser@example.com', '$2b$10$HV4N7iwiJsiyERmTieP69.wm./j0esYrr3XdJ1Q2QFqFC0qmhy65q', 10100, 20100, '/home/testuser');
+  ('testuser', 'Test User', 'User', 'testuser@example.com', '$2b$10$DJylnYTJZBhXqzYDV62nTOCW3/6ytjmXITpGo.tSqR5eCppmERflS', 10100, 20100, '/home/testuser');
 
 -- Test groups with testuser as member
 INSERT INTO `groups` (cn, gidNumber, member_uids)

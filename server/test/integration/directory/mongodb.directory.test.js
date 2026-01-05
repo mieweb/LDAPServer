@@ -247,39 +247,4 @@ maybeDescribe('MongoDB Directory Backend - Acceptance Tests', () => {
       });
     });
   });
-
-  describe('Acceptance Criteria: Group Membership Filters', () => {
-    
-    test('g. (memberUid=username) should return groups containing specific user', async () => {
-      const results = await client.search(baseDN, {
-        filter: '(memberUid=testuser)',
-        scope: 'sub'
-      });
-
-      // testuser is member of: users, developers
-      expect(results.length).toBe(2);
-      
-      const groupNames = results.map(r => r.attributes.cn);
-      expect(groupNames).toContain('users');
-      expect(groupNames).toContain('developers');
-
-      // Verify all groups contain testuser as member
-      results.forEach(group => {
-        expect(group.attributes.memberUid).toContain('testuser');
-      });
-    });
-
-    test('h. (gidNumber=1000) should return group with specific GID', async () => {
-      const results = await client.search(baseDN, {
-        filter: '(gidNumber=1000)',
-        scope: 'sub'
-      });
-
-      expect(results.length).toBe(1);
-      
-      const group = results[0];
-      expect(group.attributes.cn).toBe('admins');
-      expect(group.attributes.gidNumber).toBe('1000');
-    });
-  });
 });

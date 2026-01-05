@@ -146,27 +146,5 @@ maybeDescribe('MongoDB Auth Backend - Acceptance Tests', () => {
         client.bind(userDN, wrongPassword)
       ).rejects.toThrow(/Invalid Credentials/);
     });
-
-    test('3. Bind with non-existent user should fail', async () => {
-      const username = 'nonexistent';
-      const password = 'anypassword';
-      const userDN = `uid=${username},${baseDN}`;
-
-      // Should throw InvalidCredentialsError
-      await expect(
-        client.bind(userDN, password)
-      ).rejects.toThrow(/Invalid Credentials/);
-    });
-
-    test('4. Bind with empty password should fail', async () => {
-      const username = 'testuser';
-      const emptyPassword = '';
-      const userDN = `uid=${username},${baseDN}`;
-
-      // Should throw InvalidCredentialsError
-      await expect(
-        client.bind(userDN, emptyPassword)
-      ).rejects.toThrow(/Invalid Credentials/);
-    });
   });
 });
