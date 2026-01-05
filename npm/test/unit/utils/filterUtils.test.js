@@ -197,9 +197,9 @@ describe('filterUtils', () => {
       expect(result).toBe(false);
     });
 
-    test('should not treat generic OBJECTCLASS=top as mixed: (OBJECTCLASS=top)', () => {
+    test('should treat generic OBJECTCLASS=top as mixed: (OBJECTCLASS=top)', () => {
       const result = isMixedSearchRequest('(OBJECTCLASS=top)');
-      expect(result).toBe(false);
+      expect(result).toBe(true);
     });
   });
 

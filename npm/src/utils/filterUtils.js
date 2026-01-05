@@ -90,9 +90,14 @@ function isGroupSearchRequest(filterStr, attributes) {
  * @returns {boolean} True if this is a mixed search request
  */
 function isMixedSearchRequest(filterStr) {
-  // Only objectClass=* is truly mixed (searches all entry types)
-  // cn= is for groups, uid= is for users
-  return /objectClass=\*/i.test(filterStr) || filterStr.length === 0;
+  if (!filterStr) return true;
+
+  // objectClass=* is mixed
+  if (/objectClass=\*/i.test(filterStr)) return true;
+
+  if (/objectClass=top/i.test(filterStr)) return true;
+
+  return false;
 }
 
 /**
