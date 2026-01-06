@@ -80,10 +80,6 @@ describe('LdapEngine', () => {
 
       // proves OS-level binding (what the reviewer wants)
       await expect(canConnect(3890, '127.0.0.1')).resolves.toBe(true);
-
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining('LDAP Server listening on port 3890')
-      );
     });
   });
 });

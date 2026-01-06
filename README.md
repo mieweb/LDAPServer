@@ -451,7 +451,7 @@ npm test
 npm run test:core           # Core package tests
 npm run test:server         # Server package tests
 
-# Run database integration tests with Docker (from server/ directory)
+# Database integration tests (run from server/ directory)
 cd server
 npm run test:db:mysql       # MySQL integration tests
 npm run test:db:postgres    # PostgreSQL integration tests
