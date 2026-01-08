@@ -44,6 +44,7 @@ maybeDescribe('MySQL Directory Backend (real DB) - Integration', () => {
 
   function configureEnv() {
     process.env.SQL_URI = url;
+    process.env.SQL_SSL = 'false';  // Disable TLS for local testing
     process.env.SQL_QUERY_ALL_USERS = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number FROM users';
     process.env.SQL_QUERY_ONE_USER = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, password_hash AS password FROM users WHERE username = ?';
     process.env.SQL_QUERY_ALL_GROUPS = 'SELECT cn AS name, gid_number AS gid_number, member_uids FROM `groups`';
@@ -61,7 +62,7 @@ maybeDescribe('MySQL Directory Backend (real DB) - Integration', () => {
   }
 
   beforeAll(async () => {
-    conn = await mysql.createConnection(url);
+    conn = await mysql.createConnection({ uri: url, ssl: false });
     const seeder = new MySQLSeeder(conn);
     await seeder.seed();
   });

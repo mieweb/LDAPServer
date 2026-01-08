@@ -3,6 +3,20 @@ const logger = require('../utils/logger');
 const { Sequelize } = require('sequelize');
 
 /**
+ * Build Sequelize options with optional SSL configuration
+ * Set SQL_SSL=false to disable TLS for testing with local databases
+ */
+function buildSequelizeOptions() {
+  const options = { logging: msg => logger.debug(msg) };
+  
+  if (process.env.SQL_SSL === 'false') {
+    options.dialectOptions = { ssl: false };
+  }
+  
+  return options;
+}
+
+/**
  * Normalize member_uids field from database
  * MySQL/PostgreSQL with native JSON types return arrays directly via Sequelize
  * SQLite stores JSON as TEXT and returns strings that need parsing
@@ -30,7 +44,7 @@ class SQLDirectoryProvider extends DirectoryProvider {
     super();
     this.sequelize = new Sequelize(
       process.env.SQL_URI,
-      { logging: msg => logger.debug(msg) }
+      buildSequelizeOptions()
     );
   }
 

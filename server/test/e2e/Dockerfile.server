@@ -17,7 +17,7 @@ COPY npm/package.json ./npm/package.json
 WORKDIR /app/npm
 RUN npm install --no-audit --no-fund
 COPY npm ./
-RUN npm run build || true
+RUN npm run build
 
 # 2) Install server with local core available
 WORKDIR /app

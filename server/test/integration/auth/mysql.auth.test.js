@@ -16,6 +16,7 @@ function createClient() { return ldap.createClient({ url: `ldap://127.0.0.1:${po
 
 function configureEnv() {
   process.env.SQL_URI = url;
+  process.env.SQL_SSL = 'false';  // Disable TLS for local testing
   process.env.SQL_QUERY_ONE_USER = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, password_hash AS password FROM users WHERE username = ?';
 }
 
@@ -34,7 +35,7 @@ maybeDescribe('MySQL Auth Backend (real DB) - Integration', () => {
   }
 
   beforeAll(async () => {
-    conn = await mysql.createConnection(url);
+    conn = await mysql.createConnection({ uri: url, ssl: false });
     const seeder = new MySQLSeeder(conn);
     await seeder.seed();
   });

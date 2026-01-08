@@ -12,8 +12,33 @@ trap cleanup EXIT
 echo "Bringing up SSSD integration stack..."
 docker compose up -d --build
 
-echo "Waiting for services to start (30s)..."
-sleep 30
+echo "Waiting for services to become healthy..."
+MAX_ATTEMPTS=5
+SLEEP_INTERVAL=6
+attempt=1
+
+while [ $attempt -le $MAX_ATTEMPTS ]; do
+  echo "  Checking service health (attempt $attempt/$MAX_ATTEMPTS)..."
+  
+  # Check if all services are healthy
+  unhealthy=$(docker compose ps --format json | jq -r 'select(.Health != "healthy") | .Service' 2>/dev/null)
+  
+  if [ -z "$unhealthy" ]; then
+    echo "  ✓ All services are healthy!"
+    break
+  fi
+  
+  if [ $attempt -eq $MAX_ATTEMPTS ]; then
+    echo "ERROR: Services failed to become healthy after $((MAX_ATTEMPTS * SLEEP_INTERVAL)) seconds"
+    echo "Unhealthy services:"
+    docker compose ps
+    exit 1
+  fi
+  
+  echo "  Waiting for: $unhealthy"
+  sleep $SLEEP_INTERVAL
+  attempt=$((attempt + 1))
+done
 
 # Function to execute commands via SSH (tests actual SSH authentication)
 function ssh_cmd() {
