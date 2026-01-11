@@ -75,6 +75,15 @@ jobs:
       - name: Build server package
         run: npm run build:server
 
+      - name: Generate test certificates
+        run: |
+          mkdir -p server/cert
+          openssl req -x509 -newkey rsa:2048 -nodes -sha256 \
+            -subj "/CN=localhost" \
+            -keyout server/cert/server.key \
+            -out server/cert/server.crt \
+            -days 1
+
       - name: Run ${{ matrix.database }} integration tests
         run: npm run test:db:${{ matrix.database }} -w server
 
