@@ -155,7 +155,7 @@ class ProxmoxDirectory extends DirectoryProvider {
       if (line.startsWith('user:')) {
         const [_, rest] = line.split('user:');
         // Proxmox user.cfg format: username@realm:enable:expire:firstname:lastname:email:comment:keys:groups
-        const [usernameWithRealm, , , firstName, lastName, email] = rest.split(':');
+        const [usernameWithRealm, enabledStr, expireStr, firstName, lastName, email] = rest.split(':');
         const cleanUsername = usernameWithRealm.split('@')[0];
 
         // Generate stable UID based on username hash
@@ -166,6 +166,16 @@ class ProxmoxDirectory extends DirectoryProvider {
           uid_number: stableUid,
           gid_number: stableUid
         };
+
+        // Parse enabled field (1 = enabled, 0 = disabled)
+        if (enabledStr !== undefined && enabledStr !== '') {
+          userObj.enabled = enabledStr === '1';
+        }
+
+        // Parse expire field (0 = never expires, timestamp = expiration time)
+        if (expireStr !== undefined && expireStr !== '') {
+          userObj.expire = parseInt(expireStr, 10);
+        }
 
         // Add optional attributes
         if (firstName)

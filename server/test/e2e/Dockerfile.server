@@ -1,0 +1,32 @@
+FROM node:18-slim
+
+WORKDIR /app
+
+# OS packages needed for building native deps and fetching git deps
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+	git \
+	ca-certificates \
+	bash \
+	netcat-openbsd \
+	build-essential \
+	python3 && \
+	rm -rf /var/lib/apt/lists/*
+
+# 1) Prepare core package first (required by server via file:../npm)
+COPY npm/package.json ./npm/package.json
+WORKDIR /app/npm
+RUN npm install --no-audit --no-fund
+COPY npm ./
+RUN npm run build
+
+# 2) Install server with local core available
+WORKDIR /app
+COPY server/package.json ./server/package.json
+COPY server/package-lock.json ./server/package-lock.json
+WORKDIR /app/server
+# Use npm install to avoid lockfile strictness while developing tests
+RUN npm install --no-audit --no-fund
+COPY server ./
+
+EXPOSE 636
+CMD ["node", "index.js"]

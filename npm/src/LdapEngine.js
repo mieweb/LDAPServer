@@ -183,20 +183,20 @@ class LdapEngine extends EventEmitter {
       this.emit('bindRequest', { username: 'anonymous', anonymous: true });
       this.emit('bindSuccess', { username: 'anonymous', anonymous: true });
       res.end();
+      return next();
     });
 
     // Authenticated bind - catch all DNs under our base
-    this.server.bind(this.config.baseDn, async (req, res, next) => {
+    this.server.bind(this.config.baseDn, (req, res, next) => {
       const { username, password } = this._extractCredentials(req);
       this.logger.debug("Authenticated bind request", { username, dn: req.dn.toString() });
 
-      try {
-        this.emit('bindRequest', { username, anonymous: false });
-        
-        // Authenticate against all auth providers - all must return true
-        const authResults = await Promise.all(
-          this.authProviders.map(provider => provider.authenticate(username, password, req))
-        );
+      this.emit('bindRequest', { username, anonymous: false });
+      
+      // Authenticate against all auth providers - all must return true
+      return Promise.all(
+        this.authProviders.map(provider => provider.authenticate(username, password, req))
+      ).then(authResults => {
         const isAuthenticated = authResults.every(result => result === true);
         
         if (!isAuthenticated) {
@@ -207,13 +207,14 @@ class LdapEngine extends EventEmitter {
 
         this.emit('bindSuccess', { username, anonymous: false });
         res.end();
-      } catch (error) {
+        return next();
+      }).catch(error => {
         this.logger.error("Bind error", { error, username });
         const { normalizeAuthError } = require('./utils/errorUtils');
         const normalizedError = normalizeAuthError(error);
         this.emit('bindError', { username, error: normalizedError });
         return next(normalizedError);
-      }
+      });
     });
   }
 
@@ -360,11 +361,26 @@ class LdapEngine extends EventEmitter {
     if (isMixedSearchRequest(filterStr)) {
       this.logger.debug(`Mixed search request with filter: ${filterStr}`);
       
+      // Parse cn value from filter for filtering
+      const cnMatch = filterStr.match(/cn=([^)&|]+)/i);
+      const cnFilter = cnMatch ? cnMatch[1].trim() : null;
+      const isWildcard = cnFilter === '*';
+      
       // Return users first
       const users = await this.directoryProvider.getAllUsers();
       this.logger.debug(`Found ${users.length} users for mixed search`);
       
       for (const user of users) {
+        // Filter by cn if specified (cn is the user's common name)
+        if (cnFilter && !isWildcard) {
+          const userCn = user.firstname && user.lastname 
+            ? `${user.firstname} ${user.lastname}`
+            : user.username;
+          if (userCn.toLowerCase() !== cnFilter.toLowerCase()) {
+            continue;
+          }
+        }
+        
         const entry = createLdapEntry(user, this.config.baseDn);
         this.emit('entryFound', { type: 'user', entry: entry.dn });
         res.send(entry);
@@ -376,6 +392,11 @@ class LdapEngine extends EventEmitter {
       this.logger.debug(`Found ${groups.length} groups for mixed search`);
       
       for (const group of groups) {
+        // Filter by cn if specified (cn is the group name)
+        if (cnFilter && !isWildcard && group.name.toLowerCase() !== cnFilter.toLowerCase()) {
+          continue;
+        }
+        
         const entry = createLdapGroupEntry(group, this.config.baseDn);
         this.emit('entryFound', { type: 'group', entry: entry.dn });
         res.send(entry);

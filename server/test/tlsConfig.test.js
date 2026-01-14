@@ -1,8 +1,6 @@
-/**
- * TLS Configuration Tests
- * 
- * Tests for TLS version and cipher configuration parsing
- */
+// TLS Configuration Tests
+// 
+// Tests for TLS version and cipher configuration parsing
 
 const assert = require('assert');
 

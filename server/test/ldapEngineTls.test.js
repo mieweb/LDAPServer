@@ -1,8 +1,6 @@
-/**
- * LdapEngine TLS Options Tests
- * 
- * Tests that TLS options are properly passed to the LDAP server
- */
+// LdapEngine TLS Options Tests
+// 
+// Tests that TLS options are properly passed to the LDAP server
 
 const assert = require('assert');
 

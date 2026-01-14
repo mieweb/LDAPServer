@@ -1,0 +1,64 @@
+services:
+  ldap-gateway:
+    build:
+      context: ../../../
+      dockerfile: server/test/e2e/Dockerfile.server
+    environment:
+      - AUTH_BACKENDS=sql
+      - DIRECTORY_BACKEND=sql
+      - "SQL_URI=mysql://testuser:testpass@sql:3306/testdb"
+      - LDAP_BASE_DN=dc=test,dc=base
+      - REQUIRE_AUTH_FOR_SEARCH=false
+      - TLS_ENABLE=true
+      - TLS_CERT_PATH=/cert/server.crt
+      - TLS_KEY_PATH=/cert/server.key
+      - "SQL_QUERY_ALL_USERS=SELECT uid AS username, cn AS full_name, sn AS surname, mail, homeDirectory AS home_directory, loginShell AS login_shell, uidNumber AS uid_number, gidNumber AS gid_number FROM users"
+      - "SQL_QUERY_ONE_USER=SELECT uid AS username, cn AS full_name, sn AS surname, mail, homeDirectory AS home_directory, loginShell AS login_shell, uidNumber AS uid_number, gidNumber AS gid_number, userPassword AS password FROM users WHERE uid = ?"
+      - "SQL_QUERY_ALL_GROUPS=SELECT cn AS name, gidNumber AS gid_number, member_uids FROM `groups`"
+      - "SQL_QUERY_GROUPS_BY_MEMBER=SELECT cn AS name, gidNumber AS gid_number, member_uids FROM `groups` WHERE JSON_CONTAINS(member_uids, JSON_QUOTE(?), '$')"
+    ports:
+      - "636:636"
+    volumes:
+      - ../../cert:/cert:ro
+    depends_on:
+      sql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 636"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  sql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpass
+      - MYSQL_DATABASE=testdb
+      - MYSQL_USER=testuser
+      - MYSQL_PASSWORD=testpass
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - ../data/e2e.sssd.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  sssd-client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    environment: []
+    depends_on:
+      ldap-gateway:
+        condition: service_healthy
+    ports:
+      - "2222:2222"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "ss -lnt | grep -q ':2222' && getent passwd testuser | grep -q testuser"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    volumes: []

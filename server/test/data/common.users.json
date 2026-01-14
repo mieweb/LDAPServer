@@ -1,0 +1,54 @@
+[
+  {
+    "username": "testuser",
+    "password": "password123",
+    "uid_number": 1001,
+    "gid_number": 1001,
+    "full_name": "Test User",
+    "surname": "User",
+    "given_name": "Test",
+    "mail": "testuser@example.com",
+    "home_directory": "/home/testuser",
+    "login_shell": "/bin/bash",
+    "enabled": true
+  },
+  {
+    "username": "admin",
+    "password": "admin123",
+    "uid_number": 1000,
+    "gid_number": 1000,
+    "full_name": "Administrator",
+    "surname": "Admin",
+    "given_name": "Admin",
+    "mail": "admin@example.com",
+    "home_directory": "/home/admin",
+    "login_shell": "/bin/bash",
+    "enabled": true
+  },
+  {
+    "username": "jdoe",
+    "password": "test123",
+    "uid_number": 1002,
+    "gid_number": 1001,
+    "full_name": "John Doe",
+    "surname": "Doe",
+    "given_name": "John",
+    "mail": "jdoe@example.com",
+    "home_directory": "/home/jdoe",
+    "login_shell": "/bin/bash",
+    "enabled": true
+  },
+  {
+    "username": "disabled",
+    "password": "password",
+    "uid_number": 1003,
+    "gid_number": 1001,
+    "full_name": "Disabled User",
+    "surname": "User",
+    "given_name": "Disabled",
+    "mail": "disabled@example.com",
+    "home_directory": "/home/disabled",
+    "login_shell": "/bin/bash",
+    "enabled": false
+  }
+]

@@ -439,7 +439,36 @@ AUTH_BACKENDS=my-auth
 
 ## 🧪 Testing
 
-### LDAP Queries
+The LDAP Gateway has a comprehensive test suite organized following the **Testing Pyramid** pattern:
+
+### Quick Start
+
+```bash
+# Run all tests (from workspace root)
+npm test
+
+# Run specific test suites
+npm run test:core           # Core package tests
+npm run test:server         # Server package tests
+
+# Database integration tests (run from server/ directory)
+cd server
+npm run test:db:mysql       # MySQL integration tests
+npm run test:db:postgres    # PostgreSQL integration tests
+npm run test:db:mongodb     # MongoDB integration tests
+```
+
+### Test Organization
+
+- **Unit Tests**: Fast, isolated tests with mocked dependencies
+- **Integration Tests**: Tests with real backends (SQLite, MySQL, PostgreSQL, MongoDB, Proxmox)
+- **E2E Tests**: Full system tests with real LDAP clients (SSSD, SSH)
+
+See [server/test/README.md](server/test/README.md) for detailed documentation.
+
+### Manual Testing
+
+#### LDAP Queries
 ```bash
 # Search for users
 ldapsearch -x -H ldaps://localhost:636 -b "dc=company,dc=com" "(uid=john)"
@@ -451,16 +480,13 @@ ldapsearch -x -H ldaps://localhost:636 -b "dc=company,dc=com" "(objectClass=posi
 ldapsearch -x -H ldaps://localhost:636 -b "dc=company,dc=com" "(objectClass=posixGroup)"
 ```
 
-### SSH Authentication
+#### SSH Authentication
 ```bash
-# Test SSH authentication through SSSD
-ssh john@ldap-client-host
-
-# Test with specific port
-ssh john@localhost -p 2222
+# Test SSH authentication through E2E SSSD client
+ssh testuser@localhost -p 2222
 ```
 
-### Health Check
+#### Health Check
 ```bash
 # Check service status
 systemctl status ldap-gateway
