@@ -13,6 +13,7 @@
  * @property {string} [full_name] - User's full name
  * @property {string} [mail] - User's email address
  * @property {string} [home_directory] - User's home directory
+ * @property {string} [login_shell] - User's login shell (e.g. "/bin/bash")
  */
 
 /**
@@ -42,8 +43,17 @@ function generateFullName(user) {
  * @param {LdapUser} user - User object from directory provider
  * @param {string} baseDn - Base DN for the LDAP directory
  * @returns {Object} LDAP entry object
+ * @throws {Error} If uid_number or gid_number is missing
  */
 function createLdapEntry(user, baseDn) {
+  // Validate required numeric identifiers
+  if (user.uid_number === null || user.uid_number === undefined) {
+    throw new Error(`uid_number is required for user ${user.username}`);
+  }
+  if (user.gid_number === null || user.gid_number === undefined) {
+    throw new Error(`gid_number is required for user ${user.username}`);
+  }
+
   const fullName = generateFullName(user);
 
   // mandatory and generated attributes
@@ -53,11 +63,11 @@ function createLdapEntry(user, baseDn) {
       objectClass: ["top", "posixAccount", "inetOrgPerson"],
       uid: user.username,
       uidNumber: user.uid_number,
-      gidNumber: user.uid_number,
+      gidNumber: user.gid_number,
       cn: fullName || user.username,  // required attribute
       mail: user.mail || `${user.username}@${extractDomainFromBaseDn(baseDn)}`,
       homeDirectory: user.home_directory || `/home/${user.username}`,
-      loginShell: "/bin/bash",
+      loginShell: user.login_shell || "/bin/bash", // Default to bash if not specified
     },
   };
 
@@ -81,18 +91,21 @@ function createLdapEntry(user, baseDn) {
  * @returns {Object} LDAP group entry object
  */
 function createLdapGroupEntry(group, baseDn) {
+  const gidNumber = group.gid_number || group.gidNumber;
   const entry = {
     dn: group.dn || `cn=${group.name},${baseDn}`,
     attributes: {
       objectClass: group.objectClass || ['posixGroup'],
       cn: group.name,
-      gidNumber: group.gid_number || group.gidNumber,
+      gidNumber: gidNumber,
     }
   };
 
-  // Add member UIDs if they exist
-  if (group.memberUids && group.memberUids.length > 0) {
-    entry.attributes.memberUid = group.memberUids;
+  // Add member UIDs if they exist (support both field names)
+  const memberUids = group.memberUids || group.member_uids;
+  if (memberUids && memberUids.length > 0) {
+    // Ensure it's always an array (LDAP requirement for multi-valued attributes)
+    entry.attributes.memberUid = Array.isArray(memberUids) ? memberUids : [memberUids];
   }
 
   // Add member DNs if they exist
@@ -109,12 +122,20 @@ function createLdapGroupEntry(group, baseDn) {
  * @returns {string} Domain name
  */
 function extractDomainFromBaseDn(baseDn) {
-  const dcParts = baseDn.match(/dc=([^,]+)/g);
-  if (dcParts) {
-    return dcParts.map(part => part.replace('dc=', '')).join('.');
+  if (!baseDn || String(baseDn).trim().length === 0) {
+    throw new Error('Invalid base DN');
   }
-  return 'localhost';
+
+  const dcParts = String(baseDn).match(/dc=([^,]+)/gi);
+  if (!dcParts) {
+    throw new Error(`Invalid base DN: ${baseDn}`);
+  }
+
+  return dcParts
+    .map(part => part.split('=')[1].trim())
+    .join('.');
 }
+
 
 module.exports = {
   createLdapEntry,

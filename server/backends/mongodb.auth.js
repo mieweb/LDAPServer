@@ -1,6 +1,7 @@
 const { AuthProvider } = require('@ldap-gateway/core');
 const mongoDbDriver = require('../db/drivers/mongoDb');
 const logger = require('../utils/logger');
+const bcrypt = require('bcrypt');
 
 /**
  * MongoDB Authentication Provider  
@@ -38,12 +39,21 @@ class MongoDBAuthProvider extends AuthProvider {
         return false;
       }
 
-      // TODO: Implement proper password hashing (bcrypt, etc.)
-      // For now, using plain text comparison (NOT for production)
-      const isValid = user.password === password;
-      
-      logger.debug(`[MongoDBAuthProvider] Authentication result for ${username}: ${isValid}`);
-      return isValid;
+      // Check if user has password_hash (bcrypt)
+      if (!user.password_hash) {
+        logger.debug(`[MongoDBAuthProvider] No password_hash found for user: ${username}`);
+        return false;
+      }
+
+      // Verify password using bcrypt
+      try {
+        const isValid = await bcrypt.compare(password, user.password_hash);
+        logger.debug(`[MongoDBAuthProvider] Authentication result for ${username}: ${isValid}`);
+        return isValid;
+      } catch (error) {
+        logger.error(`[MongoDBAuthProvider] Bcrypt comparison error for ${username}:`, error);
+        return false;
+      }
       
     } catch (error) {
       logger.error(`[MongoDBAuthProvider] Authentication error for ${username}:`, error);

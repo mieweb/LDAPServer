@@ -6,13 +6,14 @@ const { AuthProvider } = require('@ldap-gateway/core');
 const logger = require('../utils/logger');
 
 class ProxmoxBackend extends AuthProvider {
-  constructor() {
+  constructor(directoryProvider = null) {
     super();
     this.shadowPath = process.env.PROXMOX_SHADOW_CFG || null;
     this.shadowCache = null;
     this.fileWatcher = null;
     this.reloadTimeout = null;
     this.initialized = false;
+    this.directoryProvider = directoryProvider;
   }
 
   async initialize() {
@@ -140,6 +141,31 @@ class ProxmoxBackend extends AuthProvider {
 
   async authenticate(username, password) {
     try {
+      // Check if user is enabled and not expired (if directory provider is available)
+      if (this.directoryProvider) {
+        const user = await this.directoryProvider.findUser(username);
+        
+        if (!user) {
+          logger.debug(`[ProxmoxBackend] User ${username} not found in directory`);
+          return false;
+        }
+
+        // Check if user is disabled
+        if (user.enabled === false) {
+          logger.info(`[ProxmoxBackend] User ${username} is disabled`);
+          return false;
+        }
+
+        // Check if user is expired (expire > 0 and timestamp is in the past)
+        if (user.expire && user.expire > 0) {
+          const now = Math.floor(Date.now() / 1000); // Current time in Unix timestamp
+          if (user.expire < now) {
+            logger.info(`[ProxmoxBackend] User ${username} account has expired`);
+            return false;
+          }
+        }
+      }
+
       // Use cached shadow data if available, otherwise read from file
       const shadow = this.shadowCache || fs.readFileSync(this.shadowPath, 'utf8');
 

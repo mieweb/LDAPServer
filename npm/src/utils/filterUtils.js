@@ -10,8 +10,8 @@
 function extractCredentials(req) {
   const dnParts = req.dn.toString().split(",");
   const username = dnParts[0].split("=")[1];
-  // Strip out non-printables
-  const password = req.credentials.replace(/[^\x20-\x7E]/g, '');
+  const password = req.credentials;
+
   return { username, password };
 }
 
@@ -75,6 +75,7 @@ function isGroupSearchRequest(filterStr, attributes) {
   const isGroupSearch =
     /(objectClass=posixGroup)|(objectClass=groupOfNames)|(memberUid=)/i.test(filterStr) ||
     /gidNumber=/i.test(filterStr) ||
+    /cn=/i.test(filterStr) ||  // cn= in filter is for groups (groups use cn= in DN)
     (filterStr.length === 0 && (attributes.includes('member') || attributes.includes('uniqueMember') || attributes.includes('memberOf'))) ||
     attributes.includes('gidNumber') ||
     attributes.includes('memberUid') ||
@@ -89,7 +90,14 @@ function isGroupSearchRequest(filterStr, attributes) {
  * @returns {boolean} True if this is a mixed search request
  */
 function isMixedSearchRequest(filterStr) {
-  return /objectClass=/i.test(filterStr) || filterStr.length === 0;
+  if (!filterStr) return true;
+
+  // objectClass=* is mixed
+  if (/objectClass=\*/i.test(filterStr)) return true;
+
+  if (/objectClass=top/i.test(filterStr)) return true;
+
+  return false;
 }
 
 /**

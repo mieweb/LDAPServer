@@ -3,6 +3,39 @@ const logger = require('../utils/logger');
 const { Sequelize } = require('sequelize');
 
 /**
+ * Build Sequelize options with optional SSL configuration
+ * Set SQL_SSL=false to disable TLS for testing with local databases
+ */
+function buildSequelizeOptions() {
+  const options = { logging: msg => logger.debug(msg) };
+  
+  if (process.env.SQL_SSL === 'false') {
+    options.dialectOptions = { ssl: false };
+  }
+  
+  return options;
+}
+
+/**
+ * Normalize member_uids field from database
+ * MySQL/PostgreSQL with native JSON types return arrays directly via Sequelize
+ * SQLite stores JSON as TEXT and returns strings that need parsing
+ * @param {Object} group - Group object from database
+ * @returns {Object} Group with normalized member_uids array
+ */
+function normalizeMemberUids(group) {
+  if (typeof group.member_uids === 'string') {
+    try {
+      group.member_uids = JSON.parse(group.member_uids);
+    } catch (e) {
+      logger.warn(`[SQLDirectoryProvider] Failed to parse member_uids JSON for group ${group.name}: ${e.message}`);
+      group.member_uids = [];
+    }
+  }
+  return group;
+}
+
+/**
  * SQL Directory Provider
  * Handles user and group directory operations against SQL database
  */
@@ -11,7 +44,7 @@ class SQLDirectoryProvider extends DirectoryProvider {
     super();
     this.sequelize = new Sequelize(
       process.env.SQL_URI,
-      { logging: msg => logger.debug(msg) }
+      buildSequelizeOptions()
     );
   }
 
@@ -56,14 +89,17 @@ class SQLDirectoryProvider extends DirectoryProvider {
           { replacements: [username] }
         );
         
+        // Normalize member_uids from JSON strings to arrays
+        const normalizedGroups = groups.map(normalizeMemberUids);
+        
         // Apply cn filter if present (skip wildcards)
         if (filterConditions.cn && filterConditions.cn !== '*') {
-          const filtered = groups.filter(g => g.name === filterConditions.cn);
+          const filtered = normalizedGroups.filter(g => g.name === filterConditions.cn);
           logger.debug(`[SQLDirectoryProvider] After cn filter (${filterConditions.cn}): ${filtered.length} groups`);
           return filtered;
         }
         
-        return groups;
+        return normalizedGroups;
       }
       
       // Get all groups and apply filters
@@ -129,8 +165,11 @@ class SQLDirectoryProvider extends DirectoryProvider {
       logger.debug('[SQLDirectoryProvider] Getting all groups');
       const [groups, _] = await this.sequelize.query(process.env.SQL_QUERY_ALL_GROUPS);
       
-      logger.debug(`[SQLDirectoryProvider] Found ${groups.length} groups`);
-      return groups;
+      // Normalize member_uids from JSON strings to arrays
+      const normalizedGroups = groups.map(normalizeMemberUids);
+      
+      logger.debug(`[SQLDirectoryProvider] Found ${normalizedGroups.length} groups`);
+      return normalizedGroups;
       
     } catch (error) {
       logger.error('[SQLDirectoryProvider] Error getting all groups:', error);
