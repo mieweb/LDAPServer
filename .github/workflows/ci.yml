@@ -2,9 +2,9 @@ name: CI Test
 
 on:
   push:
-    branches: [ main, dev, tests ]
+    branches: [ main, dev ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
 
 env:
   NODE_VERSION: '18'
