@@ -25,7 +25,7 @@ class NotificationAuthProvider extends AuthProvider {
       
       const response = await NotificationService.sendAuthenticationNotification(username);
       
-      if (response.action === "APPROVE") {
+      if (response.action === "approve") {
         logger.debug(`[NotificationAuthProvider] MFA approved for ${username}`);
         return true;
       } else {
