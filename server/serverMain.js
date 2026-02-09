@@ -25,7 +25,7 @@ async function initializeServer() {
   
   // Load configuration using the centralized configuration loader
   const configLoader = new ConfigurationLoader();
-  const config = configLoader.loadConfig();
+  const config = await configLoader.loadConfig();
   
   // Continue with server initialization
   return startServer(config);
