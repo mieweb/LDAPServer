@@ -223,7 +223,45 @@ class LdapEngine extends EventEmitter {
    * @private
    */
   _setupSearchHandlers() {
-    // Authorization middleware (if enabled)
+    // RootDSE handler - handles queries to empty base DN ("") per RFC 4512 section 5.1
+    // This must be registered as a separate route handler
+    this.server.search('', (req, res, next) => {
+      const filterStr = req.filter.toString();
+      const scope = req.scope;
+      this.logger.debug(`RootDSE Search - Filter: ${filterStr}, Scope: ${scope} (type: ${typeof scope})`);
+
+      try {
+        // Check scope - ldapjs uses 0 for 'base', 1 for 'one', 2 for 'sub'
+        if (scope === 'base' || scope === 0) {
+          this.emit('rootDSERequest', { filter: filterStr });
+          
+          // Create RootDSE entry per RFC 4512
+          const rootDSEEntry = {
+            dn: '',
+            attributes: {
+              objectClass: ['top'],
+              namingContexts: [this.config.baseDn],
+              supportedLDAPVersion: ['3']
+            }
+          };
+
+          res.send(rootDSEEntry);
+          this.logger.debug('RootDSE entry sent');
+          this.emit('rootDSEResponse', { entry: rootDSEEntry });
+        }
+        
+        res.end();
+        return next();
+      } catch (error) {
+        this.logger.error("RootDSE search error", { error, filter: filterStr });
+        const { normalizeSearchError } = require('./utils/errorUtils');
+        const normalizedError = normalizeSearchError(error);
+        this.emit('rootDSEError', { error: normalizedError });
+        return next(normalizedError);
+      }
+    });
+
+    // Authorization middleware (if enabled) for normal searches
     const authorizeSearch = (req, res, next) => {
       if (!this.config.requireAuthForSearch) {
         return next();
@@ -243,7 +281,7 @@ class LdapEngine extends EventEmitter {
       return next();
     };
 
-    // Search handler with authorization middleware
+    // Search handler with authorization middleware for normal directory searches
     this.server.search(this.config.baseDn, authorizeSearch, async (req, res, next) => {
       const filterStr = req.filter.toString();
       this.logger.debug(`LDAP Search - Filter: ${filterStr}, Attributes: ${req.attributes}`);
