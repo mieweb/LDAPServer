@@ -228,23 +228,82 @@ class LdapEngine extends EventEmitter {
     this.server.search('', (req, res, next) => {
       const filterStr = req.filter.toString();
       const scope = req.scope;
-      this.logger.debug(`RootDSE Search - Filter: ${filterStr}, Scope: ${scope} (type: ${typeof scope})`);
+      const requestedAttrs = req.attributes || [];
+      this.logger.debug(`RootDSE Search - Filter: ${filterStr}, Scope: ${scope}, Attributes: ${JSON.stringify(requestedAttrs)}`);
 
       try {
         // Check scope - ldapjs uses numeric constants: 0='base', 1='one', 2='sub'
         // We check both forms for compatibility with different ldapjs versions
         if (scope === 'base' || scope === 0) {
-          this.emit('rootDSERequest', { filter: filterStr });
+          this.emit('rootDSERequest', { filter: filterStr, attributes: requestedAttrs });
           
-          // Create RootDSE entry per RFC 4512
+          // Determine which attributes to return based on request
+          // RootDSE attribute filtering rules (per RFC 4512):
+          // - No attributes = all attributes (both user and operational)
+          // - '*' only = user attributes only (objectClass)
+          // - '+' only = operational attributes only (namingContexts, supportedLDAPVersion) + objectClass
+          // - Specific names = only those attributes + objectClass (which is always returned)
+          const hasWildcard = requestedAttrs.includes('*');
+          const hasPlus = requestedAttrs.includes('+');
+          const noAttrsRequested = requestedAttrs.length === 0;
+          
+          // Build the entry attributes
+          const attributes = {
+            objectClass: ['top']  // objectClass is always returned
+          };
+          
+          // Determine what to include
+          if (noAttrsRequested) {
+            // No attributes specified = return all (default behavior for RootDSE)
+            attributes.namingContexts = [this.config.baseDn];
+            attributes.supportedLDAPVersion = ['3'];
+          } else if (hasWildcard && hasPlus) {
+            // Both * and + = all user and operational attributes
+            attributes.namingContexts = [this.config.baseDn];
+            attributes.supportedLDAPVersion = ['3'];
+          } else if (hasPlus && !hasWildcard) {
+            // + only = operational attributes
+            attributes.namingContexts = [this.config.baseDn];
+            attributes.supportedLDAPVersion = ['3'];
+          } else if (hasWildcard && !hasPlus) {
+            // * only = user attributes only (just objectClass)
+            // attributes already has objectClass
+          } else {
+            // Specific attributes requested
+            requestedAttrs.forEach(attr => {
+              const attrLower = attr.toLowerCase();
+              if (attrLower === 'namingcontexts') {
+                attributes.namingContexts = [this.config.baseDn];
+              } else if (attrLower === 'supportedldapversion') {
+                attributes.supportedLDAPVersion = ['3'];
+              }
+            });
+          }
+          
           const rootDSEEntry = {
             dn: '',
-            attributes: {
-              objectClass: ['top'],
-              namingContexts: [this.config.baseDn],
-              supportedLDAPVersion: ['3']
-            }
+            attributes
           };
+
+          // Work around ldapjs attribute filtering:
+          // ldapjs filters attributes based on the requested attributes list.
+          // When '+' is requested, we need to replace it with actual operational attribute names.
+          // When specific attributes are requested, ensure they're in the list (in lowercase).
+          if (hasPlus && !hasWildcard) {
+            // Replace '+' with actual operational attribute names (lowercase for ldapjs matching)
+            const idx = res.attributes.indexOf('+');
+            if (idx !== -1) {
+              res.attributes.splice(idx, 1, 'namingcontexts', 'supportedldapversion');
+            }
+          } else if (requestedAttrs.length > 0 && !hasWildcard) {
+            // For specific attribute requests, add them to res.attributes in lowercase
+            requestedAttrs.forEach(attr => {
+              const attrLower = attr.toLowerCase();
+              if (attrLower !== '+' && attrLower !== '*' && res.attributes.indexOf(attrLower) === -1) {
+                res.attributes.push(attrLower);
+              }
+            });
+          }
 
           res.send(rootDSEEntry);
           this.logger.debug('RootDSE entry sent');

@@ -208,4 +208,145 @@ describe('LdapEngine - RootDSE Support (RFC 4512)', () => {
       client.destroy();
     }
   });
+
+  test('RootDSE with "+" returns operational attributes', async () => {
+    engine = new LdapEngine({
+      baseDn,
+      port,
+      requireAuthForSearch: false,
+      authProviders: [new MockAuthProvider()],
+      directoryProvider: new MockDirectoryProvider(),
+      logger,
+    });
+    await engine.start();
+
+    const client = ldap.createClient({ url: `ldap://127.0.0.1:${port}` });
+    try {
+      // Search with "+" should return operational attributes
+      const result = await new Promise((resolve, reject) => {
+        const entries = [];
+        client.search('', { filter: '(objectClass=*)', scope: 'base', attributes: ['+'] }, (err, res) => {
+          if (err) return reject(err);
+          res.on('searchEntry', (entry) => {
+            entries.push({
+              dn: entry.objectName.toString(),
+              attributes: extractAttributes(entry)
+            });
+          });
+          res.on('error', (e) => reject(e));
+          res.on('end', () => resolve(entries));
+        });
+      });
+
+      expect(result.length).toBe(1);
+      const rootDSE = result[0];
+      
+      // Should include operational attributes
+      expect(rootDSE.attributes.namingContexts).toBeDefined();
+      expect(rootDSE.attributes.namingContexts).toContain(baseDn);
+      expect(rootDSE.attributes.supportedLDAPVersion).toBeDefined();
+      expect(rootDSE.attributes.supportedLDAPVersion).toContain('3');
+      
+      // objectClass is always returned
+      expect(rootDSE.attributes.objectClass).toBeDefined();
+    } finally {
+      await new Promise((resolve) => client.unbind(() => resolve()));
+      client.destroy();
+    }
+  });
+
+  test('RootDSE with "*" returns only user attributes (not operational)', async () => {
+    engine = new LdapEngine({
+      baseDn,
+      port,
+      requireAuthForSearch: false,
+      authProviders: [new MockAuthProvider()],
+      directoryProvider: new MockDirectoryProvider(),
+      logger,
+    });
+    await engine.start();
+
+    const client = ldap.createClient({ url: `ldap://127.0.0.1:${port}` });
+    try {
+      // Search with "*" should return only user attributes (not operational)
+      const result = await new Promise((resolve, reject) => {
+        const entries = [];
+        client.search('', { filter: '(objectClass=*)', scope: 'base', attributes: ['*'] }, (err, res) => {
+          if (err) return reject(err);
+          res.on('searchEntry', (entry) => {
+            entries.push({
+              dn: entry.objectName.toString(),
+              attributes: extractAttributes(entry)
+            });
+          });
+          res.on('error', (e) => reject(e));
+          res.on('end', () => resolve(entries));
+        });
+      });
+
+      expect(result.length).toBe(1);
+      const rootDSE = result[0];
+      
+      // Should include objectClass (user attribute)
+      expect(rootDSE.attributes.objectClass).toBeDefined();
+      expect(rootDSE.attributes.objectClass).toContain('top');
+      
+      // Should NOT include operational attributes
+      expect(rootDSE.attributes.namingContexts).toBeUndefined();
+      expect(rootDSE.attributes.supportedLDAPVersion).toBeUndefined();
+    } finally {
+      await new Promise((resolve) => client.unbind(() => resolve()));
+      client.destroy();
+    }
+  });
+
+  test('RootDSE with specific attributes returns only requested attributes', async () => {
+    engine = new LdapEngine({
+      baseDn,
+      port,
+      requireAuthForSearch: false,
+      authProviders: [new MockAuthProvider()],
+      directoryProvider: new MockDirectoryProvider(),
+      logger,
+    });
+    await engine.start();
+
+    const client = ldap.createClient({ url: `ldap://127.0.0.1:${port}` });
+    try {
+      // Search with specific attributes should return only those
+      const result = await new Promise((resolve, reject) => {
+        const entries = [];
+        client.search('', { 
+          filter: '(objectClass=*)', 
+          scope: 'base', 
+          attributes: ['namingContexts', 'supportedLDAPVersion'] 
+        }, (err, res) => {
+          if (err) return reject(err);
+          res.on('searchEntry', (entry) => {
+            entries.push({
+              dn: entry.objectName.toString(),
+              attributes: extractAttributes(entry)
+            });
+          });
+          res.on('error', (e) => reject(e));
+          res.on('end', () => resolve(entries));
+        });
+      });
+
+      expect(result.length).toBe(1);
+      const rootDSE = result[0];
+      
+      // Should include requested attributes
+      expect(rootDSE.attributes.namingContexts).toBeDefined();
+      expect(rootDSE.attributes.namingContexts).toContain(baseDn);
+      expect(rootDSE.attributes.supportedLDAPVersion).toBeDefined();
+      expect(rootDSE.attributes.supportedLDAPVersion).toContain('3');
+      
+      // objectClass is always returned (as per LDAP spec)
+      expect(rootDSE.attributes.objectClass).toBeDefined();
+    } finally {
+      await new Promise((resolve) => client.unbind(() => resolve()));
+      client.destroy();
+    }
+  });
 });
