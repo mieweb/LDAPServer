@@ -28,7 +28,16 @@ class MockDirectoryProvider extends DirectoryProvider {
   async cleanup() {}
 }
 
-jest.setTimeout(20000);
+jest.setTimeout(10000);
+
+// Helper function to extract attributes from LDAP entry
+function extractAttributes(entry) {
+  return entry.attributes.reduce((acc, attr) => {
+    const values = attr.values || attr.vals || [];
+    acc[attr.type] = values.length === 1 ? values[0] : values;
+    return acc;
+  }, {});
+}
 
 describe('LdapEngine - RootDSE Support (RFC 4512)', () => {
   const baseDn = 'dc=example,dc=com';
@@ -60,11 +69,7 @@ describe('LdapEngine - RootDSE Support (RFC 4512)', () => {
           res.on('searchEntry', (entry) => {
             entries.push({
               dn: entry.objectName.toString(),
-              attributes: entry.attributes.reduce((acc, attr) => {
-                const values = attr.values || attr.vals || [];
-                acc[attr.type] = values.length === 1 ? values[0] : values;
-                return acc;
-              }, {})
+              attributes: extractAttributes(entry)
             });
           });
           res.on('error', (e) => reject(e));
@@ -157,11 +162,7 @@ describe('LdapEngine - RootDSE Support (RFC 4512)', () => {
           if (err) return reject(err);
           res.on('searchEntry', (entry) => {
             entries.push({
-              attributes: entry.attributes.reduce((acc, attr) => {
-                const values = attr.values || attr.vals || [];
-                acc[attr.type] = values.length === 1 ? values[0] : values;
-                return acc;
-              }, {})
+              attributes: extractAttributes(entry)
             });
           });
           res.on('error', (e) => reject(e));

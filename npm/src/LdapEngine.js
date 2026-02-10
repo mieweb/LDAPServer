@@ -231,7 +231,8 @@ class LdapEngine extends EventEmitter {
       this.logger.debug(`RootDSE Search - Filter: ${filterStr}, Scope: ${scope} (type: ${typeof scope})`);
 
       try {
-        // Check scope - ldapjs uses 0 for 'base', 1 for 'one', 2 for 'sub'
+        // Check scope - ldapjs uses numeric constants: 0='base', 1='one', 2='sub'
+        // We check both forms for compatibility with different ldapjs versions
         if (scope === 'base' || scope === 0) {
           this.emit('rootDSERequest', { filter: filterStr });
           
