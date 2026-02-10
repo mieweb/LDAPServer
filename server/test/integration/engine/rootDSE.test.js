@@ -349,4 +349,60 @@ describe('LdapEngine - RootDSE Support (RFC 4512)', () => {
       client.destroy();
     }
   });
+
+  test('RootDSE with "*" and specific operational attributes (SSSD scenario)', async () => {
+    engine = new LdapEngine({
+      baseDn,
+      port,
+      requireAuthForSearch: false,
+      authProviders: [new MockAuthProvider()],
+      directoryProvider: new MockDirectoryProvider(),
+      logger,
+    });
+    await engine.start();
+
+    const client = ldap.createClient({ url: `ldap://127.0.0.1:${port}` });
+    try {
+      // SSSD sends * plus specific operational attributes
+      // This should return user attributes (objectClass) plus the requested operational attributes
+      const result = await new Promise((resolve, reject) => {
+        const entries = [];
+        client.search('', { 
+          filter: '(objectClass=*)', 
+          scope: 'base', 
+          attributes: ['*', 'namingContexts', 'supportedLDAPVersion', 'altServer', 'supportedControl'] 
+        }, (err, res) => {
+          if (err) return reject(err);
+          res.on('searchEntry', (entry) => {
+            entries.push({
+              dn: entry.objectName.toString(),
+              attributes: extractAttributes(entry)
+            });
+          });
+          res.on('error', (e) => reject(e));
+          res.on('end', () => resolve(entries));
+        });
+      });
+
+      expect(result.length).toBe(1);
+      const rootDSE = result[0];
+      
+      // Should include user attributes
+      expect(rootDSE.attributes.objectClass).toBeDefined();
+      expect(rootDSE.attributes.objectClass).toContain('top');
+      
+      // Should include specifically requested operational attributes
+      expect(rootDSE.attributes.namingContexts).toBeDefined();
+      expect(rootDSE.attributes.namingContexts).toContain(baseDn);
+      expect(rootDSE.attributes.supportedLDAPVersion).toBeDefined();
+      expect(rootDSE.attributes.supportedLDAPVersion).toContain('3');
+      
+      // Attributes we don't support (altServer, supportedControl) should be undefined
+      expect(rootDSE.attributes.altServer).toBeUndefined();
+      expect(rootDSE.attributes.supportedControl).toBeUndefined();
+    } finally {
+      await new Promise((resolve) => client.unbind(() => resolve()));
+      client.destroy();
+    }
+  });
 });

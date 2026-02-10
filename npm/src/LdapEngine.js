@@ -240,9 +240,10 @@ class LdapEngine extends EventEmitter {
           // Determine which attributes to return based on request
           // RootDSE attribute filtering rules (per RFC 4512):
           // - No attributes = all attributes (both user and operational)
-          // - '*' only = user attributes only (objectClass)
+          // - '*' with '+' = all user and operational attributes
           // - '+' only = operational attributes only (namingContexts, supportedLDAPVersion) + objectClass
-          // - Specific names = only those attributes + objectClass (which is always returned)
+          // - '*' only or '*' with specific names = user attributes + any specifically requested operational attributes
+          // - Specific names only = only those attributes + objectClass (which is always returned)
           const hasWildcard = requestedAttrs.includes('*');
           const hasPlus = requestedAttrs.includes('+');
           const noAttrsRequested = requestedAttrs.length === 0;
@@ -266,10 +267,18 @@ class LdapEngine extends EventEmitter {
             attributes.namingContexts = [this.config.baseDn];
             attributes.supportedLDAPVersion = ['3'];
           } else if (hasWildcard && !hasPlus) {
-            // * only = user attributes only (just objectClass)
-            // attributes already has objectClass
+            // * with optional specific attributes = user attributes + any specifically requested operational attributes
+            // Check if any operational attributes are specifically requested
+            requestedAttrs.forEach(attr => {
+              const attrLower = attr.toLowerCase();
+              if (attrLower === 'namingcontexts') {
+                attributes.namingContexts = [this.config.baseDn];
+              } else if (attrLower === 'supportedldapversion') {
+                attributes.supportedLDAPVersion = ['3'];
+              }
+            });
           } else {
-            // Specific attributes requested
+            // Specific attributes requested (no wildcards)
             requestedAttrs.forEach(attr => {
               const attrLower = attr.toLowerCase();
               if (attrLower === 'namingcontexts') {
