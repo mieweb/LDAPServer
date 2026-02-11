@@ -27,7 +27,7 @@
         "@ldap-gateway/core": "file:../npm",
         "@ldapjs/controls": "git+https://github.com/mieweb/controls.git",
         "argon2": "^0.31.2",
-        "axios": "^1.12.0",
+        "axios": "^1.13.5",
         "bcrypt": "^5.1.1",
         "chokidar": "4.0.3",
         "dotenv": "^16.4.7",
