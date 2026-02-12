@@ -193,28 +193,37 @@ class LdapEngine extends EventEmitter {
 
       this.emit('bindRequest', { username, anonymous: false });
       
-      // Authenticate against all auth providers - all must return true
-      return Promise.all(
-        this.authProviders.map(provider => provider.authenticate(username, password, req))
-      ).then(authResults => {
-        const isAuthenticated = authResults.every(result => result === true);
-        
-        if (!isAuthenticated) {
-          this.emit('bindFail', { username, reason: 'invalid_credentials' });
-          const error = new ldap.InvalidCredentialsError('Invalid credentials');
-          return next(error);
+      // Authenticate against all auth providers sequentially - all must return true
+      // Stop on first failure to prevent subsequent providers from executing
+      const authenticateSequentially = async () => {
+        for (const provider of this.authProviders) {
+          const result = await provider.authenticate(username, password, req);
+          if (result !== true) {
+            return false;
+          }
         }
+        return true;
+      };
 
-        this.emit('bindSuccess', { username, anonymous: false });
-        res.end();
-        return next();
-      }).catch(error => {
-        this.logger.error("Bind error", { error, username });
-        const { normalizeAuthError } = require('./utils/errorUtils');
-        const normalizedError = normalizeAuthError(error);
-        this.emit('bindError', { username, error: normalizedError });
-        return next(normalizedError);
-      });
+      return authenticateSequentially()
+        .then(isAuthenticated => {
+          if (!isAuthenticated) {
+            this.emit('bindFail', { username, reason: 'invalid_credentials' });
+            const error = new ldap.InvalidCredentialsError('Invalid credentials');
+            return next(error);
+          }
+
+          this.emit('bindSuccess', { username, anonymous: false });
+          res.end();
+          return next();
+        })
+        .catch(error => {
+          this.logger.error("Bind error", { error, username });
+          const { normalizeAuthError } = require('./utils/errorUtils');
+          const normalizedError = normalizeAuthError(error);
+          this.emit('bindError', { username, error: normalizedError });
+          return next(normalizedError);
+        });
     });
   }
 
