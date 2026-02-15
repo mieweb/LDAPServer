@@ -12,6 +12,12 @@
 
 set -euo pipefail
 
+# Must run as root for dpkg/apt-get
+if [ "$(id -u)" -ne 0 ]; then
+  echo "ERROR: This script must be run as root (use sudo)." >&2
+  exit 1
+fi
+
 REPO="mieweb/LDAPServer"
 ARCH="amd64"
 DEV_MODE=false
@@ -74,7 +80,7 @@ fi
 echo ""
 
 if [ "$DEV_MODE" = false ] && [ "$CURRENT" = "$VERSION" ]; then
-  echo "Already at version ${VERSION}. Use --force or pass a different version."
+  echo "Already at version ${VERSION}. Pass a different version to upgrade."
   exit 0
 fi
 
@@ -102,10 +108,15 @@ CHECKSUM_URL="https://github.com/${REPO}/releases/download/${CHECKSUM_TAG}/check
 if curl -fsSL -o "${TMP_DIR}/checksums.txt" "$CHECKSUM_URL" 2>/dev/null; then
   echo "Verifying checksum..."
   cd "$TMP_DIR"
-  if grep "$DEB_FILE" checksums.txt | sha256sum -c --status 2>/dev/null; then
-    echo "  Checksum OK"
+  if grep -q "$DEB_FILE" checksums.txt; then
+    if grep "$DEB_FILE" checksums.txt | sha256sum -c --status 2>/dev/null; then
+      echo "  Checksum OK"
+    else
+      echo "ERROR: Checksum verification FAILED for ${DEB_FILE}. Aborting." >&2
+      exit 1
+    fi
   else
-    echo "  WARNING: Checksum verification failed or not found. Proceeding anyway." >&2
+    echo "  WARNING: No checksum entry found for ${DEB_FILE}. Skipping verification."
   fi
   cd - >/dev/null
 fi
