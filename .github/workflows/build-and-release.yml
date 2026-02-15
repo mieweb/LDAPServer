@@ -2,10 +2,10 @@ name: Build and Release
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
   workflow_dispatch:
 
 env:
@@ -323,6 +323,72 @@ jobs:
             
             ### Verification
             All release assets include SHA256 checksums in `checksums.txt`.
+
+  dev-release:
+    name: Dev Pre-Release
+    runs-on: ubuntu-latest
+    needs: [build-core, build-server, build-packages]
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Organize dev release assets
+        run: |
+          mkdir -p dist
+          cp artifacts/packages-amd64/*.deb dist/ 2>/dev/null || true
+          cp artifacts/packages-amd64/*.rpm dist/ 2>/dev/null || true
+          cp artifacts/packages-arm64/*.deb dist/ 2>/dev/null || true
+          cp artifacts/packages-arm64/*.rpm dist/ 2>/dev/null || true
+
+          # Rename packages with dev- prefix for clarity
+          cd dist
+          for f in *.deb *.rpm; do
+            [ -f "$f" ] && mv "$f" "dev-${f}"
+          done
+
+          echo "Dev release assets:"
+          ls -lh
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt 2>/dev/null || true
+          cat checksums.txt
+
+      - name: Update dev-latest release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: dev-latest
+          name: "Dev Build (latest from dev branch)"
+          draft: false
+          prerelease: true
+          make_latest: false
+          files: |
+            dist/*
+          body: |
+            ## Dev Build — ${{ github.sha }}
+            
+            **This is an automated pre-release from the `dev` branch.**
+            Updated on every push to `dev`. Not for production use.
+            
+            Commit: ${{ github.sha }}
+            Date: ${{ github.event.head_commit.timestamp }}
+            
+            ### Install on Proxmox (Debian/Ubuntu)
+            ```bash
+            ldap-gateway-upgrade --dev
+            ```
+            
+            Or manually:
+            ```bash
+            curl -LO https://github.com/${{ github.repository }}/releases/download/dev-latest/dev-ldap-gateway_${{ needs.build-server.outputs.server-version }}_amd64.deb
+            sudo dpkg -i dev-ldap-gateway_*_amd64.deb
+            ```
 
   publish-npm:
     name: Publish to npm

@@ -17,7 +17,7 @@ Environment=NODE_ENV=production
 EnvironmentFile=-/etc/default/ldap-gateway
 
 # Start the server
-ExecStart=/usr/bin/env node /opt/ldap-gateway/server/index.js
+ExecStart=/usr/bin/env node /opt/ldap-gateway/index.js
 
 # Security settings
 NoNewPrivileges=yes
@@ -26,7 +26,10 @@ ProtectSystem=strict
 ProtectHome=yes
 
 # Allow creating self-signed certs on startup
-ReadWritePaths=/opt/ldap-gateway/server/cert
+ReadWritePaths=/opt/ldap-gateway/cert
+
+# Allow reading Proxmox config files (if using proxmox backend)
+ReadOnlyPaths=/mnt/pve /mnt/priv
 
 # Capabilities
 AmbientCapabilities=CAP_NET_BIND_SERVICE
