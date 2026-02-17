@@ -264,6 +264,13 @@ class LdapEngine extends EventEmitter {
       let entryCount = 0;
       const startTime = Date.now();
 
+      // ldapjs compares lowercased entry attribute names against res.attributes,
+      // but does not lowercase res.attributes itself. Normalize to lowercase so
+      // that case-insensitive attribute requests (e.g. sshPublicKey) match.
+      if (req.attributes && req.attributes.length > 0 && !req.attributes.includes('*')) {
+        res.attributes = req.attributes.map(a => a.toLowerCase());
+      }
+
       try {
         this.emit('searchRequest', { 
           filter: filterStr, 
