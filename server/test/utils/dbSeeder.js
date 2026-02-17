@@ -27,7 +27,8 @@ class SQLiteSeeder {
         mail TEXT,
         home_directory TEXT,
         login_shell TEXT,
-        enabled INTEGER DEFAULT 1
+        enabled INTEGER DEFAULT 1,
+        sshpublickey TEXT
       )
     `);
 
@@ -51,8 +52,8 @@ class SQLiteSeeder {
       const hash = await bcrypt.hash(user.password, 10);
       await this.db.run(
         `INSERT OR REPLACE INTO users 
-         (username, password_hash, uid_number, gid_number, full_name, surname, given_name, mail, home_directory, login_shell, enabled)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (username, password_hash, uid_number, gid_number, full_name, surname, given_name, mail, home_directory, login_shell, enabled, sshpublickey)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         user.username,
         hash,
         user.uid_number,
@@ -63,7 +64,8 @@ class SQLiteSeeder {
         user.mail,
         user.home_directory,
         user.login_shell,
-        user.enabled ? 1 : 0
+        user.enabled ? 1 : 0,
+        user.sshpublickey || null
       );
     }
 
@@ -109,6 +111,7 @@ class MySQLSeeder {
         home_directory VARCHAR(255),
         login_shell VARCHAR(255),
         enabled BOOLEAN DEFAULT TRUE,
+        sshpublickey TEXT,
         INDEX idx_username (username),
         INDEX idx_uid (uid_number)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -136,12 +139,13 @@ class MySQLSeeder {
       const hash = await bcrypt.hash(user.password, 10);
       await this.connection.execute(`
         INSERT INTO users 
-        (username, password_hash, uid_number, gid_number, full_name, surname, given_name, mail, home_directory, login_shell, enabled)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (username, password_hash, uid_number, gid_number, full_name, surname, given_name, mail, home_directory, login_shell, enabled, sshpublickey)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
         password_hash = VALUES(password_hash),
         uid_number = VALUES(uid_number),
-        gid_number = VALUES(gid_number)
+        gid_number = VALUES(gid_number),
+        sshpublickey = VALUES(sshpublickey)
       `, [
         user.username,
         hash,
@@ -153,7 +157,8 @@ class MySQLSeeder {
         user.mail,
         user.home_directory,
         user.login_shell,
-        user.enabled
+        user.enabled,
+        user.sshpublickey || null
       ]);
     }
 
@@ -210,7 +215,8 @@ class MongoDBSeeder {
         mail: user.mail,
         home_directory: user.home_directory,
         login_shell: user.login_shell,
-        enabled: user.enabled
+        enabled: user.enabled,
+        sshpublickey: user.sshpublickey || null
       }))
     );
 
@@ -267,7 +273,8 @@ class PostgreSQLSeeder {
         mail TEXT,
         home_directory TEXT,
         login_shell TEXT,
-        enabled BOOLEAN DEFAULT TRUE
+        enabled BOOLEAN DEFAULT TRUE,
+        sshpublickey TEXT
       )
     `);
 
@@ -295,12 +302,13 @@ class PostgreSQLSeeder {
       const hash = await bcrypt.hash(user.password, 10);
       await this.client.query(`
         INSERT INTO users 
-        (username, password_hash, uid_number, gid_number, full_name, surname, given_name, mail, home_directory, login_shell, enabled)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        (username, password_hash, uid_number, gid_number, full_name, surname, given_name, mail, home_directory, login_shell, enabled, sshpublickey)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (username) DO UPDATE SET
         password_hash = EXCLUDED.password_hash,
         uid_number = EXCLUDED.uid_number,
-        gid_number = EXCLUDED.gid_number
+        gid_number = EXCLUDED.gid_number,
+        sshpublickey = EXCLUDED.sshpublickey
       `, [
         user.username,
         hash,
@@ -312,7 +320,8 @@ class PostgreSQLSeeder {
         user.mail,
         user.home_directory,
         user.login_shell,
-        user.enabled
+        user.enabled,
+        user.sshpublickey || null
       ]);
     }
 

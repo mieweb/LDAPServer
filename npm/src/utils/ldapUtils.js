@@ -14,6 +14,7 @@
  * @property {string} [mail] - User's email address
  * @property {string} [home_directory] - User's home directory
  * @property {string} [login_shell] - User's login shell (e.g. "/bin/bash")
+ * @property {string|string[]} [sshpublickey] - SSH public key(s) for openssh-lpk support
  */
 
 /**
@@ -80,6 +81,12 @@ function createLdapEntry(user, baseDn) {
 
   if (fullName)
     entry.attributes.gecos = fullName;
+
+  // SSH public key support (openssh-lpk schema)
+  if (user.sshpublickey) {
+    entry.attributes.sshPublicKey = user.sshpublickey;
+    entry.attributes.objectClass.push("ldapPublicKey");
+  }
 
   return entry;
 }
