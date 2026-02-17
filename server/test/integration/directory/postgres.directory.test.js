@@ -44,8 +44,8 @@ maybeDescribe('PostgreSQL Directory Backend (real DB) - Integration', () => {
 
   function configureEnv() {
     process.env.SQL_URI = url;
-    process.env.SQL_QUERY_ALL_USERS = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number FROM users';
-    process.env.SQL_QUERY_ONE_USER = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, password_hash AS password FROM users WHERE username = ?';
+    process.env.SQL_QUERY_ALL_USERS = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, sshpublickey FROM users';
+    process.env.SQL_QUERY_ONE_USER = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, sshpublickey, password_hash AS password FROM users WHERE username = ?';
     process.env.SQL_QUERY_ALL_GROUPS = 'SELECT cn AS name, gid_number, member_uids FROM groups';
     process.env.SQL_QUERY_GROUPS_BY_MEMBER = 'SELECT cn AS name, gid_number, member_uids FROM groups WHERE member_uids @> to_jsonb(?::text)';
   }

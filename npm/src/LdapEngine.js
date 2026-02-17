@@ -346,7 +346,15 @@ class LdapEngine extends EventEmitter {
       const users = await this.directoryProvider.getAllUsers();
       this.logger.debug(`Found ${users.length} users`);
       
+      // Check if filtering by ldapPublicKey objectClass
+      const filterBySSHKeys = /objectClass=ldapPublicKey/i.test(filterStr);
+      
       for (const user of users) {
+        // Skip users without SSH keys if filtering by ldapPublicKey
+        if (filterBySSHKeys && !user.sshpublickey) {
+          continue;
+        }
+        
         const entry = createLdapEntry(user, this.config.baseDn);
         this.emit('entryFound', { type: 'user', entry: entry.dn });
         res.send(entry);

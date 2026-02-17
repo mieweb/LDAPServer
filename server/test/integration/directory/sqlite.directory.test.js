@@ -61,8 +61,8 @@ describe('SQLite Directory Backend (real DB) - Integration', () => {
 
   function configureEnv() {
     process.env.SQL_URI = `sqlite:${dbPath}`;
-    process.env.SQL_QUERY_ALL_USERS = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number FROM users';
-    process.env.SQL_QUERY_ONE_USER = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, password_hash AS password FROM users WHERE username = ?';
+    process.env.SQL_QUERY_ALL_USERS = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, sshpublickey FROM users';
+    process.env.SQL_QUERY_ONE_USER = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, sshpublickey, password_hash AS password FROM users WHERE username = ?';
     process.env.SQL_QUERY_ALL_GROUPS = 'SELECT cn AS name, gid_number AS gid_number, member_uids FROM `groups`';
     // SQLite JSON containment check - member_uids is stored as JSON array string
     process.env.SQL_QUERY_GROUPS_BY_MEMBER = "SELECT cn AS name, gid_number AS gid_number, member_uids FROM `groups` WHERE json_extract(member_uids, '$') LIKE '%' || ? || '%'";
