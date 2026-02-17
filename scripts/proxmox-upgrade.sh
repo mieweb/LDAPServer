@@ -19,7 +19,17 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 REPO="mieweb/LDAPServer"
-ARCH="amd64"
+# Detect architecture dynamically so we download the correct .deb on amd64 and arm64
+DETECTED_ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
+case "$DETECTED_ARCH" in
+  amd64|arm64)
+    ARCH="$DETECTED_ARCH"
+    ;;
+  *)
+    echo "WARNING: Unsupported architecture '$DETECTED_ARCH'; defaulting to amd64 package." >&2
+    ARCH="amd64"
+    ;;
+esac
 DEV_MODE=false
 TMP_DIR=$(mktemp -d)
 
@@ -124,10 +134,10 @@ fi
 # --- Install ------------------------------------------------------------------
 
 echo "Installing ${DEB_FILE}..."
-dpkg -i "${TMP_DIR}/${DEB_FILE}"
-
-# Fix any missing dependencies
-apt-get install -f -y --no-install-recommends 2>/dev/null || true
+if ! apt-get install -y --no-install-recommends "${TMP_DIR}/${DEB_FILE}"; then
+  echo "ERROR: Failed to install ${DEB_FILE}. See apt-get output above for details." >&2
+  exit 1
+fi
 
 # --- Verify -------------------------------------------------------------------
 
