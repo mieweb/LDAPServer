@@ -97,19 +97,19 @@ describe('SQLite Directory Backend (real DB) - Integration', () => {
     test('a. (objectClass=*) should return all objects (users + groups)', async () => {
       await startServer(false);
       const results = await doSearch(client, acceptanceFilters.allObjects);
-      // 4 users + 4 groups = 8
-      expect(results.length).toBeGreaterThanOrEqual(8);
+      // 5 users + 4 groups = 9
+      expect(results.length).toBeGreaterThanOrEqual(9);
       const userEntries = results.filter(r => /uid=/.test(r.dn));
       const groupEntries = results.filter(r => /cn=/.test(r.dn));
-      expect(userEntries.length).toBe(4);
+      expect(userEntries.length).toBe(5);
       expect(groupEntries.length).toBe(4);
     });
 
     test('b. (objectClass=posixAccount) should return all users', async () => {
       await startServer(false);
       const results = await doSearch(client, acceptanceFilters.allUsers);
-      // From common.users.json → 4 users
-      expect(results.length).toBe(4);
+      // From common.users.json → 5 users
+      expect(results.length).toBe(5);
       
       // Verify all results are user entries with required attributes
       results.forEach(entry => {
@@ -133,6 +133,7 @@ describe('SQLite Directory Backend (real DB) - Integration', () => {
       expect(usernames).toContain('admin');
       expect(usernames).toContain('jdoe');
       expect(usernames).toContain('disabled');
+      expect(usernames).toContain('sshuser');
     });
 
     test('c. (objectClass=posixGroup) should return all groups', async () => {
