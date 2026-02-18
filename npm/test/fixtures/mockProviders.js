@@ -37,17 +37,12 @@ class MockAuthProvider extends AuthProvider {
 
     // If configured to always fail
     if (!this.shouldSucceed) {
-      throw new Error('Authentication failed');
+      return false;
     }
 
     // Check credentials
     const expectedPassword = this.validCredentials.get(username);
-    if (expectedPassword === password) {
-      return { success: true, username };
-    }
-
-    // Invalid credentials
-    throw new Error('Invalid credentials');
+    return expectedPassword === password;
   }
 
   reset() {
@@ -172,11 +167,7 @@ class MockNotificationAuthProvider extends AuthProvider {
     this.callCount++;
 
     // Simulate notification/push server response
-    if (this.notificationShouldSucceed) {
-      return { success: true, username, method: 'notification' };
-    }
-
-    throw new Error('Notification not approved');
+    return this.notificationShouldSucceed;
   }
 }
 
