@@ -40,11 +40,11 @@ const path = require('path');
 
 class JsonDirectoryBackend extends DirectoryProvider {
   constructor(options = {}) {
-    super();
+    super(options);
     
-    // Load configuration from environment
-    this.usersPath = process.env.JSON_USERS_PATH || path.join(process.cwd(), 'users.json');
-    this.groupsPath = process.env.JSON_GROUPS_PATH || path.join(process.cwd(), 'groups.json');
+    // Use options with env var fallback — enables multi-realm support
+    this.usersPath = options.usersPath ?? process.env.JSON_USERS_PATH ?? path.join(process.cwd(), 'users.json');
+    this.groupsPath = options.groupsPath ?? process.env.JSON_GROUPS_PATH ?? path.join(process.cwd(), 'groups.json');
     
     // Cache for loaded data
     this.usersCache = null;
@@ -52,7 +52,7 @@ class JsonDirectoryBackend extends DirectoryProvider {
     this.lastLoad = null;
     
     // Cache duration (5 minutes)
-    this.cacheDuration = parseInt(process.env.JSON_CACHE_DURATION || '300000', 10);
+    this.cacheDuration = options.cacheDuration ?? parseInt(process.env.JSON_CACHE_DURATION || '300000', 10);
     
     console.log(`[JsonDirectoryBackend] Initialized with users: ${this.usersPath}, groups: ${this.groupsPath}`);
   }
