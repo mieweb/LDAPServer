@@ -39,14 +39,8 @@ async function startServer(config) {
   logger.debug('Available auth backends:', availableBackends.auth);
   logger.debug('Available directory backends:', availableBackends.directory);
 
-  const selectedDirectory = providerFactory.createDirectoryProvider(config.directoryBackend);
-  const selectedBackends = config.authBackends.map((authBackend) => {
-    return providerFactory.createAuthProvider(authBackend);
-  });
-
-  // Create and configure LDAP engine
-  const ldapEngine = new LdapEngine({
-    baseDn: config.ldapBaseDn,
+  // Build LdapEngine options
+  const engineOptions = {
     bindIp: config.bindIp,
     port: config.port,
     certificate: config.certContent,
@@ -55,10 +49,45 @@ async function startServer(config) {
     tlsMaxVersion: config.tlsMaxVersion,
     tlsCiphers: config.tlsCiphers,
     logger: logger,
-    authProviders: selectedBackends,
-    directoryProvider: selectedDirectory,
     requireAuthForSearch: config.requireAuthForSearch
-  });
+  };
+
+  if (config.realms) {
+    // Multi-realm mode: build realm objects from config
+    logger.info(`Initializing multi-realm mode with ${config.realms.length} realm(s)`);
+    engineOptions.realms = config.realms.map(realmCfg => {
+      const directoryProvider = providerFactory.createDirectoryProvider(
+        realmCfg.directory.backend,
+        realmCfg.directory.options || {}
+      );
+
+      const authProviders = realmCfg.auth.backends.map(backendCfg =>
+        providerFactory.createAuthProvider(backendCfg.type, backendCfg.options || {})
+      );
+
+      logger.info(`Realm '${realmCfg.name}': baseDN=${realmCfg.baseDn}, ` +
+        `directory=${realmCfg.directory.backend}, auth=[${realmCfg.auth.backends.map(b => b.type).join(', ')}]`);
+
+      return {
+        name: realmCfg.name,
+        baseDn: realmCfg.baseDn,
+        directoryProvider,
+        authProviders
+      };
+    });
+  } else {
+    // Legacy single-realm mode
+    const selectedDirectory = providerFactory.createDirectoryProvider(config.directoryBackend);
+    const selectedBackends = config.authBackends.map((authBackend) => {
+      return providerFactory.createAuthProvider(authBackend);
+    });
+    engineOptions.baseDn = config.ldapBaseDn;
+    engineOptions.authProviders = selectedBackends;
+    engineOptions.directoryProvider = selectedDirectory;
+  }
+
+  // Create and configure LDAP engine
+  const ldapEngine = new LdapEngine(engineOptions);
 
   // Set up event listeners for logging and monitoring
   ldapEngine.on('started', (info) => {
