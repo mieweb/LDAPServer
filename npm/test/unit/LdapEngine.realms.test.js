@@ -2,7 +2,7 @@
 // Tests realm routing, search aggregation, and backward compatibility
 
 const LdapEngine = require('../../src/LdapEngine');
-const { MockAuthProvider, MockDirectoryProvider } = require('../fixtures/mockProviders');
+const { MockAuthProvider, MockDirectoryProvider, MockNotificationAuthProvider } = require('../fixtures/mockProviders');
 const { baseDN } = require('../fixtures/testData');
 const net = require('net');
 const ldap = require('ldapjs');
@@ -490,6 +490,289 @@ describe('LdapEngine Multi-Realm', () => {
       expect(startedInfo.baseDns).toContain('dc=b,dc=com');
       expect(startedInfo.realms).toContain('realm-a');
       expect(startedInfo.realms).toContain('realm-b');
+    });
+  });
+
+  describe('Per-User Auth Override (Phase 3)', () => {
+    describe('_resolveAuthChain', () => {
+      test('should return realm default providers when user has no auth_backends', () => {
+        const realmAuth = new MockAuthProvider({ name: 'realm-default' });
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          realms: [
+            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [realmAuth] }
+          ]
+        });
+
+        const realm = engine.allRealms[0];
+        const user = { username: 'testuser', auth_backends: null };
+
+        const chain = engine._resolveAuthChain(realm, user, 'testuser');
+        expect(chain).toEqual([realmAuth]);
+      });
+
+      test('should return realm default providers when auth_backends is empty string', () => {
+        const realmAuth = new MockAuthProvider({ name: 'realm-default' });
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          realms: [
+            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [realmAuth] }
+          ]
+        });
+
+        const chain = engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: '' }, 'testuser');
+        expect(chain).toEqual([realmAuth]);
+      });
+
+      test('should return realm default providers when auth_backends is undefined', () => {
+        const realmAuth = new MockAuthProvider({ name: 'realm-default' });
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          realms: [
+            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [realmAuth] }
+          ]
+        });
+
+        const chain = engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser' }, 'testuser');
+        expect(chain).toEqual([realmAuth]);
+      });
+
+      test('should resolve per-user override from registry', () => {
+        const realmAuth = new MockAuthProvider({ name: 'realm-default' });
+        const overrideAuth = new MockAuthProvider({ name: 'custom-auth' });
+        const registry = new Map([['custom-auth', overrideAuth]]);
+
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          authProviderRegistry: registry,
+          realms: [
+            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [realmAuth] }
+          ]
+        });
+
+        const chain = engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: 'custom-auth' }, 'testuser');
+        expect(chain).toEqual([overrideAuth]);
+        expect(chain).not.toContain(realmAuth);
+      });
+
+      test('should resolve multiple comma-separated backends', () => {
+        const providerA = new MockAuthProvider({ name: 'auth-a' });
+        const providerB = new MockAuthProvider({ name: 'auth-b' });
+        const registry = new Map([['auth-a', providerA], ['auth-b', providerB]]);
+
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          authProviderRegistry: registry,
+          realms: [
+            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [new MockAuthProvider()] }
+          ]
+        });
+
+        const chain = engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: 'auth-a, auth-b' }, 'testuser');
+        expect(chain).toHaveLength(2);
+        expect(chain[0]).toBe(providerA);
+        expect(chain[1]).toBe(providerB);
+      });
+
+      test('should throw for unknown backend in auth_backends (fail-loud)', () => {
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          authProviderRegistry: new Map(),
+          realms: [
+            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [new MockAuthProvider()] }
+          ]
+        });
+
+        expect(() => {
+          engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: 'nonexistent' }, 'testuser');
+        }).toThrow("Unknown auth backend 'nonexistent'");
+      });
+    });
+
+    describe('End-to-end per-user auth override', () => {
+      test('should use per-user auth override for bind when auth_backends is set', async () => {
+        const overrideAuth = new MockAuthProvider({
+          name: 'override-auth',
+          validCredentials: new Map([['mfauser', 'override-pass']])
+        });
+        const realmAuth = new MockAuthProvider({
+          name: 'realm-auth',
+          validCredentials: new Map([['testuser', 'password123']])
+        });
+
+        const users = [
+          { username: 'testuser', uid_number: 1001, gid_number: 1001, first_name: 'Test', last_name: 'User' },
+          { username: 'mfauser', uid_number: 1003, gid_number: 1001, first_name: 'MFA', last_name: 'User', auth_backends: 'override-auth' }
+        ];
+
+        const registry = new Map([['override-auth', overrideAuth], ['realm-auth', realmAuth]]);
+
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          authProviderRegistry: registry,
+          realms: [
+            { name: 'test-realm', baseDn: baseDN, directoryProvider: new MockDirectoryProvider({ users, groups: [] }), authProviders: [realmAuth] }
+          ]
+        });
+
+        await engine.start();
+
+        // testuser should use realm default auth (realmAuth)
+        const client1 = createClient(TEST_PORT);
+        try {
+          await bindAsync(client1, `uid=testuser,ou=users,${baseDN}`, 'password123');
+          expect(realmAuth.callCount).toBe(1);
+          expect(overrideAuth.callCount).toBe(0);
+        } finally {
+          await unbindAsync(client1);
+        }
+
+        realmAuth.reset();
+        overrideAuth.reset();
+
+        // mfauser should use per-user override auth (overrideAuth)
+        const client2 = createClient(TEST_PORT);
+        try {
+          await bindAsync(client2, `uid=mfauser,ou=users,${baseDN}`, 'override-pass');
+          expect(overrideAuth.callCount).toBe(1);
+          expect(realmAuth.callCount).toBe(0); // realm auth should NOT be called
+        } finally {
+          await unbindAsync(client2);
+        }
+      });
+
+      test('should reject bind when per-user override auth fails', async () => {
+        const overrideAuth = new MockAuthProvider({
+          name: 'override-auth',
+          validCredentials: new Map([['mfauser', 'correct-pass']])
+        });
+
+        const users = [
+          { username: 'mfauser', uid_number: 1003, gid_number: 1001, first_name: 'MFA', last_name: 'User', auth_backends: 'override-auth' }
+        ];
+
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          authProviderRegistry: new Map([['override-auth', overrideAuth]]),
+          realms: [
+            { name: 'test-realm', baseDn: baseDN, directoryProvider: new MockDirectoryProvider({ users, groups: [] }), authProviders: [new MockAuthProvider()] }
+          ]
+        });
+
+        await engine.start();
+
+        const client = createClient(TEST_PORT);
+        try {
+          await expect(
+            bindAsync(client, `uid=mfauser,ou=users,${baseDN}`, 'wrong-pass')
+          ).rejects.toThrow();
+          expect(overrideAuth.callCount).toBe(1);
+        } finally {
+          await unbindAsync(client);
+        }
+      });
+
+      test('should reject bind when auth_backends references unknown provider', async () => {
+        const users = [
+          { username: 'baduser', uid_number: 1099, gid_number: 1001, first_name: 'Bad', last_name: 'User', auth_backends: 'nonexistent-backend' }
+        ];
+
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          authProviderRegistry: new Map(),
+          realms: [
+            { name: 'test-realm', baseDn: baseDN, directoryProvider: new MockDirectoryProvider({ users, groups: [] }), authProviders: [new MockAuthProvider()] }
+          ]
+        });
+
+        await engine.start();
+
+        const client = createClient(TEST_PORT);
+        try {
+          await expect(
+            bindAsync(client, `uid=baduser,ou=users,${baseDN}`, 'anypass')
+          ).rejects.toThrow();
+        } finally {
+          await unbindAsync(client);
+        }
+      });
+
+      test('should use MFA bypass pattern: per-user override skips notification provider', async () => {
+        // Realm default: sql + notification (MFA)
+        const sqlAuth = new MockAuthProvider({
+          name: 'sql-auth',
+          validCredentials: new Map([['normaluser', 'pass123'], ['serviceuser', 'svc-pass']])
+        });
+        const notificationAuth = new MockNotificationAuthProvider({
+          notificationShouldSucceed: true
+        });
+
+        // Service user has auth_backends='sql-auth' — skips notification MFA
+        const users = [
+          { username: 'normaluser', uid_number: 2001, gid_number: 2000, first_name: 'Normal', last_name: 'User' },
+          { username: 'serviceuser', uid_number: 2002, gid_number: 2000, first_name: 'Service', last_name: 'Account', auth_backends: 'sql-auth' }
+        ];
+
+        const registry = new Map([['sql-auth', sqlAuth]]);
+
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          authProviderRegistry: registry,
+          realms: [
+            {
+              name: 'mfa-realm',
+              baseDn: baseDN,
+              directoryProvider: new MockDirectoryProvider({ users, groups: [] }),
+              authProviders: [sqlAuth, notificationAuth]
+            }
+          ]
+        });
+
+        await engine.start();
+
+        // Normal user goes through both sql + notification
+        const client1 = createClient(TEST_PORT);
+        try {
+          await bindAsync(client1, `uid=normaluser,ou=users,${baseDN}`, 'pass123');
+          expect(sqlAuth.callCount).toBe(1);
+          expect(notificationAuth.callCount).toBe(1);
+        } finally {
+          await unbindAsync(client1);
+        }
+
+        sqlAuth.reset();
+        notificationAuth.callCount = 0;
+
+        // Service user only goes through sql (MFA bypassed)
+        const client2 = createClient(TEST_PORT);
+        try {
+          await bindAsync(client2, `uid=serviceuser,ou=users,${baseDN}`, 'svc-pass');
+          expect(sqlAuth.callCount).toBe(1);
+          expect(notificationAuth.callCount).toBe(0); // MFA skipped!
+        } finally {
+          await unbindAsync(client2);
+        }
+      });
     });
   });
 });

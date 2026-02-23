@@ -1,0 +1,58 @@
+[
+  {
+    "name": "example-corp",
+    "baseDn": "dc=example,dc=com",
+    "directory": {
+      "backend": "sql",
+      "options": {
+        "sqlUri": "mysql://user:password@localhost:3306/ldap_db",
+        "ldapBaseDn": "dc=example,dc=com",
+        "sqlQueryOneUser": "SELECT * FROM users WHERE username = ?",
+        "sqlQueryAllUsers": "SELECT * FROM users",
+        "sqlQueryAllGroups": "SELECT * FROM `groups`",
+        "sqlQueryGroupsByMember": "SELECT * FROM `groups` g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))"
+      }
+    },
+    "auth": {
+      "backends": [
+        {
+          "type": "sql",
+          "options": {
+            "sqlUri": "mysql://user:password@localhost:3306/ldap_db"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "example-mfa",
+    "baseDn": "dc=secure,dc=example,dc=com",
+    "directory": {
+      "backend": "sql",
+      "options": {
+        "sqlUri": "mysql://user:password@localhost:3306/ldap_db",
+        "ldapBaseDn": "dc=secure,dc=example,dc=com",
+        "sqlQueryOneUser": "SELECT * FROM users WHERE username = ?",
+        "sqlQueryAllUsers": "SELECT * FROM users",
+        "sqlQueryAllGroups": "SELECT * FROM `groups`",
+        "sqlQueryGroupsByMember": "SELECT * FROM `groups` g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))"
+      }
+    },
+    "auth": {
+      "backends": [
+        {
+          "type": "sql",
+          "options": {
+            "sqlUri": "mysql://user:password@localhost:3306/ldap_db"
+          }
+        },
+        {
+          "type": "notification",
+          "options": {
+            "notificationUrl": "https://your-mfa-service.example.com/notify"
+          }
+        }
+      ]
+    }
+  }
+]

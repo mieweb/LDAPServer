@@ -28,16 +28,18 @@ CREATE TABLE IF NOT EXISTS users (
   uid_number INT UNIQUE,
   gid_number INT,
   home_directory VARCHAR(200),
+  auth_backends VARCHAR(255) DEFAULT NULL,
   FOREIGN KEY (gid_number) REFERENCES `groups`(gid_number)
 );
 
 -- 4. Now insert users (gid_number matches existing groups)
+-- Passwords are bcrypt-hashed: ann=maya, abrol=abrol, evan=evan, hrits=maya, chris=chris
 INSERT INTO users (username, password, full_name, email, uid_number, gid_number, home_directory) VALUES
-  ('ann', 'maya', 'Ann', 'ann@mieweb.com', 1001, 1001, '/home/ann'),
-  ('abrol','abrol', 'Abrol', 'abrol@mieweb.com', 1002, 1002, '/home/abrol'),
-  ('evan', 'evan', 'Evan Pant', 'evan@mieweb.com', 1003, 1003, '/home/evan'),
-  ('hrits', 'maya','Hrits Pant', 'hrits@mieweb.com', 1004, 1004, '/home/hrits'),
-  ('chris', 'chris','Chris Evans', 'chris@mieweb.com', 1005, 1005, '/home/chris');
+  ('ann', '$2b$10$cA9hzCdUMRdyCW/Q7uXJVuPhVeWsyPgt0iMovTobGEBEeJz0B9EVy', 'Ann', 'ann@mieweb.com', 1001, 1001, '/home/ann'),
+  ('abrol','$2b$10$gS9ofBYeNBq/OBSHwfZFoehE5v6HcDn1n7ttHORNTMRupFqHyHJt6', 'Abrol', 'abrol@mieweb.com', 1002, 1002, '/home/abrol'),
+  ('evan', '$2b$10$4jU4zFDYpBvKw1tqWh32c.6FZ5/dVzob7oOh.CxD3meFrUgHdTuAS', 'Evan Pant', 'evan@mieweb.com', 1003, 1003, '/home/evan'),
+  ('hrits', '$2b$10$QG9DsntCbOa/.eSOXseEIeIhVSi7sPIUcpx/teHN95GIELCQMbl1S','Hrits Pant', 'hrits@mieweb.com', 1004, 1004, '/home/hrits'),
+  ('chris', '$2b$10$fyBG6ofzr1yAJN9s3j1Jx.v0/JYuNLepnyaHKgYA4Fvf8EYJsEkP.','Chris Evans', 'chris@mieweb.com', 1005, 1005, '/home/chris');
 
 -- 5. Add secondary groups
 INSERT INTO `groups` (gid_number, name, description, member_uids) VALUES
@@ -51,7 +53,7 @@ CREATE TABLE IF NOT EXISTS user_groups (
   group_id INT,
   PRIMARY KEY (user_id, group_id),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (group_id) REFERENCES `groups`(gid) ON DELETE CASCADE
+  FOREIGN KEY (group_id) REFERENCES `groups`(gid_number) ON DELETE CASCADE
 );
 
 INSERT INTO user_groups (user_id, group_id)

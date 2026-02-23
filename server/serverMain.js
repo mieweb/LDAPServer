@@ -52,6 +52,20 @@ async function startServer(config) {
     requireAuthForSearch: config.requireAuthForSearch
   };
 
+  // Build global auth provider registry for per-user auth override (Phase 3)
+  // Maps provider type name → AuthProvider instance for all available backends
+  const authProviderRegistry = new Map();
+  for (const backendType of availableBackends.auth) {
+    try {
+      const provider = providerFactory.createAuthProvider(backendType);
+      authProviderRegistry.set(backendType, provider);
+      logger.debug(`Registered auth backend '${backendType}' in provider registry`);
+    } catch (err) {
+      logger.debug(`Skipping auth backend '${backendType}' for registry: ${err.message}`);
+    }
+  }
+  engineOptions.authProviderRegistry = authProviderRegistry;
+
   if (config.realms) {
     // Multi-realm mode: build realm objects from config
     logger.info(`Initializing multi-realm mode with ${config.realms.length} realm(s)`);

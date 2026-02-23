@@ -43,6 +43,10 @@ class LdapEngine extends EventEmitter {
     this.authProviders = options.authProviders || this.allRealms[0]?.authProviders;
     this.directoryProvider = options.directoryProvider || this.allRealms[0]?.directoryProvider;
 
+    // Auth provider registry for per-user auth override (Phase 3)
+    // Maps provider type name → AuthProvider instance
+    this.authProviderRegistry = options.authProviderRegistry || new Map();
+
     this.server = null;
     this.logger = options.logger || console;
     this._stopping = false;
@@ -279,11 +283,12 @@ class LdapEngine extends EventEmitter {
 
   /**
    * Find the user across realms sharing a baseDN and authenticate with the
-   * matching realm's auth chain.
+   * matching realm's auth chain (or per-user override if auth_backends is set).
    * 
    * Flow: iterate realms in config order → first findUser() hit determines
-   * which realm's auth chain to use → authenticate sequentially against that
-   * realm's providers.
+   * which realm's auth chain to use → if the user record has `auth_backends`,
+   * resolve an override chain from the authProviderRegistry → otherwise fall
+   * back to the realm's default auth providers → authenticate sequentially.
    * 
    * @private
    * @param {Array} realms - Realms sharing this baseDN
@@ -295,6 +300,7 @@ class LdapEngine extends EventEmitter {
   async _authenticateAcrossRealms(realms, username, password, req) {
     // Find which realm owns this user
     let matchedRealm = null;
+    let matchedUser = null;
     let matchCount = 0;
 
     for (const realm of realms) {
@@ -304,6 +310,7 @@ class LdapEngine extends EventEmitter {
           matchCount++;
           if (!matchedRealm) {
             matchedRealm = realm;
+            matchedUser = user;
           } else {
             this.logger.warn(
               `User '${username}' found in multiple realms: '${matchedRealm.name}' and '${realm.name}'. ` +
@@ -321,8 +328,11 @@ class LdapEngine extends EventEmitter {
       return { authenticated: false, realmName: null };
     }
 
-    // Authenticate sequentially against the matched realm's auth chain
-    for (const provider of matchedRealm.authProviders) {
+    // Resolve the auth chain: per-user override or realm default
+    const authChain = this._resolveAuthChain(matchedRealm, matchedUser, username);
+
+    // Authenticate sequentially against the resolved auth chain
+    for (const provider of authChain) {
       const result = await provider.authenticate(username, password, req);
       if (result !== true) {
         return { authenticated: false, realmName: matchedRealm.name };
@@ -330,6 +340,58 @@ class LdapEngine extends EventEmitter {
     }
 
     return { authenticated: true, realmName: matchedRealm.name };
+  }
+
+  /**
+   * Resolve the auth provider chain for a user.
+   * 
+   * If the user record has an `auth_backends` field (comma-separated provider
+   * type names), look up each name in the authProviderRegistry to build a
+   * per-user override chain.  If `auth_backends` is null/undefined/empty,
+   * fall back to the realm's default auth providers.
+   * 
+   * @private
+   * @param {Object} realm - The matched realm
+   * @param {Object} user - The user record from the directory provider
+   * @param {string} username - Username (for logging)
+   * @returns {Array} Array of auth providers to authenticate against
+   */
+  _resolveAuthChain(realm, user, username) {
+    const userBackends = user.auth_backends;
+
+    if (!userBackends || (typeof userBackends === 'string' && userBackends.trim() === '')) {
+      // No per-user override — use realm defaults
+      return realm.authProviders;
+    }
+
+    // Parse comma-separated backend names
+    const backendNames = typeof userBackends === 'string'
+      ? userBackends.split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+
+    if (backendNames.length === 0) {
+      return realm.authProviders;
+    }
+
+    // Resolve each name from the registry
+    const overrideChain = [];
+    for (const name of backendNames) {
+      const provider = this.authProviderRegistry.get(name);
+      if (!provider) {
+        this.logger.error(
+          `User '${username}' has auth_backends='${userBackends}' but backend '${name}' ` +
+          `is not registered. Failing authentication for security.`
+        );
+        throw new Error(`Unknown auth backend '${name}' for user '${username}'`);
+      }
+      overrideChain.push(provider);
+    }
+
+    this.logger.debug(
+      `User '${username}' using per-user auth override: [${backendNames.join(', ')}]`
+    );
+
+    return overrideChain;
   }
 
   /**

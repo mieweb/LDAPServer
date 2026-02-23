@@ -38,6 +38,19 @@ const testUsers = [
     userPassword: 'test123',
     homeDirectory: '/home/jdoe',
     loginShell: '/bin/bash'
+  },
+  {
+    username: 'mfauser',
+    uid: 1003,
+    gidNumber: 1001,
+    cn: 'MFA User',
+    sn: 'MFA',
+    givenName: 'MFA',
+    mail: 'mfauser@example.com',
+    userPassword: 'mfa123',
+    homeDirectory: '/home/mfauser',
+    loginShell: '/bin/bash',
+    auth_backends: 'mock-auth'
   }
 ];
 
