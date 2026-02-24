@@ -55,16 +55,6 @@ async function startServer(config) {
   // Build global auth provider registry for per-user auth override (Phase 3)
   // Maps provider type name → AuthProvider instance for all available backends
   const authProviderRegistry = new Map();
-  for (const backendType of availableBackends.auth) {
-    try {
-      const provider = providerFactory.createAuthProvider(backendType);
-      authProviderRegistry.set(backendType, provider);
-      logger.debug(`Registered auth backend '${backendType}' in provider registry`);
-    } catch (err) {
-      logger.debug(`Skipping auth backend '${backendType}' for registry: ${err.message}`);
-    }
-  }
-  engineOptions.authProviderRegistry = authProviderRegistry;
 
   if (config.realms) {
     // Multi-realm mode: build realm objects from config
@@ -75,9 +65,15 @@ async function startServer(config) {
         realmCfg.directory.options || {}
       );
 
-      const authProviders = realmCfg.auth.backends.map(backendCfg =>
-        providerFactory.createAuthProvider(backendCfg.type, backendCfg.options || {})
-      );
+      const authProviders = realmCfg.auth.backends.map(backendCfg => {
+        const provider = providerFactory.createAuthProvider(backendCfg.type, backendCfg.options || {});
+        // Register each realm's auth providers in the global registry (first one wins per type)
+        if (!authProviderRegistry.has(backendCfg.type)) {
+          authProviderRegistry.set(backendCfg.type, provider);
+          logger.debug(`Registered auth backend '${backendCfg.type}' in provider registry from realm '${realmCfg.name}'`);
+        }
+        return provider;
+      });
 
       logger.info(`Realm '${realmCfg.name}': baseDN=${realmCfg.baseDn}, ` +
         `directory=${realmCfg.directory.backend}, auth=[${realmCfg.auth.backends.map(b => b.type).join(', ')}]`);
@@ -98,7 +94,18 @@ async function startServer(config) {
     engineOptions.baseDn = config.ldapBaseDn;
     engineOptions.authProviders = selectedBackends;
     engineOptions.directoryProvider = selectedDirectory;
+
+    // Register legacy auth providers in the registry
+    for (const backendType of config.authBackends) {
+      const idx = config.authBackends.indexOf(backendType);
+      if (!authProviderRegistry.has(backendType)) {
+        authProviderRegistry.set(backendType, selectedBackends[idx]);
+        logger.debug(`Registered auth backend '${backendType}' in provider registry`);
+      }
+    }
   }
+
+  engineOptions.authProviderRegistry = authProviderRegistry;
 
   // Create and configure LDAP engine
   const ldapEngine = new LdapEngine(engineOptions);
