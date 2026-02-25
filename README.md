@@ -393,6 +393,61 @@ ENABLE_NOTIFICATION=true
 NOTIFICATION_URL=https://your-notification-service.com
 ```
 
+### 🔑 SSH Public Key Support (openssh-lpk)
+
+The LDAP gateway supports SSH public key storage and retrieval, compatible with the openssh-lpk schema used by SSSD and other LDAP-aware SSH implementations.
+
+#### Database Schema
+
+Add an `sshpublickey` column to your users table:
+
+```sql
+-- MySQL/MariaDB/PostgreSQL
+ALTER TABLE users ADD COLUMN sshpublickey TEXT;
+
+-- Store SSH public keys (supports multiple keys)
+UPDATE users SET sshpublickey = 'ssh-rsa AAAAB3NzaC1yc2EAAA... user@host' WHERE username = 'alice';
+```
+
+#### SQL Query Configuration
+
+Update your `SQL_QUERY_ONE_USER` and `SQL_QUERY_ALL_USERS` to include the `sshpublickey` column:
+
+```ini
+SQL_QUERY_ONE_USER='SELECT username, uid_number, gid_number, full_name, mail, home_directory, login_shell, sshpublickey FROM users WHERE username = ?'
+SQL_QUERY_ALL_USERS='SELECT username, uid_number, gid_number, full_name, mail, home_directory, login_shell, sshpublickey FROM users'
+```
+
+#### LDAP Attributes
+
+When SSH public keys are present, the LDAP gateway automatically:
+- Adds the `ldapPublicKey` objectClass to user entries
+- Includes the `sshPublicKey` attribute with the key(s)
+- Supports multiple SSH keys per user (stored as multi-value LDAP attribute)
+
+#### SSSD Configuration
+
+Configure SSSD to use SSH public keys from LDAP:
+
+```ini
+# /etc/sssd/sssd.conf
+[domain/ldap]
+ldap_user_ssh_public_key = sshPublicKey
+
+[ssh]
+ssh_key_cache_timeout = 300
+```
+
+Update SSHD configuration:
+
+```bash
+# /etc/ssh/sshd_config
+AuthorizedKeysCommand /usr/bin/sss_ssh_authorizedkeys
+AuthorizedKeysCommandUser nobody
+```
+
+Now SSH authentication will retrieve public keys from LDAP automatically!
+
 ### 🔌 Custom Backends (Dynamic Loading)
 
 **NEW:** Create your own backends without rebuilding! Place JavaScript files in `server/backends/` to add custom authentication or directory providers.
@@ -523,6 +578,7 @@ Direct integration with Proxmox virtualization environments:
 - **Container Authentication** → Centralized LDAP for all containers/VMs
 - **Configuration Syncing** → Reads directly from Proxmox user/shadow files
 - **MFA Support** → Optional push notifications via [MIE Authenticator](https://github.com/mieweb/mieweb_auth_app)
+- **SSH Public Key Support** → Compatible with openssh-lpk schema for SSH key authentication via SSSD
 - **Automated Setup** → Use [pown.sh](https://github.com/mieweb/pown.sh) for container LDAP client configuration
 
 ### Deployment

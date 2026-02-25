@@ -96,7 +96,35 @@ else
   exit 1
 fi
 
+# Test 6: sss_ssh_authorizedkeys returns SSH public key for testuser
+echo "Test 6: sss_ssh_authorizedkeys returns SSH key for testuser..."
+SSH_KEY_OUTPUT=$(container_exec "sss_ssh_authorizedkeys testuser" || echo "FAIL")
+echo "  Result: $SSH_KEY_OUTPUT"
+echo "$SSH_KEY_OUTPUT" | grep -q "ssh-ed25519" || { echo "FAIL: sss_ssh_authorizedkeys did not return SSH key"; exit 1; }
+echo "$SSH_KEY_OUTPUT" | grep -q "AAAAC3NzaC1lZDI1NTE5AAAAIKogUL8oT4Sn4+V2zBa4Jtis4CIryh+igq2PTCoYXSw4" || { echo "FAIL: SSH key content mismatch"; exit 1; }
+echo "  ✓ SSH public key correctly retrieved via sss_ssh_authorizedkeys"
+
+# Test 7: sss_ssh_authorizedkeys returns empty for user without SSH key
+echo "Test 7: sss_ssh_authorizedkeys returns empty for user without SSH key..."
+NO_KEY_OUTPUT=$(container_exec "sss_ssh_authorizedkeys nokeyuser" || echo "")
+echo "  Result: '${NO_KEY_OUTPUT}'"
+if [ -z "$NO_KEY_OUTPUT" ] || ! echo "$NO_KEY_OUTPUT" | grep -q "ssh-"; then
+  echo "  ✓ No SSH key returned for user without key"
+else
+  echo "FAIL: Unexpected SSH key returned for nokeyuser: $NO_KEY_OUTPUT"
+  exit 1
+fi
+
+# Test 8: SSH key-based authentication
+echo "Test 8: SSH public key authentication..."
+KEY_AUTH_OUTPUT=$(docker compose exec -T sssd-client bash -c "ssh -i /tmp/testuser_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PasswordAuthentication=no -p 2222 testuser@localhost 'whoami'" 2>/dev/null || echo "FAIL")
+echo "  Result: $KEY_AUTH_OUTPUT"
+[[ "$KEY_AUTH_OUTPUT" == "testuser" ]] || { echo "FAIL: SSH key-based auth failed or whoami=$KEY_AUTH_OUTPUT"; exit 1; }
+echo "  ✓ SSH public key authentication successful"
+
 echo ""
 echo "=========================================="
 echo "All SSH integration tests passed! ✓"
+echo "  Tests 1-5: Password auth, UID/GID, groups"
+echo "  Tests 6-8: SSH key via sss_ssh_authorizedkeys"
 echo "=========================================="

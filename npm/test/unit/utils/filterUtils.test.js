@@ -80,6 +80,11 @@ describe('filterUtils', () => {
       expect(result).toBe(true);
     });
 
+    test('should detect ldapPublicKey objectClass filter: (objectClass=ldapPublicKey)', () => {
+      const result = isAllUsersRequest('(objectClass=ldapPublicKey)', []);
+      expect(result).toBe(true);
+    });
+
     test('should detect wildcard uid filter: (uid=*)', () => {
       const result = isAllUsersRequest('(uid=*)', []);
       expect(result).toBe(true);
