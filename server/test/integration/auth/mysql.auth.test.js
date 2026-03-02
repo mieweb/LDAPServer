@@ -20,6 +20,12 @@ function configureEnv() {
   process.env.SQL_QUERY_ONE_USER = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, password_hash AS password FROM users WHERE username = ?';
 }
 
+const directoryStub = {
+  initialize: async () => {},
+  cleanup: async () => {},
+  findUser: async (username) => ({ username }),
+};
+
 maybeDescribe('MySQL Auth Backend (real DB) - Integration', () => {
   let engine;
   let conn;
@@ -28,7 +34,7 @@ maybeDescribe('MySQL Auth Backend (real DB) - Integration', () => {
   async function startServer() {
     configureEnv();
     const authProvider = new SQLAuthProvider();
-    engine = new LdapEngine({ baseDn, port, authProviders: [authProvider], directoryProvider: { initialize: async()=>{}, cleanup: async()=>{} }, logger });
+    engine = new LdapEngine({ baseDn, port, authProviders: [authProvider], directoryProvider: directoryStub, logger });
     await engine.start();
     client = createClient();
     return client;

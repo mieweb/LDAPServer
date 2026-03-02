@@ -34,15 +34,25 @@ function createClient() {
   return ldap.createClient({ url: `ldap://127.0.0.1:${port}` });
 }
 
+// Minimal directory stub – only needs findUser so _authenticateAcrossRealms
+// can locate the user before delegating to the auth provider.
+const directoryStub = {
+  initialize: async () => {},
+  cleanup: async () => {},
+  findUser: async (username) => ({ username }),
+};
+
 describe('SQLite Auth Backend (real DB) - Integration', () => {
   let engine;
   let dbPath;
+  let client;
 
   beforeAll(() => {
     // nothing yet
   });
 
   afterEach(async () => {
+    if (client) { try { client.unbind(); client.destroy(); } catch (_) {} client = null; }
     if (engine) { await engine.stop(); engine = null; }
     if (dbPath && fs.existsSync(dbPath)) {
       try { fs.unlinkSync(dbPath); } catch (_) {}
@@ -60,15 +70,14 @@ describe('SQLite Auth Backend (real DB) - Integration', () => {
     process.env.SQL_QUERY_ONE_USER = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, password_hash AS password FROM users WHERE username = ?';
 
     const authProvider = new SQLAuthProvider();
-    engine = new LdapEngine({ baseDn, port, authProviders: [authProvider], directoryProvider: { initialize: async()=>{}, cleanup: async()=>{} }, logger });
+    engine = new LdapEngine({ baseDn, port, authProviders: [authProvider], directoryProvider: directoryStub, logger });
     await engine.start();
 
-    const client = createClient();
+    client = createClient();
     const userDN = `uid=testuser,${baseDn}`;
     await expect(new Promise((resolve, reject) => {
       client.bind(userDN, 'password123', (err) => err ? reject(err) : resolve());
     })).resolves.not.toThrow();
-    client.unbind();
   });
 
   test('2. Bind with invalid credentials should fail (SQLite)', async () => {
@@ -79,14 +88,13 @@ describe('SQLite Auth Backend (real DB) - Integration', () => {
     process.env.SQL_QUERY_ONE_USER = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, password_hash AS password FROM users WHERE username = ?';
 
     const authProvider = new SQLAuthProvider();
-    engine = new LdapEngine({ baseDn, port, authProviders: [authProvider], directoryProvider: { initialize: async()=>{}, cleanup: async()=>{} }, logger });
+    engine = new LdapEngine({ baseDn, port, authProviders: [authProvider], directoryProvider: directoryStub, logger });
     await engine.start();
 
-    const client = createClient();
+    client = createClient();
     const userDN = `uid=testuser,${baseDn}`;
     await expect(new Promise((resolve, reject) => {
       client.bind(userDN, 'wrong', (err) => err ? reject(err) : resolve());
     })).rejects.toThrow();
-    client.unbind();
   });
 });
