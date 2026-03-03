@@ -81,7 +81,7 @@ jobs:
         id: server-info
         run: |
           cd server
-          echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+          echo "version=$(git log -1 --format=%cs | tr '-' '.')" >> $GITHUB_OUTPUT
 
       - name: Upload server artifacts
         uses: actions/upload-artifact@v4
@@ -173,21 +173,19 @@ jobs:
           name: server-artifacts
           path: ./
 
-      - name: Build deb package
+      - name: Build packages
+        env:
+          VERSION: ${{ needs.build-server.outputs.server-version }}
         run: |
           mkdir -p dist/packages
           nfpm package \
             --config nfpm/nfpm.yaml \
             --packager deb \
-            --target dist/packages/ldap-gateway_${GITHUB_REF_NAME}-1_all.deb
-
-      - name: Build rpm package
-        run: |
-          mkdir -p dist/packages
+            --target dist/packages/ldap-gateway_${VERSION}-1_all.deb
           nfpm package \
             --config nfpm/nfpm.yaml \
             --packager rpm \
-            --target dist/packages/ldap-gateway-${GITHUB_REF_NAME}-1.noarch.rpm
+            --target dist/packages/ldap-gateway-${VERSION}-1.noarch.rpm
 
       - name: Verify packages
         run: |

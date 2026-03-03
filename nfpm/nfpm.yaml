@@ -1,7 +1,8 @@
 name: "ldap-gateway"
 arch: "all"
 platform: "linux"
-version: "${GITHUB_REF_NAME}"
+version: "${VERSION}"
+release: 1
 section: "default"
 priority: "extra"
 maintainer: "MIEWeb <support@mieweb.com>"
