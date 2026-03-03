@@ -191,14 +191,10 @@ jobs:
         run: |
           echo "Built packages:"
           ls -lh dist/packages/
-          
-          # Basic validation for amd64 (can't validate arm64 on x86_64 runner)
-          if [ "${{ matrix.arch }}" = "amd64" ]; then
-            echo "Package info for .deb:"
-            dpkg-deb --info dist/packages/*.deb || true
-            echo "Package info for .rpm:"
-            rpm -qip dist/packages/*.rpm || true
-          fi
+          echo "Package info for .deb:"
+          dpkg-deb --info dist/packages/*.deb || true
+          echo "Package info for .rpm:"
+          rpm -qip dist/packages/*.rpm || true
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
@@ -233,8 +229,7 @@ jobs:
           mkdir -p dist
           
           # Copy packages
-          cp artifacts/packages-amd64/* dist/ 2>/dev/null || echo "No amd64 packages"
-          cp artifacts/packages-arm64/* dist/ 2>/dev/null || echo "No arm64 packages"
+          cp artifacts/packages/* dist/ 2>/dev/null || echo "No packages"
           
           # Copy binary if needed for tarball creation
           cp artifacts/server-artifacts/dist/ldap-gateway dist/ 2>/dev/null || echo "No binary"
@@ -286,17 +281,15 @@ jobs:
             
             **Ubuntu/Debian:**
             ```bash
-            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ldap-gateway_${{ steps.version.outputs.version }}_amd64.deb
-            sudo dpkg -i ldap-gateway_${{ steps.version.outputs.version }}_amd64.deb
+            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ldap-gateway_${{ steps.version.outputs.version }}-1_all.deb
+            sudo dpkg -i ldap-gateway_${{ steps.version.outputs.version }}-1_all.deb
             ```
             
             **RHEL/CentOS/Fedora:**
             ```bash
-            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ldap-gateway-${{ steps.version.outputs.version }}-1.amd64.rpm
-            sudo rpm -i ldap-gateway-${{ steps.version.outputs.version }}-1.amd64.rpm
+            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ldap-gateway-${{ steps.version.outputs.version }}-1.noarch.rpm
+            sudo rpm -i ldap-gateway-${{ steps.version.outputs.version }}-1.noarch.rpm
             ```
-            
-            **ARM64 packages are also available** - replace `amd64` with `arm64` in the URLs above.
             
             ### Changes
             See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
@@ -320,10 +313,8 @@ jobs:
       - name: Organize dev release assets
         run: |
           mkdir -p dist
-          cp artifacts/packages-amd64/*.deb dist/ 2>/dev/null || true
-          cp artifacts/packages-amd64/*.rpm dist/ 2>/dev/null || true
-          cp artifacts/packages-arm64/*.deb dist/ 2>/dev/null || true
-          cp artifacts/packages-arm64/*.rpm dist/ 2>/dev/null || true
+          cp artifacts/packages/*.deb dist/ 2>/dev/null || true
+          cp artifacts/packages/*.rpm dist/ 2>/dev/null || true
 
           # Rename packages with dev- prefix for clarity
           cd dist
@@ -366,8 +357,8 @@ jobs:
             
             Or manually:
             ```bash
-            curl -LO https://github.com/${{ github.repository }}/releases/download/dev-latest/dev-ldap-gateway_${{ needs.build-server.outputs.server-version }}_amd64.deb
-            sudo dpkg -i dev-ldap-gateway_*_amd64.deb
+            curl -LO https://github.com/${{ github.repository }}/releases/download/dev-latest/dev-ldap-gateway_${{ needs.build-server.outputs.server-version }}-1_all.deb
+            sudo dpkg -i dev-ldap-gateway_*_all.deb
             ```
 
   publish-npm:
