@@ -5,8 +5,11 @@ const resolveLDAPHosts = require('../utils/resolveLdapHosts');
 const logger = require('../utils/logger');
 
 class LDAPBackend extends AuthProvider {
-  constructor() {
-    super();
+  constructor(options = {}) {
+    super(options);
+    this.ldapBindDn = options.ldapBindDn ?? process.env.LDAP_BIND_DN;
+    this.ldapBindPassword = options.ldapBindPassword ?? process.env.LDAP_BIND_PASSWORD;
+    this.ldapAuthBaseDn = options.ldapAuthBaseDn ?? process.env.LDAP_AUTH_BASE_DN;
     this.serverPool = [];
     this.failedServers = new Map();
     this.initialized = false;
@@ -111,7 +114,7 @@ class LDAPBackend extends AuthProvider {
         attributes: ['dn']
       };
 
-      client.bind(process.env.LDAP_BIND_DN, process.env.LDAP_BIND_PASSWORD, (err) => {
+      client.bind(this.ldapBindDn, this.ldapBindPassword, (err) => {
         if (err) {
           logger.error("Service bind failed", err);
           return reject(new Error("Service bind failed: " + err));
@@ -119,7 +122,7 @@ class LDAPBackend extends AuthProvider {
         logger.debug("Service bind successful, searching for user...");
 
         let foundDN = null;
-        client.search(process.env.LDAP_AUTH_BASE_DN, opts, (err, res) => {
+        client.search(this.ldapAuthBaseDn, opts, (err, res) => {
           if (err) return reject(err);
 
           res.on('searchEntry', (entry) => {

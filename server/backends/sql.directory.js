@@ -1,20 +1,7 @@
 const { DirectoryProvider, filterUtils } = require('@ldap-gateway/core');
 const logger = require('../utils/logger');
 const { Sequelize } = require('sequelize');
-
-/**
- * Build Sequelize options with optional SSL configuration
- * Set SQL_SSL=false to disable TLS for testing with local databases
- */
-function buildSequelizeOptions() {
-  const options = { logging: msg => logger.debug(msg) };
-  
-  if (process.env.SQL_SSL === 'false') {
-    options.dialectOptions = { ssl: false };
-  }
-  
-  return options;
-}
+const { buildSequelizeOptions } = require('../utils/sqlUtils');
 
 /**
  * Normalize member_uids field from database
@@ -40,11 +27,17 @@ function normalizeMemberUids(group) {
  * Handles user and group directory operations against SQL database
  */
 class SQLDirectoryProvider extends DirectoryProvider {
-  constructor() {
-    super();
+  constructor(options = {}) {
+    super(options);
+    this.sqlUri = options.sqlUri ?? process.env.SQL_URI;
+    this.sqlQueryOneUser = options.sqlQueryOneUser ?? process.env.SQL_QUERY_ONE_USER;
+    this.sqlQueryAllUsers = options.sqlQueryAllUsers ?? process.env.SQL_QUERY_ALL_USERS;
+    this.sqlQueryAllGroups = options.sqlQueryAllGroups ?? process.env.SQL_QUERY_ALL_GROUPS;
+    this.sqlQueryGroupsByMember = options.sqlQueryGroupsByMember ?? process.env.SQL_QUERY_GROUPS_BY_MEMBER;
+    this.ldapBaseDn = options.ldapBaseDn ?? process.env.LDAP_BASE_DN;
     this.sequelize = new Sequelize(
-      process.env.SQL_URI,
-      buildSequelizeOptions()
+      this.sqlUri,
+      buildSequelizeOptions(options)
     );
   }
 
@@ -55,7 +48,7 @@ class SQLDirectoryProvider extends DirectoryProvider {
     try {
       logger.debug(`[SQLDirectoryProvider] Finding user: ${username}`);
       const [results, _] = await this.sequelize.query(
-        process.env.SQL_QUERY_ONE_USER,
+        this.sqlQueryOneUser,
         { replacements: [username] }
       );
 
@@ -85,7 +78,7 @@ class SQLDirectoryProvider extends DirectoryProvider {
         const username = filterConditions.memberUid;
         logger.debug(`[SQLDirectoryProvider] Finding groups for member: ${username}`);
         const [groups, _] = await this.sequelize.query(
-          process.env.SQL_QUERY_GROUPS_BY_MEMBER,
+          this.sqlQueryGroupsByMember,
           { replacements: [username] }
         );
         
@@ -128,7 +121,7 @@ class SQLDirectoryProvider extends DirectoryProvider {
               memberUids: [user.username],
               gid_number: gidNum,
               gidNumber: gidNum,
-              dn: `cn=${user.username},${process.env.LDAP_BASE_DN}`,
+              dn: `cn=${user.username},${this.ldapBaseDn}`,
               objectClass: ["posixGroup"],
             }];
           }
@@ -147,7 +140,7 @@ class SQLDirectoryProvider extends DirectoryProvider {
   async getAllUsers() {
     try {
       logger.debug('[SQLDirectoryProvider] Getting all users');
-      const [users, _] = await this.sequelize.query(process.env.SQL_QUERY_ALL_USERS);
+      const [users, _] = await this.sequelize.query(this.sqlQueryAllUsers);
       
       logger.debug(`[SQLDirectoryProvider] Found ${users.length} users`);
       return users;
@@ -163,7 +156,7 @@ class SQLDirectoryProvider extends DirectoryProvider {
       await this.initialize();
       
       logger.debug('[SQLDirectoryProvider] Getting all groups');
-      const [groups, _] = await this.sequelize.query(process.env.SQL_QUERY_ALL_GROUPS);
+      const [groups, _] = await this.sequelize.query(this.sqlQueryAllGroups);
       
       // Normalize member_uids from JSON strings to arrays
       const normalizedGroups = groups.map(normalizeMemberUids);
