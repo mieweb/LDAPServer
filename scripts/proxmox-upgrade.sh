@@ -19,17 +19,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 REPO="mieweb/LDAPServer"
-# Detect architecture dynamically so we download the correct .deb on amd64 and arm64
-DETECTED_ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
-case "$DETECTED_ARCH" in
-  amd64|arm64)
-    ARCH="$DETECTED_ARCH"
-    ;;
-  *)
-    echo "WARNING: Unsupported architecture '$DETECTED_ARCH'; defaulting to amd64 package." >&2
-    ARCH="amd64"
-    ;;
-esac
+# Packages are architecture-independent (noarch/all) since the server is pure Node.js
 DEV_MODE=false
 TMP_DIR=$(mktemp -d)
 
@@ -52,7 +42,7 @@ if [ "$DEV_MODE" = true ]; then
 
   # Find the .deb filename from the dev-latest release assets
   DEB_FILE=$(curl -sS "https://api.github.com/repos/${REPO}/releases/tags/dev-latest" \
-    | grep -o "\"name\": *\"dev-ldap-gateway_[^\"]*_${ARCH}\\.deb\"" \
+    | grep -o "\"name\": *\"dev-ldap-gateway_[^\"]*_all\\.deb\"" \
     | head -1 | cut -d'"' -f4)
 
   if [ -z "$DEB_FILE" ]; then
@@ -99,7 +89,7 @@ fi
 if [ "$DEV_MODE" = true ]; then
   DEB_URL="https://github.com/${REPO}/releases/download/dev-latest/${DEB_FILE}"
 else
-  DEB_FILE="ldap-gateway_${VERSION}_${ARCH}.deb"
+  DEB_FILE="ldap-gateway_${VERSION}-1_all.deb"
   DEB_URL="https://github.com/${REPO}/releases/download/${TAG}/${DEB_FILE}"
 fi
 
