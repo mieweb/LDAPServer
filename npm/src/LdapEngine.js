@@ -508,14 +508,14 @@ class LdapEngine extends EventEmitter {
     let entryCount = 0;
 
     for (const { entries, realmName } of realmResults) {
-      for (const entry of entries) {
+      for (const { entry, type } of entries) {
         const dnLower = entry.dn.toLowerCase();
         if (seenDNs.has(dnLower)) {
           this.logger.debug(`Skipping duplicate DN from realm '${realmName}': ${entry.dn}`);
           continue;
         }
         seenDNs.add(dnLower);
-        this.emit('entryFound', { type: entry._type || 'user', entry: entry.dn, realm: realmName });
+        this.emit('entryFound', { type: type || 'user', entry: entry.dn, realm: realmName });
         res.send(entry);
         entryCount++;
       }
@@ -531,7 +531,7 @@ class LdapEngine extends EventEmitter {
    * @param {Object} realm - Realm object with directoryProvider and baseDn
    * @param {string} filterStr - LDAP filter string
    * @param {Array} attributes - Requested attributes
-   * @returns {{ entries: Array, realmName: string }}
+   * @returns {{ entries: Array<{entry: Object, type: string}>, realmName: string }}
    */
   async _handleRealmSearch(realm, filterStr, attributes) {
     const entries = [];
@@ -544,8 +544,7 @@ class LdapEngine extends EventEmitter {
       const user = await directoryProvider.findUser(username);
       if (user) {
         const entry = createLdapEntry(user, baseDn);
-        entry._type = 'user';
-        entries.push(entry);
+        entries.push({ entry, type: 'user' });
       }
       return { entries, realmName };
     }
@@ -558,8 +557,7 @@ class LdapEngine extends EventEmitter {
       
       for (const user of users) {
         const entry = createLdapEntry(user, baseDn);
-        entry._type = 'user';
-        entries.push(entry);
+        entries.push({ entry, type: 'user' });
       }
       return { entries, realmName };
     }
@@ -572,8 +570,7 @@ class LdapEngine extends EventEmitter {
       
       for (const group of groups) {
         const entry = createLdapGroupEntry(group, baseDn);
-        entry._type = 'group';
-        entries.push(entry);
+        entries.push({ entry, type: 'group' });
       }
       return { entries, realmName };
     }
@@ -600,8 +597,7 @@ class LdapEngine extends EventEmitter {
         }
         
         const entry = createLdapEntry(user, baseDn);
-        entry._type = 'user';
-        entries.push(entry);
+        entries.push({ entry, type: 'user' });
       }
 
       const groups = await directoryProvider.getAllGroups();
@@ -613,8 +609,7 @@ class LdapEngine extends EventEmitter {
         }
         
         const entry = createLdapGroupEntry(group, baseDn);
-        entry._type = 'group';
-        entries.push(entry);
+        entries.push({ entry, type: 'group' });
       }
       return { entries, realmName };
     }

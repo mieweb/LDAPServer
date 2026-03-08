@@ -96,8 +96,8 @@ async function startServer(config) {
     engineOptions.directoryProvider = selectedDirectory;
 
     // Register legacy auth providers in the registry
-    for (const backendType of config.authBackends) {
-      const idx = config.authBackends.indexOf(backendType);
+    for (let idx = 0; idx < config.authBackends.length; idx++) {
+      const backendType = config.authBackends[idx];
       if (!authProviderRegistry.has(backendType)) {
         authProviderRegistry.set(backendType, selectedBackends[idx]);
         logger.debug(`Registered auth backend '${backendType}' in provider registry`);

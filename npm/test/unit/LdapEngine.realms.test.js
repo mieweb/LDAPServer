@@ -403,10 +403,6 @@ describe('LdapEngine Multi-Realm', () => {
         // Should contain both baseDNs
         expect(contexts).toContain(baseDnA);
         expect(contexts).toContain(baseDnB);
-        
-        // Should contain both baseDNs
-        expect(contexts).toContain(baseDnA);
-        expect(contexts).toContain(baseDnB);
       } finally {
         await unbindAsync(client);
       }

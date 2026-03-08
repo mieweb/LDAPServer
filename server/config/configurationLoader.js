@@ -58,94 +58,6 @@ class ConfigurationLoader {
   }
 
   /**
-   * Load realm configuration from REALM_CONFIG env var.
-   * Supports inline JSON string or file path.
-   * @private
-   * @returns {Array|null} Realm config array or null if not configured
-   */
-  _loadRealmConfig() {
-    const realmConfig = process.env.REALM_CONFIG;
-    if (!realmConfig) {
-      return null;
-    }
-
-    let realms;
-    const trimmed = realmConfig.trim();
-
-    // Try parsing as inline JSON first (starts with '[')
-    if (trimmed.startsWith('[')) {
-      try {
-        realms = JSON.parse(trimmed);
-      } catch (e) {
-        throw new Error(`Invalid REALM_CONFIG JSON: ${e.message}`);
-      }
-    } else {
-      // Treat as file path
-      try {
-        const content = fs.readFileSync(trimmed, 'utf8');
-        realms = JSON.parse(content);
-      } catch (e) {
-        throw new Error(`Failed to load REALM_CONFIG from '${trimmed}': ${e.message}`);
-      }
-    }
-
-    this._validateRealmConfig(realms);
-    logger.info(`Loaded ${realms.length} realm(s) from REALM_CONFIG`);
-    return realms;
-  }
-
-  /**
-   * Validate realm configuration structure at startup.
-   * @private
-   * @param {*} realms - Parsed realm config to validate
-   * @throws {Error} If validation fails
-   */
-  _validateRealmConfig(realms) {
-    if (!Array.isArray(realms)) {
-      throw new Error('REALM_CONFIG must be a JSON array of realm objects');
-    }
-    if (realms.length === 0) {
-      throw new Error('REALM_CONFIG must contain at least one realm');
-    }
-
-    const seenNames = new Set();
-
-    for (let i = 0; i < realms.length; i++) {
-      const realm = realms[i];
-      const prefix = `Realm[${i}]`;
-
-      if (!realm.name) {
-        throw new Error(`${prefix}: 'name' is required`);
-      }
-      if (seenNames.has(realm.name)) {
-        throw new Error(`${prefix}: duplicate realm name '${realm.name}'`);
-      }
-      seenNames.add(realm.name);
-
-      if (!realm.baseDn) {
-        throw new Error(`${prefix}: 'baseDn' is required`);
-      }
-      if (!realm.directory) {
-        throw new Error(`${prefix}: 'directory' is required`);
-      }
-      if (!realm.directory.backend) {
-        throw new Error(`${prefix}: 'directory.backend' is required`);
-      }
-      if (!realm.auth) {
-        throw new Error(`${prefix}: 'auth' is required`);
-      }
-      if (!Array.isArray(realm.auth.backends) || realm.auth.backends.length === 0) {
-        throw new Error(`${prefix}: 'auth.backends' must be a non-empty array`);
-      }
-      for (let j = 0; j < realm.auth.backends.length; j++) {
-        if (!realm.auth.backends[j].type) {
-          throw new Error(`${prefix}: 'auth.backends[${j}].type' is required`);
-        }
-      }
-    }
-  }
-
-  /**
    * Build LDAP Base DN from common name
    * @private
    */
@@ -195,6 +107,7 @@ class ConfigurationLoader {
 
     // Validate realm config
     this._validateRealmConfig(realms);
+    logger.info(`Loaded ${realms.length} realm(s) from REALM_CONFIG`);
     return realms;
   }
 
