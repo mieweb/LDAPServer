@@ -1,10 +1,11 @@
 name: "ldap-gateway"
-arch: "amd64"
+arch: "all"
 platform: "linux"
-version: "v1.0.0"
+version: "${VERSION}"
+release: 1
 section: "default"
 priority: "extra"
-maintainer: "MieWeb <support@mieweb.com>"
+maintainer: "MIEWeb <support@mieweb.com>"
 description: |
   LDAP Gateway Server - A bridge between LDAP authentication and various backends
 
@@ -21,7 +22,7 @@ description: |
   - Comprehensive audit logging
   - POSIX account and group support
   - Easy configuration via environment variables
-vendor: "MieWeb"
+vendor: "MIEWeb"
 homepage: "https://github.com/mieweb/LDAPServer"
 license: "MIT"
 
