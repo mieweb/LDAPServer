@@ -25,7 +25,7 @@
   "author": "MieWeb",
   "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=24.0.0"
   },
   "peerDependencies": {
     "@ldapjs/controls": "git+https://github.com/mieweb/controls.git",

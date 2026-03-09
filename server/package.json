@@ -2,8 +2,8 @@
     "name": "ldap-gateway-server",
     "version": "1.0.0",
     "engines": {
-        "node": ">=18.0.0",
-        "npm": ">=9.0.0"
+        "node": ">=24.0.0",
+        "npm": ">=10.0.0"
     },
     "main": "serverMain.js",
     "bin": {
