@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const selfsigned = require('selfsigned');
 const logger = require('../utils/logger');
 
 /**
@@ -18,16 +18,16 @@ class ConfigurationLoader {
 
   /**
    * Load configuration from various sources
-   * @returns {Object} Combined configuration object
+   * @returns {Promise<Object>} Combined configuration object
    */
-  loadConfig() {
+  async loadConfig() {
     if (this.loaded) {
       return this.config;
     }
 
     // Build configuration object from environment variables
     require('dotenv').config(); // Load .env from current directory if exists
-    this.config = this._buildConfigFromEnv();
+    this.config = await this._buildConfigFromEnv();
     this.loaded = true;
 
     return this.config;
@@ -37,7 +37,7 @@ class ConfigurationLoader {
    * Build configuration object from environment variables
    * @private
    */
-  _buildConfigFromEnv() {
+  async _buildConfigFromEnv() {
     return {
       authBackends: process.env.AUTH_BACKENDS.split(','),
       directoryBackend: process.env.DIRECTORY_BACKEND,
@@ -49,7 +49,7 @@ class ConfigurationLoader {
       backendDir: process.env.BACKEND_DIR || null,
       requireAuthForSearch: process.env.REQUIRE_AUTH_FOR_SEARCH !== 'false',
       // Load certificates - this handles all certificate logic
-      ...this._loadCertificates(),
+      ...(await this._loadCertificates()),
       // Load TLS configuration
       ...this._loadTlsConfig()
     };
@@ -71,7 +71,7 @@ class ConfigurationLoader {
    * Load SSL/TLS certificates (handles all certificate logic)
    * @private
    */
-  _loadCertificates() {
+  async _loadCertificates() {
     // If unencrypted mode is explicitly enabled, return null values
     if (process.env.LDAP_UNENCRYPTED === 'true' || process.env.LDAP_UNENCRYPTED === '1') {
       logger.warn('LDAP server configured for unencrypted mode - SSL/TLS disabled');
@@ -91,7 +91,7 @@ class ConfigurationLoader {
 
       // If paths are not provided, create certificates
       if (!certPath || !keyPath) {
-        const createdCerts = this._createCertificates();
+        const createdCerts = await this._createCertificates();
         certPath = createdCerts.certPath;
         keyPath = createdCerts.keyPath;
       }
@@ -198,7 +198,7 @@ class ConfigurationLoader {
    * Create self-signed certificates
    * @private
    */
-  _createCertificates() {
+  async _createCertificates() {
     const certDir = path.join(process.cwd(), 'cert');
     const certPath = path.join(certDir, 'server.crt');
     const keyPath = path.join(certDir, 'server.key');
@@ -218,23 +218,21 @@ class ConfigurationLoader {
 
       logger.info('Creating self-signed certificates...');
 
-      // Use the configured common name directly
       const commonName = process.env.LDAP_COMMON_NAME || 'localhost';
+      const attrs = [{ name: 'commonName', value: commonName }];
+      const pems = await selfsigned.generate(attrs, {
+        keySize: 4096,
+        days: 3650,
+        algorithm: 'sha256'
+      });
 
-      // Create self-signed certificate
-      const opensslCmd = `openssl req -x509 -newkey rsa:4096 -keyout "${keyPath}" -out "${certPath}" -days 3650 -nodes -subj "/C=US/ST=State/L=City/O=Organization/CN=${commonName}"`;
-      
-      execSync(opensslCmd, { stdio: 'pipe' });
+      fs.writeFileSync(certPath, pems.cert);
+      fs.writeFileSync(keyPath, pems.private);
 
-      if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-        logger.info('Self-signed certificates created successfully');
-        return { certPath, keyPath };
-      } else {
-        throw new Error('Certificate files were not created');
-      }
+      logger.info('Self-signed certificates created successfully');
+      return { certPath, keyPath };
     } catch (error) {
       logger.error('Failed to create certificates:', error.message);
-      logger.error('Please ensure OpenSSL is installed and available in PATH');
       process.exit(1);
     }
   }
@@ -242,22 +240,22 @@ class ConfigurationLoader {
   /**
    * Get a specific configuration value
    * @param {string} key - Configuration key
-   * @returns {*} Configuration value
+   * @returns {Promise<*>} Configuration value
    */
-  get(key) {
+  async get(key) {
     if (!this.loaded) {
-      this.loadConfig();
+      await this.loadConfig();
     }
     return this.config[key];
   }
 
   /**
    * Get all configuration
-   * @returns {Object} All configuration
+   * @returns {Promise<Object>} All configuration
    */
-  getAll() {
+  async getAll() {
     if (!this.loaded) {
-      this.loadConfig();
+      await this.loadConfig();
     }
     return { ...this.config };
   }
