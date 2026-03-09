@@ -575,10 +575,11 @@ LDAPServer/
 # Install dependencies
 npm install
 
-# Build core package
-npm run build:core
+# Start the server (no build required for local development)
+npm start
 
-# Build server package  
+# Build for releases (only needed for npm publishing and distribution packages)
+npm run build:core
 npm run build:server
 
 # Create binary
