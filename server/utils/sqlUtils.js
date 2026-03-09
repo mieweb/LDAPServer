@@ -11,7 +11,8 @@ function buildSequelizeOptions(options = {}) {
   const seqOptions = { logging: msg => logger.debug(msg) };
 
   const sqlSsl = options.sqlSsl ?? process.env.SQL_SSL;
-  if (sqlSsl === 'false') {
+  // Handle both boolean false and string 'false'/'0' from JSON config or env vars
+  if (sqlSsl === false || sqlSsl === 'false' || sqlSsl === '0') {
     seqOptions.dialectOptions = { ssl: false };
   }
 

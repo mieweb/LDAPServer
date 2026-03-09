@@ -301,13 +301,11 @@ class LdapEngine extends EventEmitter {
     // Find which realm owns this user
     let matchedRealm = null;
     let matchedUser = null;
-    let matchCount = 0;
 
     for (const realm of realms) {
       try {
         const user = await realm.directoryProvider.findUser(username);
         if (user) {
-          matchCount++;
           if (!matchedRealm) {
             matchedRealm = realm;
             matchedUser = user;
@@ -373,14 +371,18 @@ class LdapEngine extends EventEmitter {
       return realm.authProviders;
     }
 
-    // Resolve each name from the registry
+    // Resolve each name from the registry.
+    // Try realm-scoped key first ("realm:type"), then fall back to type-only key.
     const overrideChain = [];
     for (const name of backendNames) {
-      const provider = this.authProviderRegistry.get(name);
+      const namespacedKey = `${realm.name}:${name}`;
+      const provider = this.authProviderRegistry.get(namespacedKey)
+                    || this.authProviderRegistry.get(name);
       if (!provider) {
         this.logger.error(
           `User '${username}' has auth_backends='${userBackends}' but backend '${name}' ` +
-          `is not registered. Failing authentication for security.`
+          `is not registered (tried keys: '${namespacedKey}', '${name}'). ` +
+          `Failing authentication for security.`
         );
         throw new Error(`Unknown auth backend '${name}' for user '${username}'`);
       }
@@ -649,15 +651,26 @@ class LdapEngine extends EventEmitter {
           }
         }
         
-        // RootDSE attribute filtering rules (per RFC 4512)
+        // RootDSE attribute filtering rules (per RFC 4512):
+        // - No attributes requested = return all (user + operational)
+        // - '*' + '+' = all user and operational attributes
+        // - '+' only = operational attributes only
+        // - '*' only = user attrs + specifically requested operational attrs
+        // - Specific names only = only those attributes
         const hasWildcard = requestedAttrs.includes('*');
         const hasPlus = requestedAttrs.includes('+');
+        const noAttrsRequested = requestedAttrs.length === 0;
         
         const attributes = {
           objectClass: ['top']
         };
         
-        if (hasWildcard && !hasPlus) {
+        if (noAttrsRequested || (hasWildcard && hasPlus) || (hasPlus && !hasWildcard)) {
+          // Return all operational attributes
+          attributes.namingContexts = allBaseDns;
+          attributes.supportedLDAPVersion = ['3'];
+        } else if (hasWildcard) {
+          // '*' only: user attrs + specifically requested operational attrs
           requestedAttrs.forEach(attr => {
             const attrLower = attr.toLowerCase();
             if (attrLower === 'namingcontexts') {
@@ -667,8 +680,15 @@ class LdapEngine extends EventEmitter {
             }
           });
         } else {
-          attributes.namingContexts = allBaseDns;
-          attributes.supportedLDAPVersion = ['3'];
+          // Specific attributes only — return only what was requested
+          requestedAttrs.forEach(attr => {
+            const attrLower = attr.toLowerCase();
+            if (attrLower === 'namingcontexts') {
+              attributes.namingContexts = allBaseDns;
+            } else if (attrLower === 'supportedldapversion') {
+              attributes.supportedLDAPVersion = ['3'];
+            }
+          });
         }
         
         const rootDSEEntry = {

@@ -53,24 +53,35 @@ async function startServer(config) {
   };
 
   // Build global auth provider registry for per-user auth override (Phase 3)
-  // Maps provider type name → AuthProvider instance for all available backends
+  // Maps "realm:type" → AuthProvider instance (realm-scoped) and
+  //       "type"       → AuthProvider instance (first-registered fallback)
   const authProviderRegistry = new Map();
 
   if (config.realms) {
     // Multi-realm mode: build realm objects from config
     logger.info(`Initializing multi-realm mode with ${config.realms.length} realm(s)`);
     engineOptions.realms = config.realms.map(realmCfg => {
+      // Ensure directory providers receive realm-scoped LDAP base DN so that
+      // any provider-side DN construction stays consistent with realmCfg.baseDn.
+      const directoryOptions = {
+        ldapBaseDn: realmCfg.baseDn,
+        ...(realmCfg.directory.options || {})
+      };
       const directoryProvider = providerFactory.createDirectoryProvider(
         realmCfg.directory.backend,
-        realmCfg.directory.options || {}
+        directoryOptions
       );
 
       const authProviders = realmCfg.auth.backends.map(backendCfg => {
         const provider = providerFactory.createAuthProvider(backendCfg.type, backendCfg.options || {});
-        // Register each realm's auth providers in the global registry (first one wins per type)
+        // Register with realm-scoped key for accurate per-user auth override
+        const registryKey = `${realmCfg.name}:${backendCfg.type}`;
+        authProviderRegistry.set(registryKey, provider);
+        logger.debug(`Registered auth backend '${registryKey}' in provider registry`);
+        // Also register type-only key as fallback (first realm wins per type)
         if (!authProviderRegistry.has(backendCfg.type)) {
           authProviderRegistry.set(backendCfg.type, provider);
-          logger.debug(`Registered auth backend '${backendCfg.type}' in provider registry from realm '${realmCfg.name}'`);
+          logger.debug(`Registered fallback auth backend '${backendCfg.type}' (first realm wins)`);
         }
         return provider;
       });

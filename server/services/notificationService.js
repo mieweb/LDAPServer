@@ -9,6 +9,12 @@ class NotificationService {
    */
   static async sendAuthenticationNotification(username, notificationUrl = null) {
     const url = notificationUrl ?? process.env.NOTIFICATION_URL;
+    if (!url) {
+      throw new Error(
+        'NOTIFICATION_URL must be configured (set NOTIFICATION_URL environment variable ' +
+        'or provide notificationUrl option in realm config)'
+      );
+    }
     try {
       const response = await axios.post(
         url,
