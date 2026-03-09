@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "description": "Reusable LDAP gateway core with pluggable authentication and directory backends",
   "main": "src/index.js",
-  "types": "dist/index.d.ts",
   "files": [
     "src/",
     "README.md"
@@ -12,8 +11,7 @@
     "build": "node build.js",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "prepublishOnly": "npm run build"
+    "test:coverage": "jest --coverage"
   },
   "keywords": [
     "ldap",
