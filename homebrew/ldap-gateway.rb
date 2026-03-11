@@ -5,7 +5,7 @@ class LdapGateway < Formula
   sha256 "PLACEHOLDER_SHA256"
   license "MIT"
 
-  depends_on "node@18"
+  depends_on "node@24"
 
   def install
     # Install all files to libexec
