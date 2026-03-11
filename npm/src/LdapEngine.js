@@ -348,6 +348,11 @@ class LdapEngine extends EventEmitter {
    * per-user override chain.  If `auth_backends` is null/undefined/empty,
    * fall back to the realm's default auth providers.
    * 
+   * Resolution order for each backend name:
+   * 1. Exact match in realm's own auth providers (by type)
+   * 2. Registry with realm-scoped key "realm:type"
+   * 3. Registry with type-only key (cross-realm fallback)
+   * 
    * @private
    * @param {Object} realm - The matched realm
    * @param {Object} user - The user record from the directory provider
@@ -371,17 +376,48 @@ class LdapEngine extends EventEmitter {
       return realm.authProviders;
     }
 
-    // Resolve each name from the registry.
-    // Try realm-scoped key first ("realm:type"), then fall back to type-only key.
+    // Build a quick lookup map of realm's own auth providers by type
+    const realmAuthByType = new Map();
+    for (const provider of realm.authProviders) {
+      // Extract type from constructor name (e.g., SQLAuthProvider -> sql)
+      const type = provider.constructor.name
+        .replace(/AuthProvider$/i, '')
+        .replace(/Backend$/i, '')
+        .toLowerCase();
+      if (!realmAuthByType.has(type)) {
+        realmAuthByType.set(type, provider);
+      }
+    }
+
+    // Resolve each name from realm's providers first, then registry
     const overrideChain = [];
     for (const name of backendNames) {
-      const namespacedKey = `${realm.name}:${name}`;
-      const provider = this.authProviderRegistry.get(namespacedKey)
-                    || this.authProviderRegistry.get(name);
+      const normalizedName = name.toLowerCase();
+      
+      // 1. Check realm's own auth providers first
+      let provider = realmAuthByType.get(normalizedName);
+      
+      if (!provider) {
+        // 2. Try realm-scoped registry key
+        const namespacedKey = `${realm.name}:${name}`;
+        provider = this.authProviderRegistry.get(namespacedKey);
+      }
+      
+      if (!provider) {
+        // 3. Fall back to type-only registry key (cross-realm)
+        provider = this.authProviderRegistry.get(name);
+        if (provider) {
+          this.logger.warn(
+            `User '${username}' in realm '${realm.name}' using cross-realm auth backend '${name}'. ` +
+            `Consider using realm-scoped key '${realm.name}:${name}' for clarity.`
+          );
+        }
+      }
+      
       if (!provider) {
         this.logger.error(
           `User '${username}' has auth_backends='${userBackends}' but backend '${name}' ` +
-          `is not registered (tried keys: '${namespacedKey}', '${name}'). ` +
+          `is not found in realm '${realm.name}' providers or registry. ` +
           `Failing authentication for security.`
         );
         throw new Error(`Unknown auth backend '${name}' for user '${username}'`);
@@ -500,10 +536,15 @@ class LdapEngine extends EventEmitter {
    * @returns {number} Number of entries sent
    */
   async _handleMultiRealmSearch(realms, filterStr, attributes, res) {
-    // Collect entries from all realms in parallel
-    const realmResults = await Promise.all(
-      realms.map(realm => this._handleRealmSearch(realm, filterStr, attributes))
+    // Collect entries from all realms in parallel with graceful degradation
+    const realmPromises = realms.map(realm => 
+      this._handleRealmSearch(realm, filterStr, attributes)
+        .catch(err => {
+          this.logger.error(`Search failed in realm '${realm.name}':`, err);
+          return { entries: [], realmName: realm.name, error: err };
+        })
     );
+    const realmResults = await Promise.all(realmPromises);
 
     // Deduplicate entries by DN (first realm wins for same DN)
     const seenDNs = new Set();

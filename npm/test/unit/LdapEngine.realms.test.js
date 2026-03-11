@@ -365,6 +365,46 @@ describe('LdapEngine Multi-Realm', () => {
         await unbindAsync(client);
       }
     });
+
+    test('should handle realm search failures gracefully (partial results)', async () => {
+      const usersA = [{ username: 'alice', uid_number: 2001, gid_number: 2000, first_name: 'Alice', last_name: 'A' }];
+      
+      const dirA = new MockDirectoryProvider({ name: 'dir-a', users: usersA, groups: [] });
+      // dirB will throw an error when searched
+      const dirB = new MockDirectoryProvider({ name: 'dir-b', users: [], groups: [] });
+      dirB.getAllUsers = async () => { throw new Error('Database connection failed'); };
+
+      engine = new LdapEngine({
+        port: TEST_PORT,
+        bindIp: '127.0.0.1',
+        logger: mockLogger,
+        requireAuthForSearch: false,
+        realms: [
+          { name: 'realm-a', baseDn: baseDN, directoryProvider: dirA, authProviders: [new MockAuthProvider()] },
+          { name: 'realm-b', baseDn: baseDN, directoryProvider: dirB, authProviders: [new MockAuthProvider()] }
+        ]
+      });
+
+      await engine.start();
+
+      const client = createClient(TEST_PORT);
+      try {
+        // Search should succeed with partial results (realm-a only)
+        const entries = await searchAsync(client, baseDN, {
+          filter: '(objectClass=posixAccount)',
+          scope: 'sub'
+        });
+
+        // Should get alice from realm-a despite realm-b failure
+        expect(entries.length).toBe(1);
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          expect.stringContaining("Search failed in realm 'realm-b'"),
+          expect.any(Error)
+        );
+      } finally {
+        await unbindAsync(client);
+      }
+    });
   });
 
   describe('RootDSE Multi-Realm', () => {
@@ -594,6 +634,80 @@ describe('LdapEngine Multi-Realm', () => {
         expect(() => {
           engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: 'nonexistent' }, 'testuser');
         }).toThrow("Unknown auth backend 'nonexistent'");
+      });
+
+      test('should prioritize realm own provider over registry fallback', () => {
+        // Realm A has its own 'mock' provider
+        const realmAProvider = new MockAuthProvider({ name: 'realm-a-mock' });
+        // Registry has a different 'mock' provider (from realm B or global)
+        const registryProvider = new MockAuthProvider({ name: 'registry-mock' });
+        const registry = new Map([['mock', registryProvider]]);
+
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          authProviderRegistry: registry,
+          realms: [
+            { name: 'realm-a', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [realmAProvider] }
+          ]
+        });
+
+        const chain = engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: 'mock' }, 'testuser');
+        // Should use realm's own provider, not the registry one
+        expect(chain).toHaveLength(1);
+        expect(chain[0]).toBe(realmAProvider);
+        expect(chain[0]).not.toBe(registryProvider);
+      });
+
+      test('should warn when using cross-realm registry fallback', () => {
+        // No 'sql' provider in realm's own auth chain
+        const realmAuth = new MockAuthProvider({ name: 'realm-default' });
+        // Registry has a 'sql' provider from another realm
+        const sqlProvider = new MockAuthProvider({ name: 'sql-provider' });
+        const registry = new Map([['sql', sqlProvider]]);
+
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          authProviderRegistry: registry,
+          realms: [
+            { name: 'test-realm', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [realmAuth] }
+          ]
+        });
+
+        const chain = engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: 'sql' }, 'testuser');
+        expect(chain).toEqual([sqlProvider]);
+        // Should have logged a warning about cross-realm usage
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.stringContaining("using cross-realm auth backend 'sql'")
+        );
+      });
+
+      test('should prefer realm-scoped registry key over type-only key', () => {
+        const realmAuth = new MockAuthProvider({ name: 'realm-default' });
+        const realmScopedSql = new MockAuthProvider({ name: 'realm-a:sql' });
+        const globalSql = new MockAuthProvider({ name: 'global-sql' });
+        const registry = new Map([
+          ['realm-a:sql', realmScopedSql],
+          ['sql', globalSql]
+        ]);
+
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          authProviderRegistry: registry,
+          realms: [
+            { name: 'realm-a', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [realmAuth] }
+          ]
+        });
+
+        const chain = engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: 'sql' }, 'testuser');
+        // Should use realm-scoped registry key, not global fallback
+        expect(chain).toEqual([realmScopedSql]);
+        expect(chain).not.toContain(globalSql);
       });
     });
 
