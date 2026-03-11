@@ -159,7 +159,7 @@ const providers = {
 
 #### Old Dockerfile Pattern
 ```dockerfile
-FROM node:18
+FROM node:24
 COPY src/ /app/src/
 COPY package.json /app/
 RUN npm install
@@ -168,7 +168,7 @@ CMD ["node", "src/server.js"]
 
 #### New Dockerfile Pattern
 ```dockerfile
-FROM node:18
+FROM node:24
 # Option 1: Use binary release
 COPY ldap-gateway /usr/local/bin/
 CMD ["ldap-gateway"]
