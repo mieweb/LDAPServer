@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS user_groups (
   group_id INT,
   PRIMARY KEY (user_id, group_id),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (group_id) REFERENCES `groups`(gid) ON DELETE CASCADE
+  FOREIGN KEY (group_id) REFERENCES `groups`(gid_number) ON DELETE CASCADE
 );
 
 INSERT INTO user_groups (user_id, group_id)
