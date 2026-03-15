@@ -20,7 +20,7 @@ after_install () {
 }
 
 if [ "$1" = "configure" -a -z "$2" ] || \
-    [ "$1" = "abort-remove" ] || \
+    [ "$1" = "abort-remove" ]; \
 then
     after_install
 elif [ "$1" = "configure" -a -n "$2" ]; then

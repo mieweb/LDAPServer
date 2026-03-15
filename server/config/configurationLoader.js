@@ -48,6 +48,8 @@ class ConfigurationLoader {
       unencrypted: process.env.LDAP_UNENCRYPTED === 'true' || process.env.LDAP_UNENCRYPTED === '1',
       backendDir: process.env.BACKEND_DIR || null,
       requireAuthForSearch: process.env.REQUIRE_AUTH_FOR_SEARCH !== 'false',
+      // Load realm configuration (null if not configured)
+      realms: this._loadRealmConfig(),
       // Load certificates - this handles all certificate logic
       ...(await this._loadCertificates()),
       // Load TLS configuration
@@ -65,6 +67,116 @@ class ConfigurationLoader {
       return 'dc=localhost';
     }
     return commonName.split('.').map(part => `dc=${part}`).join(',');
+  }
+
+  /**
+   * Load realm configuration from REALM_CONFIG env var.
+   * Supports both inline JSON strings and file paths.
+   * Returns null if REALM_CONFIG is not set (single-realm backward compat).
+   * @private
+   * @returns {Array|null} Array of realm config objects or null
+   */
+  _loadRealmConfig() {
+    const realmConfigValue = process.env.REALM_CONFIG;
+    if (!realmConfigValue) {
+      return null;
+    }
+
+    let realms;
+    const trimmed = realmConfigValue.trim();
+
+    // Try inline JSON first (starts with [ for an array)
+    if (trimmed.startsWith('[')) {
+      try {
+        realms = JSON.parse(trimmed);
+      } catch (err) {
+        logger.error(`Failed to parse REALM_CONFIG as JSON: ${err.message}`);
+        throw new Error(`Invalid REALM_CONFIG JSON: ${err.message}`);
+      }
+    } else {
+      // Treat as file path
+      const filePath = path.resolve(trimmed);
+      try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        realms = JSON.parse(content);
+      } catch (err) {
+        logger.error(`Failed to load REALM_CONFIG from file '${filePath}': ${err.message}`);
+        throw new Error(`Failed to load REALM_CONFIG from '${filePath}': ${err.message}`);
+      }
+    }
+
+    // Validate realm config
+    this._validateRealmConfig(realms);
+    logger.info(`Loaded ${realms.length} realm(s) from REALM_CONFIG`);
+    return realms;
+  }
+
+  /**
+   * Validate realm configuration array.
+   * @private
+   * @param {*} realms - Parsed realm configuration
+   * @throws {Error} If validation fails
+   */
+  _validateRealmConfig(realms) {
+    if (!Array.isArray(realms)) {
+      throw new Error('REALM_CONFIG must be a JSON array of realm objects');
+    }
+
+    if (realms.length === 0) {
+      throw new Error('REALM_CONFIG must contain at least one realm');
+    }
+
+    const names = new Set();
+    for (let i = 0; i < realms.length; i++) {
+      const realm = realms[i];
+      const prefix = `REALM_CONFIG[${i}]`;
+
+      if (!realm || typeof realm !== 'object') {
+        throw new Error(`${prefix}: must be an object`);
+      }
+
+      if (!realm.name || typeof realm.name !== 'string') {
+        throw new Error(`${prefix}: 'name' is required and must be a string`);
+      }
+
+      if (names.has(realm.name)) {
+        throw new Error(`${prefix}: duplicate realm name '${realm.name}'`);
+      }
+      names.add(realm.name);
+
+      if (!realm.baseDn || typeof realm.baseDn !== 'string') {
+        throw new Error(`${prefix} (${realm.name}): 'baseDn' is required and must be a string`);
+      }
+
+      if (!realm.directory || typeof realm.directory !== 'object') {
+        throw new Error(`${prefix} (${realm.name}): 'directory' is required and must be an object`);
+      }
+
+      if (!realm.directory.backend || typeof realm.directory.backend !== 'string') {
+        throw new Error(`${prefix} (${realm.name}): 'directory.backend' is required`);
+      }
+
+      if (!realm.auth) {
+        throw new Error(`${prefix} (${realm.name}): 'auth' is required`);
+      }
+
+      if (!Array.isArray(realm.auth.backends) || realm.auth.backends.length === 0) {
+        throw new Error(`${prefix} (${realm.name}): 'auth.backends' must be a non-empty array`);
+      }
+
+      for (let j = 0; j < realm.auth.backends.length; j++) {
+        const backend = realm.auth.backends[j];
+        if (!backend || typeof backend !== 'object') {
+          throw new Error(`${prefix} (${realm.name}): 'auth.backends[${j}]' must be an object`);
+        }
+        if (!backend.type || typeof backend.type !== 'string') {
+          throw new Error(`${prefix} (${realm.name}): 'auth.backends[${j}].type' is required`);
+        }
+      }
+
+      logger.info(`Realm '${realm.name}' configured with baseDN '${realm.baseDn}', ` +
+        `directory: ${realm.directory.backend}, auth: [${realm.auth.backends.map(b => b.type).join(', ')}]`);
+    }
   }
 
   /**

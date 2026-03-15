@@ -13,12 +13,12 @@ class ProviderFactory {
 
   createAuthProvider(type, options = {}) {
     const AuthProvider = this.backendLoader.getAuthBackend(type);
-    return new AuthProvider();
+    return new AuthProvider(options);
   }
 
   createDirectoryProvider(type, options = {}) {
     const DirectoryProvider = this.backendLoader.getDirectoryBackend(type);
-    return new DirectoryProvider();
+    return new DirectoryProvider(options);
   }
 
   /**

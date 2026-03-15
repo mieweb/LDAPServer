@@ -14,6 +14,12 @@ const url = process.env.SQL_URI || 'postgres://testuser:testpass@127.0.0.1:25432
 
 function createClient() { return ldap.createClient({ url: `ldap://127.0.0.1:${port}` }); }
 
+const directoryStub = {
+  initialize: async () => {},
+  cleanup: async () => {},
+  findUser: async (username) => ({ username }),
+};
+
 async function seedPostgres() {
   const client = new Client({ connectionString: url });
   await client.connect();
@@ -33,7 +39,7 @@ maybeDescribe('PostgreSQL Auth Backend (real DB) - Integration', () => {
     process.env.SQL_QUERY_ONE_USER = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, password_hash AS password FROM users WHERE username = ?';
 
     const authProvider = new SQLAuthProvider();
-    engine = new LdapEngine({ baseDn, port, authProviders: [authProvider], directoryProvider: { initialize: async()=>{}, cleanup: async()=>{} }, logger });
+    engine = new LdapEngine({ baseDn, port, authProviders: [authProvider], directoryProvider: directoryStub, logger });
     await engine.start();
 
     const client = createClient();
@@ -46,7 +52,7 @@ maybeDescribe('PostgreSQL Auth Backend (real DB) - Integration', () => {
     process.env.SQL_QUERY_ONE_USER = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, password_hash AS password FROM users WHERE username = ?';
 
     const authProvider = new SQLAuthProvider();
-    engine = new LdapEngine({ baseDn, port, authProviders: [authProvider], directoryProvider: { initialize: async()=>{}, cleanup: async()=>{} }, logger });
+    engine = new LdapEngine({ baseDn, port, authProviders: [authProvider], directoryProvider: directoryStub, logger });
     await engine.start();
 
     const client = createClient();

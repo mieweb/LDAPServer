@@ -39,14 +39,8 @@ async function startServer(config) {
   logger.debug('Available auth backends:', availableBackends.auth);
   logger.debug('Available directory backends:', availableBackends.directory);
 
-  const selectedDirectory = providerFactory.createDirectoryProvider(config.directoryBackend);
-  const selectedBackends = config.authBackends.map((authBackend) => {
-    return providerFactory.createAuthProvider(authBackend);
-  });
-
-  // Create and configure LDAP engine
-  const ldapEngine = new LdapEngine({
-    baseDn: config.ldapBaseDn,
+  // Build LdapEngine options
+  const engineOptions = {
     bindIp: config.bindIp,
     port: config.port,
     certificate: config.certContent,
@@ -55,10 +49,77 @@ async function startServer(config) {
     tlsMaxVersion: config.tlsMaxVersion,
     tlsCiphers: config.tlsCiphers,
     logger: logger,
-    authProviders: selectedBackends,
-    directoryProvider: selectedDirectory,
     requireAuthForSearch: config.requireAuthForSearch
-  });
+  };
+
+  // Build global auth provider registry for per-user auth override (Phase 3)
+  // Maps "realm:type" → AuthProvider instance (realm-scoped) and
+  //       "type"       → AuthProvider instance (first-registered fallback)
+  const authProviderRegistry = new Map();
+
+  if (config.realms) {
+    // Multi-realm mode: build realm objects from config
+    logger.info(`Initializing multi-realm mode with ${config.realms.length} realm(s)`);
+    engineOptions.realms = config.realms.map(realmCfg => {
+      // Ensure directory providers receive realm-scoped LDAP base DN so that
+      // any provider-side DN construction stays consistent with realmCfg.baseDn.
+      const directoryOptions = {
+        ldapBaseDn: realmCfg.baseDn,
+        ...(realmCfg.directory.options || {})
+      };
+      const directoryProvider = providerFactory.createDirectoryProvider(
+        realmCfg.directory.backend,
+        directoryOptions
+      );
+
+      const authProviders = realmCfg.auth.backends.map(backendCfg => {
+        const provider = providerFactory.createAuthProvider(backendCfg.type, backendCfg.options || {});
+        // Register with realm-scoped key for accurate per-user auth override
+        const registryKey = `${realmCfg.name}:${backendCfg.type}`;
+        authProviderRegistry.set(registryKey, provider);
+        logger.debug(`Registered auth backend '${registryKey}' in provider registry`);
+        // Also register type-only key as fallback (first realm wins per type)
+        if (!authProviderRegistry.has(backendCfg.type)) {
+          authProviderRegistry.set(backendCfg.type, provider);
+          logger.debug(`Registered fallback auth backend '${backendCfg.type}' (first realm wins)`);
+        }
+        return provider;
+      });
+
+      logger.info(`Realm '${realmCfg.name}': baseDN=${realmCfg.baseDn}, ` +
+        `directory=${realmCfg.directory.backend}, auth=[${realmCfg.auth.backends.map(b => b.type).join(', ')}]`);
+
+      return {
+        name: realmCfg.name,
+        baseDn: realmCfg.baseDn,
+        directoryProvider,
+        authProviders
+      };
+    });
+  } else {
+    // Legacy single-realm mode
+    const selectedDirectory = providerFactory.createDirectoryProvider(config.directoryBackend);
+    const selectedBackends = config.authBackends.map((authBackend) => {
+      return providerFactory.createAuthProvider(authBackend);
+    });
+    engineOptions.baseDn = config.ldapBaseDn;
+    engineOptions.authProviders = selectedBackends;
+    engineOptions.directoryProvider = selectedDirectory;
+
+    // Register legacy auth providers in the registry
+    for (let idx = 0; idx < config.authBackends.length; idx++) {
+      const backendType = config.authBackends[idx];
+      if (!authProviderRegistry.has(backendType)) {
+        authProviderRegistry.set(backendType, selectedBackends[idx]);
+        logger.debug(`Registered auth backend '${backendType}' in provider registry`);
+      }
+    }
+  }
+
+  engineOptions.authProviderRegistry = authProviderRegistry;
+
+  // Create and configure LDAP engine
+  const ldapEngine = new LdapEngine(engineOptions);
 
   // Set up event listeners for logging and monitoring
   ldapEngine.on('started', (info) => {

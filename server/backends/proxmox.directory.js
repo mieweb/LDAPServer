@@ -7,9 +7,10 @@ const logger = require('../utils/logger');
 const { name } = require('./proxmox.auth');
 
 class ProxmoxDirectory extends DirectoryProvider {
-  constructor() {
-    super();
-    this.configPath = process.env.PROXMOX_USER_CFG || null;
+  constructor(options = {}) {
+    super(options);
+    this.configPath = options.proxmoxUserCfg ?? process.env.PROXMOX_USER_CFG ?? null;
+    this.ldapBaseDn = options.ldapBaseDn ?? process.env.LDAP_BASE_DN;
     this.users = [];
     this.groups = [];
     this.watcher = null;
@@ -201,7 +202,7 @@ class ProxmoxDirectory extends DirectoryProvider {
             memberUids,
             gid_number: gidBase,
             gidNumber: gidBase,
-            dn: `cn=${groupName},${process.env.LDAP_BASE_DN}`,
+            dn: `cn=${groupName},${this.ldapBaseDn}`,
             objectClass: ["posixGroup"],
           });
           gidBase++;
@@ -218,7 +219,7 @@ class ProxmoxDirectory extends DirectoryProvider {
       memberUids: allUsernames,
       gid_number: 9999,
       gidNumber: 9999,
-      dn: `cn=proxmox-sudo,${process.env.LDAP_BASE_DN}`,
+      dn: `cn=proxmox-sudo,${this.ldapBaseDn}`,
       objectClass: ["posixGroup"],
     });
 
@@ -274,7 +275,7 @@ class ProxmoxDirectory extends DirectoryProvider {
             memberUids: [user.username],
             gid_number: gidNum,
             gidNumber: gidNum,
-            dn: `cn=${user.username},${process.env.LDAP_BASE_DN}`,
+            dn: `cn=${user.username},${this.ldapBaseDn}`,
             objectClass: ["posixGroup"],
           }];
         }

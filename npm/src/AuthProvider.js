@@ -4,6 +4,13 @@
  */
 class AuthProvider {
   /**
+   * @param {Object} options - Provider configuration options (overrides env vars)
+   */
+  constructor(options = {}) {
+    this.options = options;
+  }
+
+  /**
    * Authenticate a user with username and password
    * @param {string} username - The username to authenticate
    * @param {string} password - The password to verify

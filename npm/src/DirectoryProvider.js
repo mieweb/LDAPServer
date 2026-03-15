@@ -4,6 +4,13 @@
  */
 class DirectoryProvider {
   /**
+   * @param {Object} options - Provider configuration options (overrides env vars)
+   */
+  constructor(options = {}) {
+    this.options = options;
+  }
+
+  /**
    * Find a single user by username
    * @param {string} username - The username to search for
    * @returns {Promise<Object|null>} User object or null if not found
