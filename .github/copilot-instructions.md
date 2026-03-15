@@ -104,7 +104,7 @@ This is a **modular LDAP gateway** built with Node.js and ldapjs that bridges LD
 - **Local development**: Run `./launch.sh` (starts Docker MySQL/client, installs deps, runs server)
 - **Stop services**: `./shutdown.sh` (kills Node process, stops Docker)
 - **Testing**: `ldapsearch -x -H ldaps://localhost:636 -b "dc=mieweb,dc=com" "(uid=test)"` and `ssh test@localhost -p 2222`
-- **Deployment**: Use Terraform in `terraform/` for AWS EC2 with security group (ports 22, 636, 3000)
+- **Deployment**: Create a `dev-v*` GitHub release to auto-deploy to the dev container via SSH (see `.github/workflows/deploy-dev.yml`)
 
 ## Project-Specific Patterns
 - **Backend separation**: Always implement both auth and directory providers (see `npm/src/interfaces/`)

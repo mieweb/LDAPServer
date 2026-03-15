@@ -1,0 +1,186 @@
+# ─────────────────────────────────────────────────────────
+# Deploy to Development Container
+#
+# Triggers when a release with tag 'dev-v*' is created
+# SSHs into the dev container, pulls latest code,
+# builds, restarts the systemd service, and verifies health.
+#
+# Tags: dev-v1.2.3 → deploys to dev container
+#        v1.2.3   → skipped (handled by other workflows)
+# ─────────────────────────────────────────────────────────
+
+name: Deploy to Development Container
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: write
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Gate: Only run for dev-v* tags
+  # ─────────────────────────────────────────────
+  check-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+      version: ${{ steps.check.outputs.version }}
+      tag_name: ${{ steps.check.outputs.tag_name }}
+    steps:
+      - name: Check tag pattern
+        id: check
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          echo "tag_name=${TAG}" >> "$GITHUB_OUTPUT"
+
+          if [[ "$TAG" == dev-v* ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            VERSION="${TAG#dev-v}"
+            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "✅ Tag '${TAG}' matches dev-v* — deploying to development"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️ Tag '${TAG}' does not match dev-v* — skipping"
+          fi
+
+  # ─────────────────────────────────────────────
+  # Build & test before deploying
+  # ─────────────────────────────────────────────
+  build-and-test:
+    needs: check-tag
+    if: needs.check-tag.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build core package
+        run: npm run build:core
+
+      - name: Build server package
+        run: npm run build:server
+
+      - name: Generate test certificates
+        run: |
+          mkdir -p server/cert
+          openssl req -x509 -newkey rsa:2048 -nodes -sha256 \
+            -subj "/CN=localhost" \
+            -keyout server/cert/server.key \
+            -out server/cert/server.crt \
+            -days 1
+
+      - name: Run core tests
+        run: npm run test:core
+
+      - name: Run server tests
+        run: npm run test:server
+
+  # ─────────────────────────────────────────────
+  # Deploy to dev container via SSH
+  # ─────────────────────────────────────────────
+  deploy-dev:
+    needs: [check-tag, build-and-test]
+    if: needs.check-tag.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    environment: development
+    env:
+      VERSION: ${{ needs.check-tag.outputs.version }}
+      TAG_NAME: ${{ needs.check-tag.outputs.tag_name }}
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEV_CONTAINER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # Add known hosts to prevent interactive prompt
+          if [ -n "${{ secrets.DEV_CONTAINER_SSH_KNOWN_HOSTS }}" ]; then
+            echo "${{ secrets.DEV_CONTAINER_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          fi
+
+      - name: Deploy to development container
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -p ${{ secrets.DEV_CONTAINER_PORT }} \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.DEV_CONTAINER_USER }}@${{ secrets.DEV_CONTAINER_HOST }} << 'DEPLOY_SCRIPT'
+            set -e
+
+            echo "======================================"
+            echo "Deploying LDAP Gateway ${{ env.TAG_NAME }}"
+            echo "======================================"
+
+            echo "==> Pulling latest code from dev branch"
+            cd /opt/ldap-gateway
+            git fetch origin dev
+            git checkout dev
+            git reset --hard origin/dev
+
+            echo "==> Current commit:"
+            git log -1 --oneline
+
+            echo "==> Installing dependencies"
+            npm ci --production=false
+
+            echo "==> Building core package"
+            npm run build:core
+
+            echo "==> Building server package"
+            npm run build:server
+
+            echo "==> Restarting LDAP Gateway service"
+            sudo systemctl restart ldap-gateway
+
+            echo "==> Waiting for service to start"
+            sleep 5
+
+            echo "==> Health check"
+            if sudo systemctl is-active --quiet ldap-gateway; then
+              echo "✅ LDAP Gateway is running"
+              sudo systemctl status ldap-gateway --no-pager --lines=10
+            else
+              echo "❌ LDAP Gateway failed to start"
+              sudo journalctl -u ldap-gateway --no-pager -n 50
+              exit 1
+            fi
+
+            echo "======================================"
+            echo "✅ Deployment complete"
+            echo "======================================"
+          DEPLOY_SCRIPT
+
+      - name: Update release with deployment status
+        if: always()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: "LDAP Gateway Dev ${{ env.TAG_NAME }}"
+          body: |
+            ## LDAP Gateway Development Release
+
+            **Version:** `${{ env.VERSION }}`
+            **Environment:** Development
+            **Status:** ${{ job.status == 'success' && '✅ Deployed' || '❌ Failed' }}
+            **Branch:** `dev`
+
+            ### Deployment Details
+            - Build & Tests: ${{ needs.build-and-test.result == 'success' && '✅ Passed' || '❌ Failed' }}
+            - Container Deploy: ${{ job.status == 'success' && '✅ Completed' || '❌ Failed' }}
+
+            ---
+            *Automated deployment via GitHub Actions*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

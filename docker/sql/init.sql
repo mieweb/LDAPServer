@@ -33,11 +33,11 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- 4. Now insert users (gid_number matches existing groups)
 INSERT INTO users (username, password, full_name, email, uid_number, gid_number, home_directory) VALUES
-  ('ann', 'maya', 'Ann', 'ann@mieweb.com', 1001, 1001, '/home/ann'),
-  ('abrol','abrol', 'Abrol', 'abrol@mieweb.com', 1002, 1002, '/home/abrol'),
-  ('evan', 'evan', 'Evan Pant', 'evan@mieweb.com', 1003, 1003, '/home/evan'),
-  ('hrits', 'maya','Hrits Pant', 'hrits@mieweb.com', 1004, 1004, '/home/hrits'),
-  ('chris', 'chris','Chris Evans', 'chris@mieweb.com', 1005, 1005, '/home/chris');
+  ('ann', '$6$Zmtz1yzJJyslWIK/$OoLdG1FNvPbSsyqekHGNIKdx.X1IlMQBVqACvr/WI8IFze.jzvLDzB1y3/Tigjk1mzcGKgowZ1lwCVF8EXv2q.', 'Ann', 'ann@mieweb.com', 1001, 1001, '/home/ann'),
+  ('abrol','$6$7KbEtgYeI.FFS7sw$EcFip4Ros8inRQQ2nGhBa32s3qA7h2pFXGfrP8x0NRMIM0bGaZ8bIObVh207yhQ.YW1KkMW2o7RIkEuDWG3wb/', 'Abrol', 'abrol@mieweb.com', 1002, 1002, '/home/abrol'),
+  ('evan', '$6$KgsRsEVt9N7AdBp9$/IKH6FUhKEu2PwwuzD9X.bhg3omjHvu2C4svEnJiIA3qxBnxf8PlLaZyRfcp8VRLwpOJcXKrj90OYw9rKJnq4/', 'Evan Pant', 'evan@mieweb.com', 1003, 1003, '/home/evan'),
+  ('hrits', '$6$Zmtz1yzJJyslWIK/$OoLdG1FNvPbSsyqekHGNIKdx.X1IlMQBVqACvr/WI8IFze.jzvLDzB1y3/Tigjk1mzcGKgowZ1lwCVF8EXv2q.','Hrits Pant', 'hrits@mieweb.com', 1004, 1004, '/home/hrits'),
+  ('chris', '$6$IgTXizGU8TCQg6fW$EQPpKK1lzLmr3x1HeZArvWQ3lLknQ60cPnKv6diDJVaaTaY7HLDPfrdfKcXYFE9IiSr3gBv98NodNb8ZCfAQD/','Chris Evans', 'chris@mieweb.com', 1005, 1005, '/home/chris');
 
 -- 5. Add secondary groups
 INSERT INTO `groups` (gid_number, name, description, member_uids) VALUES
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS user_groups (
   group_id INT,
   PRIMARY KEY (user_id, group_id),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (group_id) REFERENCES `groups`(gid) ON DELETE CASCADE
+  FOREIGN KEY (group_id) REFERENCES `groups`(gid_number) ON DELETE CASCADE
 );
 
 INSERT INTO user_groups (user_id, group_id)
