@@ -50,5 +50,19 @@
     "home_directory": "/home/disabled",
     "login_shell": "/bin/bash",
     "enabled": false
+  },
+  {
+    "username": "sshuser",
+    "password": "sshpass123",
+    "uid_number": 1004,
+    "gid_number": 1001,
+    "full_name": "SSH Test User",
+    "surname": "User",
+    "given_name": "SSH",
+    "mail": "sshuser@example.com",
+    "home_directory": "/home/sshuser",
+    "login_shell": "/bin/bash",
+    "enabled": true,
+    "sshpublickey": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC8... sshuser@testhost"
   }
 ]

@@ -4,6 +4,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     openssh-server \
     sssd \
     sssd-ldap \
+    sssd-tools \
     ldap-utils \
     sshpass \
     procps \
@@ -16,9 +17,12 @@ RUN mkdir -p /var/run/sshd && \
     echo "Port 2222" >> /etc/ssh/sshd_config && \
     echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && \
     echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config && \
+    echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config && \
     echo 'UsePAM yes' >> /etc/ssh/sshd_config && \
     echo 'LoginGraceTime 30' >> /etc/ssh/sshd_config && \
-    echo 'MaxAuthTries 3' >> /etc/ssh/sshd_config
+    echo 'MaxAuthTries 3' >> /etc/ssh/sshd_config && \
+    echo 'AuthorizedKeysCommand /usr/bin/sss_ssh_authorizedkeys %u' >> /etc/ssh/sshd_config && \
+    echo 'AuthorizedKeysCommandUser nobody' >> /etc/ssh/sshd_config
 
 # PAM: create home dirs for LDAP users
 RUN echo "session required pam_mkhomedir.so skel=/etc/skel umask=0077" >> /etc/pam.d/sshd
@@ -37,6 +41,10 @@ RUN useradd -m -s /bin/bash localadmin && echo 'localadmin:localpass' | chpasswd
 
 # Pre-create home directory for testuser to avoid warnings
 RUN mkdir -p /home/testuser && chmod 755 /home/testuser
+
+# Copy test SSH private key for key-based auth testing
+COPY fixtures/testuser_ed25519 /tmp/testuser_ed25519
+RUN chmod 600 /tmp/testuser_ed25519
 
 EXPOSE 2222
 

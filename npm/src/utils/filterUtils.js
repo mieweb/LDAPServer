@@ -57,7 +57,7 @@ function isAllUsersRequest(filterStr, attributes) {
   }
   
   // User objectClass searches
-  if (/(objectClass=posixAccount)|(objectClass=inetOrgPerson)|(objectClass=person)/i.test(filterStr)) {
+  if (/(objectClass=posixAccount)|(objectClass=inetOrgPerson)|(objectClass=person)|(objectClass=ldapPublicKey)/i.test(filterStr)) {
     return true;
   }
   
