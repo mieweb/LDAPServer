@@ -1,80 +1,168 @@
-# Multi-Realm LDAP Gateway Architecture
+# Multi-Realm LDAP Gateway
 
 ## Overview
 
-The LDAP Gateway supports **multi-realm architecture**, enabling a single gateway instance to serve multiple directory backends, each with its own baseDN and authentication chain. This allows organizations to:
+The LDAP Gateway supports **multi-realm architecture**, enabling a single gateway instance to serve multiple directory backends, each with its own baseDN and authentication chain.
 
+**Capabilities:**
 - Serve users from multiple domains (e.g., `dc=mieweb,dc=com`, `dc=bluehive,dc=com`)
-- Apply different authentication requirements per user population (e.g., MFA for employees, password-only for service accounts)
+- Apply different authentication requirements per user population (MFA for employees, password-only for service accounts)
 - Isolate directory data across organizational boundaries
-- Maintain backward compatibility with single-realm deployments
+- Override authentication per user via the `auth_backends` database column
+- Maintain full backward compatibility with single-realm deployments
 
-## Architecture Components
+### Architecture Overview
 
 ```mermaid
 flowchart TB
     subgraph "Client Layer"
-        C1["SSSD Client<br/>dc=mieweb,dc=com"]
-        C2["SSSD Client<br/>dc=bluehive,dc=com"]
-        C3["Service Account<br/>dc=mieweb,dc=com"]
+        C1["SSSD Client\ndc=mieweb,dc=com"]
+        C2["SSSD Client\ndc=bluehive,dc=com"]
+        C3["Service Account\ndc=mieweb,dc=com"]
     end
     
-    subgraph "LDAP Gateway - Routing Layer"
-        GW["LdapEngine<br/>realmsByBaseDn Map"]
-        GW -->|"baseDN routing"| ROUTE["O(1) lookup:<br/>lowercased baseDN → realms[]"]
+    subgraph "LDAP Gateway"
+        GW["BaseDN Router"]
     end
     
     subgraph "Realm Layer"
-        R1["Realm: mieweb<br/>dc=mieweb,dc=com"]
-        R2["Realm: bluehive<br/>dc=bluehive,dc=com"]
-        R3["Realm: service-accounts<br/>dc=mieweb,dc=com"]
+        R1["Realm: mieweb\ndc=mieweb,dc=com"]
+        R2["Realm: bluehive\ndc=bluehive,dc=com"]
+        R3["Realm: service-accounts\ndc=mieweb,dc=com"]
         
-        R1 --> DIR1["SQLDirectory<br/>users table"]
-        R1 --> AUTH1["[SQL, MFA]"]
+        R1 --> DIR1["SQL Directory\nusers table"]
+        R1 --> AUTH1["Auth: SQL + MFA"]
         
-        R2 --> DIR2["SQLDirectory<br/>bluehive_users"]
-        R2 --> AUTH2["[SQL]"]
+        R2 --> DIR2["SQL Directory\nbluehive_users"]
+        R2 --> AUTH2["Auth: SQL"]
         
-        R3 --> DIR3["SQLDirectory<br/>service_accounts"]
-        R3 --> AUTH3["[SQL only]"]
+        R3 --> DIR3["SQL Directory\nservice_accounts"]
+        R3 --> AUTH3["Auth: SQL only"]
     end
     
     C1 -->|"bind/search"| GW
     C2 -->|"bind/search"| GW
     C3 -->|"bind/search"| GW
     
-    ROUTE --> R1
-    ROUTE --> R2
-    ROUTE --> R3
+    GW -->|"dc=mieweb"| R1
+    GW -->|"dc=bluehive"| R2
+    GW -->|"dc=mieweb"| R3
 ```
 
-### Core Concepts
+## Prerequisites
 
-#### Realm
+- LDAP Gateway v2.0+
+- A `realms.json` configuration file (or `REALM_CONFIG` environment variable)
+- Configured backend databases or directory sources for each realm
+- Understanding of your organization's LDAP baseDN structure
 
-A **realm** is an isolated authentication/directory domain consisting of:
-- **Name**: Unique identifier (e.g., `"mieweb-employees"`)
-- **BaseDN**: LDAP subtree root (e.g., `"dc=mieweb,dc=com"`)
-- **Directory Provider**: Backend for user/group lookups (SQL, MongoDB, Proxmox, etc.)
-- **Auth Providers**: Chain of authentication backends (SQL, LDAP, MFA, etc.)
+## Core Concepts
+
+### Realm
+
+A **realm** is an isolated authentication and directory domain consisting of:
+
+| Property | Description | Example |
+|----------|-------------|---------|
+| `name` | Unique identifier | `"mieweb-employees"` |
+| `baseDn` | LDAP subtree root | `"dc=mieweb,dc=com"` |
+| `directory` | Backend for user/group lookups | SQL, MongoDB, Proxmox |
+| `auth.backends` | Ordered list of authentication providers | SQL, Notification (MFA) |
 
 Multiple realms can share the same baseDN (e.g., employees and service accounts both under `dc=mieweb,dc=com`).
 
-#### BaseDN Routing
+### Routing Behavior
 
-The gateway routes LDAP operations by baseDN:
-- **Different baseDNs** serve **different subtrees** (completely isolated)
-- **Same baseDN** results are **merged** from multiple realms (deduplication applied)
-- Routing uses a lowercased baseDN index for O(1) lookups
+**Different baseDNs (complete isolation):**
+- Each baseDN routes to its own set of realms
+- No result merging across baseDNs
 
-#### Authentication Chain
+**Same baseDN, multiple realms:**
 
-Each realm defines a sequential authentication chain:
-```javascript
-authProviders: [SQLAuth, MFAAuth] // Both must succeed
+| Operation | Behavior |
+|-----------|----------|
+| **Bind (auth)** | Realms checked in config order; first realm containing the user wins |
+| **Search** | All realms queried in parallel; results merged with DN deduplication |
+| **Duplicate DNs** | First realm's entry wins; duplicates silently dropped |
+
+### Authentication Chain
+
+Each realm defines a sequential authentication chain. **All providers in the chain must succeed** for authentication to pass:
+
+```json
+"auth": {
+  "backends": [
+    { "type": "sql" },
+    { "type": "notification" }
+  ]
+}
 ```
 
-Individual users can override the realm's default chain via the `auth_backends` database column (Phase 3 feature).
+In the example above, SQL password validation must pass first, then the MFA notification provider must also succeed.
+
+### Authentication Flow
+
+When a client binds (authenticates), the gateway routes by baseDN, finds the user across realms, and runs the authentication chain:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Gateway as LDAP Gateway
+    participant R1 as Realm: employees
+    participant R2 as Realm: service-accounts
+    participant Auth as Auth Chain
+
+    Client->>Gateway: BIND uid=ldap-reader,dc=mieweb,dc=com
+
+    Gateway->>Gateway: Route by baseDN: dc=mieweb,dc=com
+
+    Gateway->>R1: Find user 'ldap-reader'
+    R1-->>Gateway: Not found
+
+    Gateway->>R2: Find user 'ldap-reader'
+    R2-->>Gateway: Found (auth_backends: null)
+
+    Note over Gateway: First match wins
+
+    Gateway->>Gateway: Resolve auth chain for realm
+
+    alt auth_backends is null
+        Note over Gateway: Use realm default: [SQL]
+    else auth_backends = 'sql,hardware-token'
+        Note over Gateway: Use per-user override
+    end
+
+    Gateway->>Auth: SQL password check
+    Auth-->>Gateway: Pass
+
+    Gateway-->>Client: BIND SUCCESS (realm: service-accounts)
+```
+
+### Search Flow
+
+When a client searches, all realms sharing the baseDN are queried in parallel and results are merged:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Gateway as LDAP Gateway
+    participant R1 as Realm: employees
+    participant R2 as Realm: service-accounts
+
+    Client->>Gateway: SEARCH base=dc=mieweb,dc=com
+
+    par Query all matching realms
+        Gateway->>R1: Get users
+        R1-->>Gateway: [uid=apant, uid=horner]
+        
+        Gateway->>R2: Get users
+        R2-->>Gateway: [uid=ldap-reader, uid=monitoring-bot]
+    end
+
+    Gateway->>Gateway: Merge & deduplicate by DN
+
+    Gateway-->>Client: 4 unique entries
+```
 
 ## Configuration
 
@@ -150,29 +238,23 @@ REALM_CONFIG='[{"name":"mieweb","baseDn":"dc=mieweb,dc=com",...}]'
         }
       ]
     }
-  },
-  {
-    "name": "bluehive",
-    "baseDn": "dc=bluehive,dc=com",
-    "directory": {
-      "backend": "sql",
-      "options": {
-        "sqlUri": "mysql://user:pass@db.bluehive.com:3306/hr_system"
-      }
-    },
-    "auth": {
-      "backends": [
-        {
-          "type": "sql",
-          "options": {
-            "sqlUri": "mysql://user:pass@db.bluehive.com:3306/hr_system"
-          }
-        }
-      ]
-    }
   }
 ]
 ```
+
+A full example configuration is available at [`server/realms.example.json`](../server/realms.example.json).
+
+### Configuration Reference
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Unique realm identifier |
+| `baseDn` | string | Yes | LDAP base DN for this realm |
+| `directory.backend` | string | Yes | Directory provider type (`sql`, `mongo`, `proxmox`) |
+| `directory.options` | object | No | Provider-specific options (connection strings, queries) |
+| `auth.backends[]` | array | Yes | Ordered list of auth backends |
+| `auth.backends[].type` | string | Yes | Auth provider type (`sql`, `notification`, etc.) |
+| `auth.backends[].options` | object | No | Provider-specific auth options |
 
 ### Legacy Single-Realm Mode (Backward Compatible)
 
@@ -183,138 +265,13 @@ AUTH_BACKENDS=sql,notification
 DIRECTORY_BACKEND=sql
 LDAP_BASE_DN=dc=mieweb,dc=com
 SQL_URI=mysql://user:pass@localhost:3306/ldap_db
-# ... other SQL/auth-specific env vars
 ```
 
-The gateway automatically wraps these into a single realm named `"default"`.
+The gateway automatically wraps these into a single realm named `"default"`. No code or client changes are needed.
 
-## Operational Flows
+## Per-User Authentication Override
 
-### Startup Sequence
-
-```mermaid
-flowchart TD
-    START["Server Startup"] --> CONFIG["ConfigurationLoader.loadConfig()"]
-    
-    CONFIG --> CHECK{"REALM_CONFIG<br/>set?"}
-    
-    CHECK -->|"Yes"| LOAD["Load & validate realm config"]
-    CHECK -->|"No"| LEGACY["Load flat env vars"]
-    
-    LOAD --> MULTI["Multi-realm mode"]
-    LEGACY --> WRAP["Auto-wrap into single 'default' realm"]
-    
-    MULTI --> INSTANTIATE["Instantiate providers per realm"]
-    WRAP --> INSTANTIATE
-    
-    INSTANTIATE --> REGISTRY["Build authProviderRegistry"]
-    REGISTRY --> ENGINE["Create LdapEngine with realms[]"]
-    
-    ENGINE --> INIT["_initRealms():<br/>Build realmsByBaseDn routing map"]
-    INIT --> HANDLERS["Register LDAP handlers per baseDN"]
-    
-    HANDLERS --> LISTEN["Server listening on port"]
-```
-
-### Authentication Flow
-
-When a client attempts to bind (authenticate):
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Engine as LdapEngine
-    participant Routing as realmsByBaseDn
-    participant R1 as Realm: employees
-    participant R2 as Realm: service-accounts
-    participant Auth as Auth Chain
-
-    Client->>Engine: BIND uid=ldap-reader,dc=mieweb,dc=com
-
-    Engine->>Engine: Extract baseDN: dc=mieweb,dc=com
-    Engine->>Routing: Get realms for 'dc=mieweb,dc=com'
-    Routing-->>Engine: [employees, service-accounts]
-
-    Note over Engine: _authenticateAcrossRealms()
-
-    Engine->>R1: findUser('ldap-reader')
-    R1-->>Engine: null (not found)
-
-    Engine->>R2: findUser('ldap-reader')
-    R2-->>Engine: { username: 'ldap-reader', auth_backends: null }
-
-    Note over Engine: First match wins!<br/>User found in 'service-accounts'
-
-    Engine->>Engine: _resolveAuthChain(realm, user)
-
-    alt user.auth_backends is null/empty
-        Engine->>Engine: Use realm default: [SQL]
-    else user.auth_backends = 'sql,hardware-token'
-        Engine->>Engine: Resolve override from registry
-    end
-
-    Engine->>Auth: Sequential auth: SQL.authenticate()
-    Auth-->>Engine: true
-
-    Note over Engine: No MFA notification!
-
-    Engine-->>Client: BIND SUCCESS (realm='service-accounts')
-```
-
-**Key Points:**
-1. **BaseDN Routing**: O(1) lookup determines which realms to check
-2. **First-Match Wins**: Realms are checked in config order; first `findUser()` hit wins
-3. **Auth Chain Resolution**: Uses realm default or per-user override
-4. **Sequential Authentication**: All providers in chain must succeed
-
-### Search Flow
-
-When a client searches for directory entries:
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Engine as LdapEngine
-    participant Handler as Search Handler
-    participant R1 as Realm: employees
-    participant R2 as Realm: service-accounts
-    participant Dedupe as Deduplication
-
-    Client->>Engine: SEARCH base=dc=mieweb,dc=com<br/>filter=(objectClass=posixAccount)
-
-    Engine->>Handler: Route to handler for 'dc=mieweb,dc=com'
-    Handler->>Handler: Lookup realms: [employees, service-accounts]
-
-    Note over Handler: _handleMultiRealmSearch()<br/>Parallel query
-
-    par Query realms in parallel
-        Handler->>R1: _handleRealmSearch()
-        R1->>R1: getAllUsers()
-        R1-->>Handler: [uid=apant, uid=horner]
-        
-        Handler->>R2: _handleRealmSearch()
-        R2->>R2: getAllUsers()
-        R2-->>Handler: [uid=ldap-reader, uid=monitoring-bot]
-    end
-
-    Handler->>Dedupe: Merge results
-    Note over Dedupe: seenDNs Set (lowercased DN keys)<br/>First realm wins for duplicates
-
-    Dedupe-->>Handler: 4 unique entries
-
-    Handler->>Client: Send entries
-    Handler->>Client: SearchResultDone
-```
-
-**Key Points:**
-1. **Parallel Queries**: All realms sharing the baseDN are queried simultaneously
-2. **Graceful Degradation**: Realm failures don't block results from other realms
-3. **DN Deduplication**: First realm's entry wins for duplicate DNs
-4. **Subtree Isolation**: Different baseDNs query different realm sets
-
-## Per-User Authentication Override (Phase 3)
-
-Individual users can override their realm's default authentication chain via the `auth_backends` database column.
+Individual users can override their realm's default authentication chain via the `auth_backends` database column. This allows fine-grained control without creating additional realms.
 
 ### Database Schema
 
@@ -322,82 +279,99 @@ Add to your user table:
 
 ```sql
 ALTER TABLE users ADD COLUMN auth_backends VARCHAR(255) NULL 
-  COMMENT 'Comma-separated auth backend types to override realm default. NULL = use realm default.';
+  COMMENT 'Comma-separated auth backend types. NULL = use realm default.';
 ```
 
-### Resolution Priority
+### Auth Provider Registry
 
-When authenticating a user, the auth chain is resolved with three-level precedence:
+The registry is a key-value map of backend type names to provider instances, built automatically at startup. It enables per-user overrides by letting the gateway look up any auth provider by name.
+
+**How the registry is built:**
+
+1. For each realm, every auth backend is registered with **two keys**:
+   - **Realm-scoped key** (`realm-name:type`) — always registered, unique per realm
+   - **Global key** (`type`) — registered only if no other realm claimed that type first
+
+2. All keys are **normalized to lowercase** for case-insensitive lookups
+
+**Example:** Given this configuration with two realms:
+
+```json
+[
+  {
+    "name": "employees",
+    "auth": { "backends": [{ "type": "sql" }, { "type": "notification" }] }
+  },
+  {
+    "name": "service-accounts",
+    "auth": { "backends": [{ "type": "sql" }] }
+  }
+]
+```
+
+The resulting registry contains:
+
+| Registry Key | Provider | How Registered |
+|-------------|----------|----------------|
+| `employees:sql` | SQL provider (employees) | Realm-scoped |
+| `employees:notification` | MFA provider (employees) | Realm-scoped |
+| `service-accounts:sql` | SQL provider (service-accounts) | Realm-scoped |
+| `sql` | SQL provider (employees) | Global fallback (first realm wins) |
+| `notification` | MFA provider (employees) | Global fallback |
+
+### How Override Resolution Works
+
+When a user has `auth_backends` set (e.g., `'sql,hardware-token'`), each backend name is resolved through a three-level lookup:
 
 ```mermaid
 flowchart TD
-    START["User found in realm"] --> CHECK{"user.auth_backends<br/>set?"}
+    START["User has auth_backends = 'sql,mfa'"] --> PARSE["Split: ['sql', 'mfa']"]
+    PARSE --> LOOP["For each backend name:"]
     
-    CHECK -->|"NULL/empty"| DEFAULT["Return realm.authProviders"]
-    
-    CHECK -->|"'sql,mfa'"| PARSE["Split by comma: ['sql', 'mfa']"]
-    PARSE --> RESOLVE["For each backend name:"]
-    
-    RESOLVE --> STEP1["1. Check realm's own auth providers"]
-    STEP1 -->|"found"| USE1["Use realm provider"]
+    LOOP --> STEP1["1. Check realm's own providers\n(matched by type name)"]
+    STEP1 -->|"found"| USE["Use this provider"]
     STEP1 -->|"not found"| STEP2
     
-    STEP2["2. Check registry: 'realm:type' key"]
-    STEP2 -->|"found"| USE2["Use scoped provider"]
+    STEP2["2. Check registry:\nrealm-scoped key (realm:type)"]
+    STEP2 -->|"found"| USE
     STEP2 -->|"not found"| STEP3
     
-    STEP3["3. Check registry: 'type' key (global)"]
-    STEP3 -->|"found"| USE3["Use global provider + warn"]
-    STEP3 -->|"not found"| ERROR["Throw error: Unknown backend"]
+    STEP3["3. Check registry:\nglobal key (type only)"]
+    STEP3 -->|"found"| WARN["Use provider + log warning"]
+    STEP3 -->|"not found"| FAIL["Deny authentication:\nunknown backend"]
     
-    USE1 --> BUILD["Build override chain"]
-    USE2 --> BUILD
-    USE3 --> BUILD
-    BUILD --> RETURN["Return custom chain"]
-    
-    DEFAULT --> DONE["Authenticate"]
-    RETURN --> DONE
-    ERROR --> FAIL["Authentication fails"]
+    USE --> CHAIN["Add to auth chain"]
+    WARN --> CHAIN
+    CHAIN --> NEXT{"More\nbackends?"}
+    NEXT -->|"yes"| LOOP
+    NEXT -->|"no"| AUTH["Run auth chain sequentially"]
 ```
 
-### Example Usage
+**Why three levels?**
+- **Level 1** (realm providers) ensures the user gets the exact provider instance configured for their realm
+- **Level 2** (realm-scoped registry) enables dynamic/custom backends registered at startup without duplicating config
+- **Level 3** (global registry) is a safety net for shared services, but logs a warning since it may use a provider from a different realm
 
-**Scenario: Bypass MFA for CI/CD service account**
+If `auth_backends` is `NULL` or empty, the realm's default auth chain is used with no registry lookup.
+
+### Examples
 
 ```sql
--- Service account that needs to skip MFA for automation
+-- Service account: skip MFA, only validate password
 UPDATE users SET auth_backends = 'sql' WHERE username = 'ci-deployment-bot';
 
--- Regular employee (NULL = use realm default: sql,mfa)
+-- Regular employee: use realm default (sql + mfa)
 UPDATE users SET auth_backends = NULL WHERE username = 'apant';
 
--- Executive requiring hardware token
+-- Executive: require additional hardware token
 UPDATE users SET auth_backends = 'sql,mfa,hardware-token' WHERE username = 'ceo';
-```
-
-**Auth Provider Registry**
-
-The registry maps backend type names to provider instances:
-
-```javascript
-authProviderRegistry = Map {
-  // Realm-scoped (preferred)
-  'mieweb-employees:sql' => SQLAuthProvider #1,
-  'mieweb-employees:mfa' => MFAAuthProvider #1,
-  'mieweb-employees:hardware-token' => HardwareTokenAuth #1,
-  
-  // Type-only fallback (first registered wins)
-  'sql' => SQLAuthProvider #1,
-  'mfa' => MFAAuthProvider #1,
-  'hardware-token' => HardwareTokenAuth #1
-}
 ```
 
 ## Use Cases
 
 ### 1. Multi-Domain Organization
 
-Serve users from different acquired companies:
+Serve users from different acquired companies with complete isolation:
 
 ```json
 [
@@ -415,8 +389,6 @@ Serve users from different acquired companies:
   }
 ]
 ```
-
-Different domains → different baseDNs → complete isolation.
 
 ### 2. Service Account MFA Bypass
 
@@ -439,11 +411,9 @@ Prevent automated tools from triggering MFA notifications:
 ]
 ```
 
-Same baseDN, different authentication requirements.
-
 ### 3. Gradual MFA Rollout
 
-Deploy MFA to subsets of users:
+Deploy MFA to subsets of users before full rollout:
 
 ```json
 [
@@ -519,106 +489,77 @@ SQL_URI=mysql://localhost/ldap_db
 ]
 ```
 
-2. Update environment:
+2. Set the environment variable:
 ```bash
 REALM_CONFIG=/path/to/realms.json
-# Keep other vars for backward compat if needed
 ```
 
-3. Restart gateway - **zero downtime**, behavior identical.
+3. Restart the gateway. Behavior is identical — zero downtime.
 
 ### Adding New Realms
 
-Simply append to the realms array and restart:
+Append to the realms array and restart. No changes to existing realm configurations are needed.
 
-```json
-[
-  {
-    "name": "existing-realm",
-    "baseDn": "dc=company,dc=com",
-    ...
-  },
-  {
-    "name": "new-realm",
-    "baseDn": "dc=partner,dc=com",
-    ...
-  }
-]
+## Verifying Your Configuration
+
+After deploying a new realm configuration:
+
+**1. Check startup logs for realm initialization:**
+```
+Initializing multi-realm mode with 2 realm(s)
+Realm 'mieweb-employees': baseDN=dc=mieweb,dc=com, directory=sql, auth=[sql, notification]
+Realm 'service-accounts': baseDN=dc=mieweb,dc=com, directory=sql, auth=[sql]
 ```
 
-No changes to existing realm configurations needed.
+**2. Test search against each baseDN:**
+```bash
+ldapsearch -x -H ldaps://localhost:636 -b "dc=mieweb,dc=com" "(uid=testuser)"
+```
 
-## Architecture Decisions
+**3. Test authentication (bind):**
+```bash
+ldapwhoami -x -H ldaps://localhost:636 \
+  -D "uid=testuser,ou=users,dc=mieweb,dc=com" -w password
+```
 
-### Why BaseDN Routing is Not Authorization
+**4. Verify realm isolation** (different baseDN should not return users from another realm):
+```bash
+ldapsearch -x -H ldaps://localhost:636 -b "dc=bluehive,dc=com" "(uid=mieweb-user)"
+# Should return 0 results
+```
 
-**BaseDN routing = Addressing**, not authorization. It answers "which mailbox?" not "who can access?".
+## Troubleshooting
 
-| Responsibility | Layer | Example |
-|---------------|-------|---------|
-| **Addressing** | Gateway (baseDN routing) | Deliver search to `dc=mieweb,dc=com` realm |
-| **Authentication** | Gateway (auth chain) | Verify user's password and MFA |
-| **Authorization** | Client (SSSD filters) | `ldap_access_filter = memberOf=cn=employees,...` |
+### User not found during authentication
 
-The gateway doesn't enforce "who can log into which server" - that's the client's job via group membership filters.
+- **Check realm order** in `realms.json` — first realm with a matching user wins
+- **Verify baseDN** matches what the client is sending (case-insensitive)
+- **Check directory backend connectivity** — database connection errors are logged
 
-### Why Registry Uses Three-Level Lookup
+### User authenticates against wrong realm
 
-1. **Realm's Own Providers** (highest priority) - Zero ambiguity, guaranteed correct
-2. **Realm-Scoped Registry** - Enables dynamic backends without config duplication
-3. **Global Registry** - Emergency fallback for truly shared services (logs warnings)
+- Realms sharing a baseDN are checked in config order; move the intended realm earlier in the array
+- Check server logs for `"User found in multiple realms"` warnings
 
-This prevents accidental cross-realm provider sharing (e.g., SQL auth hitting wrong database).
+### Per-user `auth_backends` override not working
 
-### Why First-Match Wins
+- Verify the backend type name matches exactly (lookups are case-insensitive)
+- Check logs for `"Unknown auth backend"` errors — the backend must be registered in the realm or global registry
+- Ensure the `auth_backends` column value is comma-separated with no extra whitespace
 
-Following PAM/nsswitch convention: admin controls priority via config order. If user exists in multiple realms sharing a baseDN, first realm in array wins (with warning logged).
+### MFA still triggering for service accounts
 
-### Why Parallel Realm Search
-
-Realms are independent data sources - querying them sequentially would be unnecessarily slow. Parallel queries with graceful degradation (failed realm doesn't block others) maximize performance and reliability.
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| [server/config/configurationLoader.js](../server/config/configurationLoader.js) | Loads and validates realm config |
-| [server/serverMain.js](../server/serverMain.js) | Instantiates providers per realm |
-| [npm/src/LdapEngine.js](../npm/src/LdapEngine.js) | Core routing and auth logic |
-| [server/providers.js](../server/providers.js) | Provider factory |
-| [server/backends/](../server/backends/) | Auth/directory provider implementations |
-| [server/realms.example.json](../server/realms.example.json) | Example realm configuration |
-
-## Testing
-
-Multi-realm tests are located in:
-- [npm/test/unit/LdapEngine.realms.test.js](../npm/test/unit/LdapEngine.realms.test.js) - Unit tests for realm routing
-- [server/test/integration/](../server/test/integration/) - Integration tests with real backends
-
-## Performance Characteristics
-
-| Operation | Complexity | Notes |
-|-----------|-----------|-------|
-| BaseDN routing | O(1) | Map lookup with lowercased key |
-| User lookup | O(n) realms | Sequential, stops at first match |
-| Search query | O(r) realms | Parallel queries where r = realms sharing baseDN |
-| Auth chain resolution | O(p) providers | Sequential validation, short-circuits on failure |
+- Confirm the service account is in a realm without the `notification` backend, **OR** set `auth_backends = 'sql'` on the user record
+- Verify the user is being found in the correct realm (check logs for realm name)
 
 ## Security Considerations
 
-1. **Unknown backend = fail-loud**: Per-user `auth_backends` referencing unknown backend throws error (no silent fallback)
-2. **Cross-realm warnings**: Using global registry fallback logs warnings to detect misconfigurations
-3. **Data isolation**: Different baseDNs = complete isolation (different subtrees)
-4. **Auth chain integrity**: All providers must succeed (sequential AND logic)
+- **Unknown backends fail loudly**: Per-user `auth_backends` referencing an unknown backend throws an error and denies authentication. There is no silent fallback.
+- **Data isolation**: Different baseDNs provide complete directory isolation. Realms on different baseDNs never share search results.
+- **Auth chain integrity**: All providers in the chain must succeed (sequential AND logic). A single failure rejects the bind.
 
-## Support & Resources
+## Further Reading
 
-- **Multi-Realm Planning Document**: [Multi-realm.md](../Multi-realm.md)
-- **Provider Backend Guide**: [server/backends/template.js](../server/backends/template.js)
-- **Example Configurations**: [server/realms.example.json](../server/realms.example.json)
-- **Issues/Questions**: GitHub Issues
-
----
-
-**Version**: Phase 1-3 Complete (per PR #143)  
-**Last Updated**: 2026-03-15
+- [Example realm configuration](../server/realms.example.json)
+- [Custom backend template](../server/backends/template.js)
+- [Multi-realm planning document](../Multi-realm.md)
