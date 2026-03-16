@@ -709,6 +709,49 @@ describe('LdapEngine Multi-Realm', () => {
         expect(chain).toEqual([realmScopedSql]);
         expect(chain).not.toContain(globalSql);
       });
+
+      test('should resolve auth_backends case-insensitively against registry', () => {
+        const sqlProvider = new MockAuthProvider({ name: 'sql-provider' });
+        // Registry key is lowercase
+        const registry = new Map([['sql', sqlProvider]]);
+
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          authProviderRegistry: registry,
+          realms: [
+            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [new MockAuthProvider()] }
+          ]
+        });
+
+        // User record has uppercase auth_backends value
+        const chain = engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: 'SQL' }, 'testuser');
+        expect(chain).toHaveLength(1);
+        expect(chain[0]).toBe(sqlProvider);
+      });
+
+      test('should resolve realm-scoped registry keys case-insensitively', () => {
+        const realmAuth = new MockAuthProvider({ name: 'realm-default' });
+        const realmScopedProvider = new MockAuthProvider({ name: 'realm-scoped-mfa' });
+        // Registry key uses mixed case
+        const registry = new Map([['MyRealm:MFA', realmScopedProvider]]);
+
+        engine = new LdapEngine({
+          port: TEST_PORT,
+          bindIp: '127.0.0.1',
+          logger: mockLogger,
+          authProviderRegistry: registry,
+          realms: [
+            { name: 'MyRealm', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [realmAuth] }
+          ]
+        });
+
+        // User record has lowercase auth_backends value
+        const chain = engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: 'mfa' }, 'testuser');
+        expect(chain).toHaveLength(1);
+        expect(chain[0]).toBe(realmScopedProvider);
+      });
     });
 
     describe('End-to-end per-user auth override', () => {

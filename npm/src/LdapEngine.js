@@ -45,7 +45,15 @@ class LdapEngine extends EventEmitter {
 
     // Auth provider registry for per-user auth override (Phase 3)
     // Maps provider type name → AuthProvider instance
-    this.authProviderRegistry = options.authProviderRegistry || new Map();
+    // Keys are normalized to lowercase for case-insensitive lookups
+    const incomingRegistry = options.authProviderRegistry || new Map();
+    this.authProviderRegistry = new Map();
+    for (const [key, value] of incomingRegistry.entries()) {
+      const normalizedKey = String(key).toLowerCase();
+      if (!this.authProviderRegistry.has(normalizedKey)) {
+        this.authProviderRegistry.set(normalizedKey, value);
+      }
+    }
 
     this.server = null;
     this.logger = options.logger || console;
@@ -398,18 +406,18 @@ class LdapEngine extends EventEmitter {
       let provider = realmAuthByType.get(normalizedName);
       
       if (!provider) {
-        // 2. Try realm-scoped registry key
-        const namespacedKey = `${realm.name}:${name}`;
+        // 2. Try realm-scoped registry key (case-insensitive)
+        const namespacedKey = `${realm.name}:${normalizedName}`.toLowerCase();
         provider = this.authProviderRegistry.get(namespacedKey);
       }
       
       if (!provider) {
-        // 3. Fall back to type-only registry key (cross-realm)
-        provider = this.authProviderRegistry.get(name);
+        // 3. Fall back to type-only registry key (cross-realm, case-insensitive)
+        provider = this.authProviderRegistry.get(normalizedName);
         if (provider) {
           this.logger.warn(
             `User '${username}' in realm '${realm.name}' using cross-realm auth backend '${name}'. ` +
-            `Consider using realm-scoped key '${realm.name}:${name}' for clarity.`
+            `Consider using realm-scoped key '${realm.name}:${normalizedName}' for clarity.`
           );
         }
       }
