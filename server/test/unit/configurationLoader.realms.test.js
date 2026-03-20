@@ -183,11 +183,11 @@ describe('ConfigurationLoader._validateRealmConfig', () => {
     }])).toThrow("'auth.backends[0].type' is required");
   });
 
-  test('should accept multiple valid realms with shared baseDN', () => {
+  test('should reject multiple realms with same baseDN', () => {
     const realms = [
       { name: 'realm-a', baseDn: 'dc=shared,dc=com', directory: { backend: 'sql' }, auth: { backends: [{ type: 'sql' }] } },
       { name: 'realm-b', baseDn: 'dc=shared,dc=com', directory: { backend: 'mongodb' }, auth: { backends: [{ type: 'mongodb' }] } }
     ];
-    expect(() => loader._validateRealmConfig(realms)).not.toThrow();
+    expect(() => loader._validateRealmConfig(realms)).toThrow(/duplicate baseDn/);
   });
 });

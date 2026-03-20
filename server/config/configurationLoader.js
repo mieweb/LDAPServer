@@ -127,6 +127,8 @@ class ConfigurationLoader {
     }
 
     const names = new Set();
+    const baseDns = new Map(); // lowercased baseDn -> realm name
+    let defaultCount = 0;
     for (let i = 0; i < realms.length; i++) {
       const realm = realms[i];
       const prefix = `REALM_CONFIG[${i}]`;
@@ -146,6 +148,21 @@ class ConfigurationLoader {
 
       if (!realm.baseDn || typeof realm.baseDn !== 'string') {
         throw new Error(`${prefix} (${realm.name}): 'baseDn' is required and must be a string`);
+      }
+
+      // Enforce 1:1 baseDN-to-realm mapping
+      const baseDnKey = realm.baseDn.toLowerCase();
+      if (baseDns.has(baseDnKey)) {
+        throw new Error(
+          `${prefix} (${realm.name}): duplicate baseDn '${realm.baseDn}' ` +
+          `(already used by realm '${baseDns.get(baseDnKey)}'). ` +
+          `Each baseDN must map to exactly one realm.`
+        );
+      }
+      baseDns.set(baseDnKey, realm.name);
+
+      if (realm.default === true) {
+        defaultCount++;
       }
 
       if (!realm.directory || typeof realm.directory !== 'object') {
@@ -175,7 +192,12 @@ class ConfigurationLoader {
       }
 
       logger.info(`Realm '${realm.name}' configured with baseDN '${realm.baseDn}', ` +
-        `directory: ${realm.directory.backend}, auth: [${realm.auth.backends.map(b => b.type).join(', ')}]`);
+        `directory: ${realm.directory.backend}, auth: [${realm.auth.backends.map(b => b.type).join(', ')}]` +
+        (realm.default ? ' (default)' : ''));
+    }
+
+    if (defaultCount > 1) {
+      throw new Error('REALM_CONFIG: only one realm may be marked as "default": true');
     }
   }
 

@@ -13,8 +13,8 @@ const {
  * Handles LDAP server setup, bind operations, and search operations.
  * 
  * Supports multi-realm mode: each realm pairs a directory backend + auth chain
- * with a baseDN. Searches are routed by baseDN; binds locate the user across
- * realms sharing a baseDN and apply the correct auth chain.
+ * with a baseDN. Each baseDN maps to exactly one realm (1:1). Searches and binds
+ * are routed by baseDN to the owning realm.
  * 
  * Backward compatible: when no `realms` option is provided, the engine wraps
  * the legacy `authProviders`/`directoryProvider`/`baseDn` into one implicit realm.
@@ -36,6 +36,8 @@ class LdapEngine extends EventEmitter {
       ...options
     };
     
+    this.logger = options.logger || console;
+
     // Build realm data structures
     this._initRealms(options);
 
@@ -43,20 +45,10 @@ class LdapEngine extends EventEmitter {
     this.authProviders = options.authProviders || this.allRealms[0]?.authProviders;
     this.directoryProvider = options.directoryProvider || this.allRealms[0]?.directoryProvider;
 
-    // Auth provider registry for per-user auth override (Phase 3)
-    // Maps provider type name → AuthProvider instance
-    // Keys are normalized to lowercase for case-insensitive lookups
-    const incomingRegistry = options.authProviderRegistry || new Map();
-    this.authProviderRegistry = new Map();
-    for (const [key, value] of incomingRegistry.entries()) {
-      const normalizedKey = String(key).toLowerCase();
-      if (!this.authProviderRegistry.has(normalizedKey)) {
-        this.authProviderRegistry.set(normalizedKey, value);
-      }
-    }
+    // Default realm for RootDSE defaultNamingContext (SSSD discovery)
+    this.defaultRealm = options.defaultRealm || this.allRealms[0] || null;
 
     this.server = null;
-    this.logger = options.logger || console;
     this._stopping = false;
   }
 
@@ -71,7 +63,9 @@ class LdapEngine extends EventEmitter {
         name: r.name,
         baseDn: r.baseDn,
         directoryProvider: r.directoryProvider,
-        authProviders: r.authProviders || []
+        authProviders: r.authProviders || [],
+        // Explicit map of backend type name → provider instance for per-user auth override
+        authBackendTypes: r.authBackendTypes || new Map()
       }));
     } else if (options.authProviders && options.directoryProvider) {
       // Legacy single-realm mode: wrap into one implicit realm
@@ -80,19 +74,34 @@ class LdapEngine extends EventEmitter {
         name: 'default',
         baseDn,
         directoryProvider: options.directoryProvider,
-        authProviders: options.authProviders
+        authProviders: options.authProviders,
+        authBackendTypes: options.authBackendTypes || new Map()
       }];
     } else {
       this.allRealms = [];
     }
 
-    // Index realms by baseDN (lowercased) for O(1) routing
+    // Warn about realms with auth providers but no type map (per-user overrides won't work)
+    for (const realm of this.allRealms) {
+      if (realm.authProviders.length > 0 && realm.authBackendTypes.size === 0) {
+        this.logger.warn(
+          `Realm '${realm.name}' has auth providers but no authBackendTypes map — per-user auth overrides will not work`
+        );
+      }
+    }
+
+    // Index realms by baseDN (lowercased) — each baseDN maps to exactly one realm
     this.realmsByBaseDn = new Map();
     for (const realm of this.allRealms) {
       const key = realm.baseDn.toLowerCase();
-      const existing = this.realmsByBaseDn.get(key) || [];
-      existing.push(realm);
-      this.realmsByBaseDn.set(key, existing);
+      if (this.realmsByBaseDn.has(key)) {
+        const existing = this.realmsByBaseDn.get(key);
+        throw new Error(
+          `Duplicate baseDN '${realm.baseDn}': realm '${realm.name}' conflicts with realm '${existing.name}'. ` +
+          `Each baseDN must map to exactly one realm.`
+        );
+      }
+      this.realmsByBaseDn.set(key, realm);
     }
   }
 
@@ -101,6 +110,13 @@ class LdapEngine extends EventEmitter {
    * @returns {Promise<void>}
    */
   async start() {
+    if (this.allRealms.length === 0) {
+      throw new Error(
+        'Cannot start LDAP server: no realms configured. ' +
+        'Provide either a realms array or authProviders/directoryProvider.'
+      );
+    }
+
     // Initialize all realm providers
     for (const realm of this.allRealms) {
       if (realm.directoryProvider && typeof realm.directoryProvider.initialize === 'function') {
@@ -257,24 +273,24 @@ class LdapEngine extends EventEmitter {
       return next();
     });
 
-    // Register one bind handler per unique baseDN
-    for (const [baseDn, realms] of this.realmsByBaseDn) {
+    // Register one bind handler per baseDN (1:1 with realm)
+    for (const [baseDn, realm] of this.realmsByBaseDn) {
       this.server.bind(baseDn, (req, res, next) => {
         const { username, password } = this._extractCredentials(req);
         this.logger.debug("Authenticated bind request", { username, dn: req.dn.toString() });
 
         this.emit('bindRequest', { username, anonymous: false });
 
-        this._authenticateAcrossRealms(realms, username, password, req)
-          .then(({ authenticated, realmName }) => {
+        this._authenticateInRealm(realm, username, password, req)
+          .then(({ authenticated }) => {
             if (!authenticated) {
               this.emit('bindFail', { username, reason: 'invalid_credentials' });
               const error = new ldap.InvalidCredentialsError('Invalid credentials');
               return next(error);
             }
 
-            this.logger.debug(`User ${username} authenticated via realm '${realmName}'`);
-            this.emit('bindSuccess', { username, anonymous: false, realm: realmName });
+            this.logger.debug(`User ${username} authenticated via realm '${realm.name}'`);
+            this.emit('bindSuccess', { username, anonymous: false, realm: realm.name });
             res.end();
             return next();
           })
@@ -290,76 +306,55 @@ class LdapEngine extends EventEmitter {
   }
 
   /**
-   * Find the user across realms sharing a baseDN and authenticate with the
-   * matching realm's auth chain (or per-user override if auth_backends is set).
-   * 
-   * Flow: iterate realms in config order → first findUser() hit determines
-   * which realm's auth chain to use → if the user record has `auth_backends`,
-   * resolve an override chain from the authProviderRegistry → otherwise fall
-   * back to the realm's default auth providers → authenticate sequentially.
+   * Authenticate a user within a single realm.
+   * Looks up the user in the realm's directory, resolves the auth chain
+   * (per-user override or realm default), and authenticates sequentially.
    * 
    * @private
-   * @param {Array} realms - Realms sharing this baseDN
+   * @param {Object} realm - The realm to authenticate against
    * @param {string} username
    * @param {string} password
    * @param {Object} req - LDAP request
-   * @returns {Promise<{authenticated: boolean, realmName: string|null}>}
+   * @returns {Promise<{authenticated: boolean}>}
    */
-  async _authenticateAcrossRealms(realms, username, password, req) {
-    // Find which realm owns this user
-    let matchedRealm = null;
-    let matchedUser = null;
-
-    for (const realm of realms) {
-      try {
-        const user = await realm.directoryProvider.findUser(username);
-        if (user) {
-          if (!matchedRealm) {
-            matchedRealm = realm;
-            matchedUser = user;
-          } else {
-            this.logger.warn(
-              `User '${username}' found in multiple realms: '${matchedRealm.name}' and '${realm.name}'. ` +
-              `Using first match '${matchedRealm.name}'.`
-            );
-          }
-        }
-      } catch (err) {
-        this.logger.error(`Error finding user '${username}' in realm '${realm.name}':`, err);
-      }
+  async _authenticateInRealm(realm, username, password, req) {
+    let user;
+    try {
+      user = await realm.directoryProvider.findUser(username);
+    } catch (err) {
+      this.logger.error(`Error finding user '${username}' in realm '${realm.name}':`, err);
+      return { authenticated: false };
     }
 
-    if (!matchedRealm) {
-      this.logger.debug(`User '${username}' not found in any realm`);
-      return { authenticated: false, realmName: null };
+    if (!user) {
+      this.logger.debug(`User '${username}' not found in realm '${realm.name}'`);
+      return { authenticated: false };
     }
 
     // Resolve the auth chain: per-user override or realm default
-    const authChain = this._resolveAuthChain(matchedRealm, matchedUser, username);
+    const authChain = this._resolveAuthChain(realm, user, username);
 
     // Authenticate sequentially against the resolved auth chain
     for (const provider of authChain) {
       const result = await provider.authenticate(username, password, req);
       if (result !== true) {
-        return { authenticated: false, realmName: matchedRealm.name };
+        return { authenticated: false };
       }
     }
 
-    return { authenticated: true, realmName: matchedRealm.name };
+    return { authenticated: true };
   }
 
   /**
    * Resolve the auth provider chain for a user.
    * 
    * If the user record has an `auth_backends` field (comma-separated provider
-   * type names), look up each name in the authProviderRegistry to build a
-   * per-user override chain.  If `auth_backends` is null/undefined/empty,
-   * fall back to the realm's default auth providers.
+   * type names), look up each name in the realm's authBackendTypes map.
+   * If `auth_backends` is null/undefined/empty, fall back to the realm's
+   * default auth providers.
    * 
-   * Resolution order for each backend name:
-   * 1. Exact match in realm's own auth providers (by type)
-   * 2. Registry with realm-scoped key "realm:type"
-   * 3. Registry with type-only key (cross-realm fallback)
+   * Resolution is strictly realm-scoped — if a backend name cannot be resolved
+   * within the realm, authentication fails immediately.
    * 
    * @private
    * @param {Object} realm - The matched realm
@@ -384,48 +379,16 @@ class LdapEngine extends EventEmitter {
       return realm.authProviders;
     }
 
-    // Build a quick lookup map of realm's own auth providers by type
-    const realmAuthByType = new Map();
-    for (const provider of realm.authProviders) {
-      // Extract type from constructor name (e.g., SQLAuthProvider -> sql)
-      const type = provider.constructor.name
-        .replace(/AuthProvider$/i, '')
-        .replace(/Backend$/i, '')
-        .toLowerCase();
-      if (!realmAuthByType.has(type)) {
-        realmAuthByType.set(type, provider);
-      }
-    }
-
-    // Resolve each name from realm's providers first, then registry
+    // Resolve each name strictly from the realm's auth backend types
     const overrideChain = [];
     for (const name of backendNames) {
       const normalizedName = name.toLowerCase();
-      
-      // 1. Check realm's own auth providers first
-      let provider = realmAuthByType.get(normalizedName);
-      
-      if (!provider) {
-        // 2. Try realm-scoped registry key (case-insensitive)
-        const namespacedKey = `${realm.name}:${normalizedName}`.toLowerCase();
-        provider = this.authProviderRegistry.get(namespacedKey);
-      }
-      
-      if (!provider) {
-        // 3. Fall back to type-only registry key (cross-realm, case-insensitive)
-        provider = this.authProviderRegistry.get(normalizedName);
-        if (provider) {
-          this.logger.warn(
-            `User '${username}' in realm '${realm.name}' using cross-realm auth backend '${name}'. ` +
-            `Consider using realm-scoped key '${realm.name}:${normalizedName}' for clarity.`
-          );
-        }
-      }
+      const provider = realm.authBackendTypes.get(normalizedName);
       
       if (!provider) {
         this.logger.error(
-          `User '${username}' has auth_backends='${userBackends}' but backend '${name}' ` +
-          `is not found in realm '${realm.name}' providers or registry. ` +
+          `User '${username}' has auth_backends='${userBackends}' but backend '${normalizedName}' ` +
+          `is not found in realm '${realm.name}' (available: [${[...realm.authBackendTypes.keys()].join(', ')}]). ` +
           `Failing authentication for security.`
         );
         throw new Error(`Unknown auth backend '${name}' for user '${username}'`);
@@ -468,8 +431,8 @@ class LdapEngine extends EventEmitter {
       return next();
     };
 
-    // Register one search handler per unique baseDN
-    for (const [baseDn, realms] of this.realmsByBaseDn) {
+    // Register one search handler per baseDN (1:1 with realm)
+    for (const [baseDn, realm] of this.realmsByBaseDn) {
       this.server.search(baseDn, authorizeSearch, async (req, res, next) => {
         const filterStr = req.filter.toString();
         this.logger.debug(`LDAP Search - Filter: ${filterStr}, Attributes: ${req.attributes}`);
@@ -485,7 +448,7 @@ class LdapEngine extends EventEmitter {
             scope: req.scope
           });
           
-          entryCount = await this._handleMultiRealmSearch(realms, filterStr, req.attributes, res);
+          entryCount = await this._handleRealmSearch(realm, filterStr, req.attributes, res);
           
           const duration = Date.now() - startTime;
           this.emit('searchResponse', { 
@@ -533,71 +496,33 @@ class LdapEngine extends EventEmitter {
   }
 
   /**
-   * Handle search across multiple realms sharing a baseDN.
-   * Queries each realm's directory provider, deduplicates entries by DN,
-   * and sends merged results.
+   * Handle search operations for a single realm and send results.
    * @private
-   * @param {Array} realms - Realms sharing the same baseDN
+   * @param {Object} realm - Realm object with directoryProvider and baseDn
    * @param {string} filterStr - LDAP filter string
    * @param {Array} attributes - Requested attributes
    * @param {Object} res - ldapjs response object
    * @returns {number} Number of entries sent
    */
-  async _handleMultiRealmSearch(realms, filterStr, attributes, res) {
-    // Collect entries from all realms in parallel with graceful degradation
-    const realmPromises = realms.map(realm => 
-      this._handleRealmSearch(realm, filterStr, attributes)
-        .catch(err => {
-          this.logger.error(`Search failed in realm '${realm.name}':`, err);
-          return { entries: [], realmName: realm.name, error: err };
-        })
-    );
-    const realmResults = await Promise.all(realmPromises);
-
-    // Deduplicate entries by DN (first realm wins for same DN)
-    const seenDNs = new Set();
-    let entryCount = 0;
-
-    for (const { entries, realmName } of realmResults) {
-      for (const { entry, type } of entries) {
-        const dnLower = entry.dn.toLowerCase();
-        if (seenDNs.has(dnLower)) {
-          this.logger.debug(`Skipping duplicate DN from realm '${realmName}': ${entry.dn}`);
-          continue;
-        }
-        seenDNs.add(dnLower);
-        this.emit('entryFound', { type: type || 'user', entry: entry.dn, realm: realmName });
-        res.send(entry);
-        entryCount++;
-      }
-    }
-
-    return entryCount;
-  }
-
-  /**
-   * Handle search operations for a single realm.
-   * Returns entries array instead of sending directly to res.
-   * @private
-   * @param {Object} realm - Realm object with directoryProvider and baseDn
-   * @param {string} filterStr - LDAP filter string
-   * @param {Array} attributes - Requested attributes
-   * @returns {{ entries: Array<{entry: Object, type: string}>, realmName: string }}
-   */
-  async _handleRealmSearch(realm, filterStr, attributes) {
-    const entries = [];
+  async _handleRealmSearch(realm, filterStr, attributes, res) {
     const { directoryProvider, baseDn, name: realmName } = realm;
     const username = getUsernameFromFilter(filterStr);
+    let entryCount = 0;
+
+    const sendEntry = (entry, type) => {
+      this.emit('entryFound', { type, entry: entry.dn, realm: realmName });
+      res.send(entry);
+      entryCount++;
+    };
 
     // Handle specific user requests
     if (username) {
       this.logger.debug(`[${realmName}] Searching for specific user: ${username}`);
       const user = await directoryProvider.findUser(username);
       if (user) {
-        const entry = createLdapEntry(user, baseDn);
-        entries.push({ entry, type: 'user' });
+        sendEntry(createLdapEntry(user, baseDn), 'user');
       }
-      return { entries, realmName };
+      return entryCount;
     }
 
     // Handle all users requests
@@ -607,10 +532,9 @@ class LdapEngine extends EventEmitter {
       this.logger.debug(`[${realmName}] Found ${users.length} users`);
       
       for (const user of users) {
-        const entry = createLdapEntry(user, baseDn);
-        entries.push({ entry, type: 'user' });
+        sendEntry(createLdapEntry(user, baseDn), 'user');
       }
-      return { entries, realmName };
+      return entryCount;
     }
 
     // Handle group search requests
@@ -620,10 +544,9 @@ class LdapEngine extends EventEmitter {
       this.logger.debug(`[${realmName}] Found ${groups.length} groups`);
       
       for (const group of groups) {
-        const entry = createLdapGroupEntry(group, baseDn);
-        entries.push({ entry, type: 'group' });
+        sendEntry(createLdapGroupEntry(group, baseDn), 'group');
       }
-      return { entries, realmName };
+      return entryCount;
     }
 
     // Handle mixed searches (both users and groups)
@@ -647,8 +570,7 @@ class LdapEngine extends EventEmitter {
           }
         }
         
-        const entry = createLdapEntry(user, baseDn);
-        entries.push({ entry, type: 'user' });
+        sendEntry(createLdapEntry(user, baseDn), 'user');
       }
 
       const groups = await directoryProvider.getAllGroups();
@@ -659,14 +581,13 @@ class LdapEngine extends EventEmitter {
           continue;
         }
         
-        const entry = createLdapGroupEntry(group, baseDn);
-        entries.push({ entry, type: 'group' });
+        sendEntry(createLdapGroupEntry(group, baseDn), 'group');
       }
-      return { entries, realmName };
+      return entryCount;
     }
 
     this.logger.debug(`[${realmName}] No matching search pattern found for filter: ${filterStr}`);
-    return { entries, realmName };
+    return entryCount;
   }
 
   /**
@@ -690,15 +611,8 @@ class LdapEngine extends EventEmitter {
         this.emit('rootDSERequest', { filter: filterStr, attributes: requestedAttrs });
         
         // Collect unique baseDNs (preserving original casing from realm config)
-        const seenDns = new Set();
-        const allBaseDns = [];
-        for (const realm of this.allRealms) {
-          const key = realm.baseDn.toLowerCase();
-          if (!seenDns.has(key)) {
-            seenDns.add(key);
-            allBaseDns.push(realm.baseDn);
-          }
-        }
+        const allBaseDns = this.allRealms.map(r => r.baseDn);
+        const defaultBaseDn = this.defaultRealm ? this.defaultRealm.baseDn : allBaseDns[0];
         
         // RootDSE attribute filtering rules (per RFC 4512):
         // - No attributes requested = return all (user + operational)
@@ -709,6 +623,17 @@ class LdapEngine extends EventEmitter {
         const hasWildcard = requestedAttrs.includes('*');
         const hasPlus = requestedAttrs.includes('+');
         const noAttrsRequested = requestedAttrs.length === 0;
+
+        // Helper to populate operational attributes into the attributes object
+        const addOperationalAttr = (attrLower, attributes) => {
+          if (attrLower === 'namingcontexts') {
+            attributes.namingContexts = allBaseDns;
+          } else if (attrLower === 'defaultnamingcontext' && defaultBaseDn) {
+            attributes.defaultNamingContext = defaultBaseDn;
+          } else if (attrLower === 'supportedldapversion') {
+            attributes.supportedLDAPVersion = ['3'];
+          }
+        };
         
         const attributes = {
           objectClass: ['top']
@@ -717,27 +642,16 @@ class LdapEngine extends EventEmitter {
         if (noAttrsRequested || (hasWildcard && hasPlus) || (hasPlus && !hasWildcard)) {
           // Return all operational attributes
           attributes.namingContexts = allBaseDns;
+          if (defaultBaseDn) {
+            attributes.defaultNamingContext = defaultBaseDn;
+          }
           attributes.supportedLDAPVersion = ['3'];
         } else if (hasWildcard) {
           // '*' only: user attrs + specifically requested operational attrs
-          requestedAttrs.forEach(attr => {
-            const attrLower = attr.toLowerCase();
-            if (attrLower === 'namingcontexts') {
-              attributes.namingContexts = allBaseDns;
-            } else if (attrLower === 'supportedldapversion') {
-              attributes.supportedLDAPVersion = ['3'];
-            }
-          });
+          requestedAttrs.forEach(attr => addOperationalAttr(attr.toLowerCase(), attributes));
         } else {
           // Specific attributes only — return only what was requested
-          requestedAttrs.forEach(attr => {
-            const attrLower = attr.toLowerCase();
-            if (attrLower === 'namingcontexts') {
-              attributes.namingContexts = allBaseDns;
-            } else if (attrLower === 'supportedldapversion') {
-              attributes.supportedLDAPVersion = ['3'];
-            }
-          });
+          requestedAttrs.forEach(attr => addOperationalAttr(attr.toLowerCase(), attributes));
         }
         
         const rootDSEEntry = {
@@ -753,7 +667,7 @@ class LdapEngine extends EventEmitter {
           // Replace '+' with actual operational attribute names (lowercase for ldapjs matching)
           const idx = res.attributes.indexOf('+');
           if (idx !== -1) {
-            res.attributes.splice(idx, 1, 'namingcontexts', 'supportedldapversion');
+            res.attributes.splice(idx, 1, 'namingcontexts', 'defaultnamingcontext', 'supportedldapversion');
           }
         } else if (requestedAttrs.length > 0 && !hasWildcard) {
           // For specific attribute requests, add them to res.attributes in lowercase

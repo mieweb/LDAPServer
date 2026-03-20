@@ -52,14 +52,11 @@ async function startServer(config) {
     requireAuthForSearch: config.requireAuthForSearch
   };
 
-  // Build global auth provider registry for per-user auth override (Phase 3)
-  // Maps "realm:type" → AuthProvider instance (realm-scoped) and
-  //       "type"       → AuthProvider instance (first-registered fallback)
-  const authProviderRegistry = new Map();
-
   if (config.realms) {
     // Multi-realm mode: build realm objects from config
     logger.info(`Initializing multi-realm mode with ${config.realms.length} realm(s)`);
+    let defaultRealmObj = null;
+
     engineOptions.realms = config.realms.map(realmCfg => {
       // Ensure directory providers receive realm-scoped LDAP base DN so that
       // any provider-side DN construction stays consistent with realmCfg.baseDn.
@@ -72,30 +69,40 @@ async function startServer(config) {
         directoryOptions
       );
 
+      // Build per-realm auth backend type map using explicit type names from config
+      const authBackendTypes = new Map();
       const authProviders = realmCfg.auth.backends.map(backendCfg => {
         const provider = providerFactory.createAuthProvider(backendCfg.type, backendCfg.options || {});
-        // Register with realm-scoped key for accurate per-user auth override
-        const registryKey = `${realmCfg.name}:${backendCfg.type}`;
-        authProviderRegistry.set(registryKey, provider);
-        logger.debug(`Registered auth backend '${registryKey}' in provider registry`);
-        // Also register type-only key as fallback (first realm wins per type)
-        if (!authProviderRegistry.has(backendCfg.type)) {
-          authProviderRegistry.set(backendCfg.type, provider);
-          logger.debug(`Registered fallback auth backend '${backendCfg.type}' (first realm wins)`);
+        const typeKey = backendCfg.type.toLowerCase();
+        if (!authBackendTypes.has(typeKey)) {
+          authBackendTypes.set(typeKey, provider);
         }
+        logger.debug(`Realm '${realmCfg.name}': registered auth backend '${typeKey}'`);
         return provider;
       });
 
       logger.info(`Realm '${realmCfg.name}': baseDN=${realmCfg.baseDn}, ` +
-        `directory=${realmCfg.directory.backend}, auth=[${realmCfg.auth.backends.map(b => b.type).join(', ')}]`);
+        `directory=${realmCfg.directory.backend}, auth=[${realmCfg.auth.backends.map(b => b.type).join(', ')}]` +
+        (realmCfg.default ? ' (default)' : ''));
 
-      return {
+      const realmObj = {
         name: realmCfg.name,
         baseDn: realmCfg.baseDn,
         directoryProvider,
-        authProviders
+        authProviders,
+        authBackendTypes
       };
+
+      if (realmCfg.default) {
+        defaultRealmObj = realmObj;
+      }
+
+      return realmObj;
     });
+
+    if (defaultRealmObj) {
+      engineOptions.defaultRealm = defaultRealmObj;
+    }
   } else {
     // Legacy single-realm mode
     const selectedDirectory = providerFactory.createDirectoryProvider(config.directoryBackend);
@@ -106,17 +113,17 @@ async function startServer(config) {
     engineOptions.authProviders = selectedBackends;
     engineOptions.directoryProvider = selectedDirectory;
 
-    // Register legacy auth providers in the registry
+    // Build auth backend types map for legacy mode
+    const authBackendTypes = new Map();
     for (let idx = 0; idx < config.authBackends.length; idx++) {
-      const backendType = config.authBackends[idx];
-      if (!authProviderRegistry.has(backendType)) {
-        authProviderRegistry.set(backendType, selectedBackends[idx]);
-        logger.debug(`Registered auth backend '${backendType}' in provider registry`);
+      const typeKey = config.authBackends[idx].toLowerCase();
+      if (!authBackendTypes.has(typeKey)) {
+        authBackendTypes.set(typeKey, selectedBackends[idx]);
+        logger.debug(`Registered auth backend '${typeKey}' in provider type map`);
       }
     }
+    engineOptions.authBackendTypes = authBackendTypes;
   }
-
-  engineOptions.authProviderRegistry = authProviderRegistry;
 
   // Create and configure LDAP engine
   const ldapEngine = new LdapEngine(engineOptions);

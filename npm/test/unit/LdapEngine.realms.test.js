@@ -103,13 +103,13 @@ describe('LdapEngine Multi-Realm', () => {
       expect(engine.realmsByBaseDn.has('dc=company-b,dc=com')).toBe(true);
     });
 
-    test('should support multiple realms sharing the same baseDN', () => {
+    test('should reject duplicate baseDN across realms', () => {
       const auth1 = new MockAuthProvider({ name: 'realm1-auth' });
       const dir1 = new MockDirectoryProvider({ name: 'realm1-dir' });
       const auth2 = new MockAuthProvider({ name: 'realm2-auth' });
       const dir2 = new MockDirectoryProvider({ name: 'realm2-dir' });
 
-      engine = new LdapEngine({
+      expect(() => new LdapEngine({
         port: TEST_PORT,
         bindIp: '127.0.0.1',
         logger: mockLogger,
@@ -127,11 +127,7 @@ describe('LdapEngine Multi-Realm', () => {
             authProviders: [auth2]
           }
         ]
-      });
-
-      expect(engine.allRealms).toHaveLength(2);
-      expect(engine.realmsByBaseDn.size).toBe(1);
-      expect(engine.realmsByBaseDn.get(baseDN)).toHaveLength(2);
+      })).toThrow(/Duplicate baseDN/);
     });
 
     test('should auto-wrap legacy options into single default realm', () => {
@@ -179,9 +175,12 @@ describe('LdapEngine Multi-Realm', () => {
   });
 
   describe('Multi-Realm Bind', () => {
-    test('should authenticate against the realm that owns the user', async () => {
+    test('should authenticate against the correct realm by baseDN', async () => {
       const usersA = [{ username: 'alice', uid_number: 2001, gid_number: 2000, first_name: 'Alice', last_name: 'A' }];
       const usersB = [{ username: 'bob', uid_number: 3001, gid_number: 3000, first_name: 'Bob', last_name: 'B' }];
+
+      const baseDnA = 'dc=company-a,dc=com';
+      const baseDnB = 'dc=company-b,dc=com';
 
       const authA = new MockAuthProvider({
         name: 'auth-a',
@@ -200,8 +199,8 @@ describe('LdapEngine Multi-Realm', () => {
         bindIp: '127.0.0.1',
         logger: mockLogger,
         realms: [
-          { name: 'realm-a', baseDn: baseDN, directoryProvider: dirA, authProviders: [authA] },
-          { name: 'realm-b', baseDn: baseDN, directoryProvider: dirB, authProviders: [authB] }
+          { name: 'realm-a', baseDn: baseDnA, directoryProvider: dirA, authProviders: [authA] },
+          { name: 'realm-b', baseDn: baseDnB, directoryProvider: dirB, authProviders: [authB] }
         ]
       });
 
@@ -210,7 +209,7 @@ describe('LdapEngine Multi-Realm', () => {
       const client = createClient(TEST_PORT);
       try {
         // Alice should authenticate through realm-a
-        await bindAsync(client, `uid=alice,ou=users,${baseDN}`, 'pass-a');
+        await bindAsync(client, `uid=alice,ou=users,${baseDnA}`, 'pass-a');
         expect(authA.callCount).toBe(1);
         expect(authB.callCount).toBe(0); // realm-b should NOT be tried
 
@@ -218,7 +217,7 @@ describe('LdapEngine Multi-Realm', () => {
         authA.reset();
         const client2 = createClient(TEST_PORT);
         try {
-          await bindAsync(client2, `uid=bob,ou=users,${baseDN}`, 'pass-b');
+          await bindAsync(client2, `uid=bob,ou=users,${baseDnB}`, 'pass-b');
           expect(dirB.callCounts.findUser).toBeGreaterThanOrEqual(1);
           expect(authB.callCount).toBe(1);
         } finally {
@@ -256,73 +255,6 @@ describe('LdapEngine Multi-Realm', () => {
   });
 
   describe('Multi-Realm Search', () => {
-    test('should merge search results from multiple realms sharing same baseDN', async () => {
-      const usersA = [{ username: 'alice', uid_number: 2001, gid_number: 2000, first_name: 'Alice', last_name: 'A' }];
-      const usersB = [{ username: 'bob', uid_number: 3001, gid_number: 3000, first_name: 'Bob', last_name: 'B' }];
-
-      const dirA = new MockDirectoryProvider({ name: 'dir-a', users: usersA, groups: [] });
-      const dirB = new MockDirectoryProvider({ name: 'dir-b', users: usersB, groups: [] });
-
-      engine = new LdapEngine({
-        port: TEST_PORT,
-        bindIp: '127.0.0.1',
-        logger: mockLogger,
-        requireAuthForSearch: false,
-        realms: [
-          { name: 'realm-a', baseDn: baseDN, directoryProvider: dirA, authProviders: [new MockAuthProvider()] },
-          { name: 'realm-b', baseDn: baseDN, directoryProvider: dirB, authProviders: [new MockAuthProvider()] }
-        ]
-      });
-
-      await engine.start();
-
-      const client = createClient(TEST_PORT);
-      try {
-        // Search for all users - should get results from both realms
-        const entries = await searchAsync(client, baseDN, {
-          filter: '(objectClass=posixAccount)',
-          scope: 'sub'
-        });
-
-        expect(entries.length).toBe(2);
-      } finally {
-        await unbindAsync(client);
-      }
-    });
-
-    test('should deduplicate entries by DN across realms', async () => {
-      // Same user in both realms - first realm wins
-      const sharedUser = { username: 'shared', uid_number: 5001, gid_number: 5000, first_name: 'Shared', last_name: 'User' };
-      const dirA = new MockDirectoryProvider({ name: 'dir-a', users: [sharedUser], groups: [] });
-      const dirB = new MockDirectoryProvider({ name: 'dir-b', users: [sharedUser], groups: [] });
-
-      engine = new LdapEngine({
-        port: TEST_PORT,
-        bindIp: '127.0.0.1',
-        logger: mockLogger,
-        requireAuthForSearch: false,
-        realms: [
-          { name: 'realm-a', baseDn: baseDN, directoryProvider: dirA, authProviders: [new MockAuthProvider()] },
-          { name: 'realm-b', baseDn: baseDN, directoryProvider: dirB, authProviders: [new MockAuthProvider()] }
-        ]
-      });
-
-      await engine.start();
-
-      const client = createClient(TEST_PORT);
-      try {
-        const entries = await searchAsync(client, baseDN, {
-          filter: '(uid=shared)',
-          scope: 'sub'
-        });
-
-        // Should deduplicate - only 1 entry even though both realms have user
-        expect(entries.length).toBe(1);
-      } finally {
-        await unbindAsync(client);
-      }
-    });
-
     test('should search different baseDNs independently', async () => {
       const usersA = [{ username: 'alice', uid_number: 2001, gid_number: 2000, first_name: 'Alice', last_name: 'A' }];
       const usersB = [{ username: 'bob', uid_number: 3001, gid_number: 3000, first_name: 'Bob', last_name: 'B' }];
@@ -361,46 +293,6 @@ describe('LdapEngine Multi-Realm', () => {
           scope: 'sub'
         });
         expect(entriesB.length).toBe(1);
-      } finally {
-        await unbindAsync(client);
-      }
-    });
-
-    test('should handle realm search failures gracefully (partial results)', async () => {
-      const usersA = [{ username: 'alice', uid_number: 2001, gid_number: 2000, first_name: 'Alice', last_name: 'A' }];
-      
-      const dirA = new MockDirectoryProvider({ name: 'dir-a', users: usersA, groups: [] });
-      // dirB will throw an error when searched
-      const dirB = new MockDirectoryProvider({ name: 'dir-b', users: [], groups: [] });
-      dirB.getAllUsers = async () => { throw new Error('Database connection failed'); };
-
-      engine = new LdapEngine({
-        port: TEST_PORT,
-        bindIp: '127.0.0.1',
-        logger: mockLogger,
-        requireAuthForSearch: false,
-        realms: [
-          { name: 'realm-a', baseDn: baseDN, directoryProvider: dirA, authProviders: [new MockAuthProvider()] },
-          { name: 'realm-b', baseDn: baseDN, directoryProvider: dirB, authProviders: [new MockAuthProvider()] }
-        ]
-      });
-
-      await engine.start();
-
-      const client = createClient(TEST_PORT);
-      try {
-        // Search should succeed with partial results (realm-a only)
-        const entries = await searchAsync(client, baseDN, {
-          filter: '(objectClass=posixAccount)',
-          scope: 'sub'
-        });
-
-        // Should get alice from realm-a despite realm-b failure
-        expect(entries.length).toBe(1);
-        expect(mockLogger.error).toHaveBeenCalledWith(
-          expect.stringContaining("Search failed in realm 'realm-b'"),
-          expect.any(Error)
-        );
       } finally {
         await unbindAsync(client);
       }
@@ -579,18 +471,17 @@ describe('LdapEngine Multi-Realm', () => {
         expect(chain).toEqual([realmAuth]);
       });
 
-      test('should resolve per-user override from registry', () => {
+      test('should resolve per-user override from realm authBackendTypes', () => {
         const realmAuth = new MockAuthProvider({ name: 'realm-default' });
         const overrideAuth = new MockAuthProvider({ name: 'custom-auth' });
-        const registry = new Map([['custom-auth', overrideAuth]]);
+        const authBackendTypes = new Map([['custom-auth', overrideAuth]]);
 
         engine = new LdapEngine({
           port: TEST_PORT,
           bindIp: '127.0.0.1',
           logger: mockLogger,
-          authProviderRegistry: registry,
           realms: [
-            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [realmAuth] }
+            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [realmAuth], authBackendTypes }
           ]
         });
 
@@ -602,15 +493,14 @@ describe('LdapEngine Multi-Realm', () => {
       test('should resolve multiple comma-separated backends', () => {
         const providerA = new MockAuthProvider({ name: 'auth-a' });
         const providerB = new MockAuthProvider({ name: 'auth-b' });
-        const registry = new Map([['auth-a', providerA], ['auth-b', providerB]]);
+        const authBackendTypes = new Map([['auth-a', providerA], ['auth-b', providerB]]);
 
         engine = new LdapEngine({
           port: TEST_PORT,
           bindIp: '127.0.0.1',
           logger: mockLogger,
-          authProviderRegistry: registry,
           realms: [
-            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [new MockAuthProvider()] }
+            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [new MockAuthProvider()], authBackendTypes }
           ]
         });
 
@@ -625,9 +515,8 @@ describe('LdapEngine Multi-Realm', () => {
           port: TEST_PORT,
           bindIp: '127.0.0.1',
           logger: mockLogger,
-          authProviderRegistry: new Map(),
           realms: [
-            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [new MockAuthProvider()] }
+            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [new MockAuthProvider()], authBackendTypes: new Map() }
           ]
         });
 
@@ -636,92 +525,16 @@ describe('LdapEngine Multi-Realm', () => {
         }).toThrow("Unknown auth backend 'nonexistent'");
       });
 
-      test('should prioritize realm own provider over registry fallback', () => {
-        // Realm A has its own 'mock' provider
-        const realmAProvider = new MockAuthProvider({ name: 'realm-a-mock' });
-        // Registry has a different 'mock' provider (from realm B or global)
-        const registryProvider = new MockAuthProvider({ name: 'registry-mock' });
-        const registry = new Map([['mock', registryProvider]]);
-
-        engine = new LdapEngine({
-          port: TEST_PORT,
-          bindIp: '127.0.0.1',
-          logger: mockLogger,
-          authProviderRegistry: registry,
-          realms: [
-            { name: 'realm-a', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [realmAProvider] }
-          ]
-        });
-
-        const chain = engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: 'mock' }, 'testuser');
-        // Should use realm's own provider, not the registry one
-        expect(chain).toHaveLength(1);
-        expect(chain[0]).toBe(realmAProvider);
-        expect(chain[0]).not.toBe(registryProvider);
-      });
-
-      test('should warn when using cross-realm registry fallback', () => {
-        // No 'sql' provider in realm's own auth chain
-        const realmAuth = new MockAuthProvider({ name: 'realm-default' });
-        // Registry has a 'sql' provider from another realm
+      test('should resolve auth_backends case-insensitively', () => {
         const sqlProvider = new MockAuthProvider({ name: 'sql-provider' });
-        const registry = new Map([['sql', sqlProvider]]);
+        const authBackendTypes = new Map([['sql', sqlProvider]]);
 
         engine = new LdapEngine({
           port: TEST_PORT,
           bindIp: '127.0.0.1',
           logger: mockLogger,
-          authProviderRegistry: registry,
           realms: [
-            { name: 'test-realm', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [realmAuth] }
-          ]
-        });
-
-        const chain = engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: 'sql' }, 'testuser');
-        expect(chain).toEqual([sqlProvider]);
-        // Should have logged a warning about cross-realm usage
-        expect(mockLogger.warn).toHaveBeenCalledWith(
-          expect.stringContaining("using cross-realm auth backend 'sql'")
-        );
-      });
-
-      test('should prefer realm-scoped registry key over type-only key', () => {
-        const realmAuth = new MockAuthProvider({ name: 'realm-default' });
-        const realmScopedSql = new MockAuthProvider({ name: 'realm-a:sql' });
-        const globalSql = new MockAuthProvider({ name: 'global-sql' });
-        const registry = new Map([
-          ['realm-a:sql', realmScopedSql],
-          ['sql', globalSql]
-        ]);
-
-        engine = new LdapEngine({
-          port: TEST_PORT,
-          bindIp: '127.0.0.1',
-          logger: mockLogger,
-          authProviderRegistry: registry,
-          realms: [
-            { name: 'realm-a', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [realmAuth] }
-          ]
-        });
-
-        const chain = engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: 'sql' }, 'testuser');
-        // Should use realm-scoped registry key, not global fallback
-        expect(chain).toEqual([realmScopedSql]);
-        expect(chain).not.toContain(globalSql);
-      });
-
-      test('should resolve auth_backends case-insensitively against registry', () => {
-        const sqlProvider = new MockAuthProvider({ name: 'sql-provider' });
-        // Registry key is lowercase
-        const registry = new Map([['sql', sqlProvider]]);
-
-        engine = new LdapEngine({
-          port: TEST_PORT,
-          bindIp: '127.0.0.1',
-          logger: mockLogger,
-          authProviderRegistry: registry,
-          realms: [
-            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [new MockAuthProvider()] }
+            { name: 'test', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [new MockAuthProvider()], authBackendTypes }
           ]
         });
 
@@ -729,28 +542,6 @@ describe('LdapEngine Multi-Realm', () => {
         const chain = engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: 'SQL' }, 'testuser');
         expect(chain).toHaveLength(1);
         expect(chain[0]).toBe(sqlProvider);
-      });
-
-      test('should resolve realm-scoped registry keys case-insensitively', () => {
-        const realmAuth = new MockAuthProvider({ name: 'realm-default' });
-        const realmScopedProvider = new MockAuthProvider({ name: 'realm-scoped-mfa' });
-        // Registry key uses mixed case
-        const registry = new Map([['MyRealm:MFA', realmScopedProvider]]);
-
-        engine = new LdapEngine({
-          port: TEST_PORT,
-          bindIp: '127.0.0.1',
-          logger: mockLogger,
-          authProviderRegistry: registry,
-          realms: [
-            { name: 'MyRealm', baseDn: baseDN, directoryProvider: new MockDirectoryProvider(), authProviders: [realmAuth] }
-          ]
-        });
-
-        // User record has lowercase auth_backends value
-        const chain = engine._resolveAuthChain(engine.allRealms[0], { username: 'testuser', auth_backends: 'mfa' }, 'testuser');
-        expect(chain).toHaveLength(1);
-        expect(chain[0]).toBe(realmScopedProvider);
       });
     });
 
@@ -770,15 +561,14 @@ describe('LdapEngine Multi-Realm', () => {
           { username: 'mfauser', uid_number: 1003, gid_number: 1001, first_name: 'MFA', last_name: 'User', auth_backends: 'override-auth' }
         ];
 
-        const registry = new Map([['override-auth', overrideAuth], ['realm-auth', realmAuth]]);
+        const authBackendTypes = new Map([['override-auth', overrideAuth], ['realm-auth', realmAuth]]);
 
         engine = new LdapEngine({
           port: TEST_PORT,
           bindIp: '127.0.0.1',
           logger: mockLogger,
-          authProviderRegistry: registry,
           realms: [
-            { name: 'test-realm', baseDn: baseDN, directoryProvider: new MockDirectoryProvider({ users, groups: [] }), authProviders: [realmAuth] }
+            { name: 'test-realm', baseDn: baseDN, directoryProvider: new MockDirectoryProvider({ users, groups: [] }), authProviders: [realmAuth], authBackendTypes }
           ]
         });
 
@@ -818,13 +608,14 @@ describe('LdapEngine Multi-Realm', () => {
           { username: 'mfauser', uid_number: 1003, gid_number: 1001, first_name: 'MFA', last_name: 'User', auth_backends: 'override-auth' }
         ];
 
+        const authBackendTypes = new Map([['override-auth', overrideAuth]]);
+
         engine = new LdapEngine({
           port: TEST_PORT,
           bindIp: '127.0.0.1',
           logger: mockLogger,
-          authProviderRegistry: new Map([['override-auth', overrideAuth]]),
           realms: [
-            { name: 'test-realm', baseDn: baseDN, directoryProvider: new MockDirectoryProvider({ users, groups: [] }), authProviders: [new MockAuthProvider()] }
+            { name: 'test-realm', baseDn: baseDN, directoryProvider: new MockDirectoryProvider({ users, groups: [] }), authProviders: [new MockAuthProvider()], authBackendTypes }
           ]
         });
 
@@ -850,9 +641,8 @@ describe('LdapEngine Multi-Realm', () => {
           port: TEST_PORT,
           bindIp: '127.0.0.1',
           logger: mockLogger,
-          authProviderRegistry: new Map(),
           realms: [
-            { name: 'test-realm', baseDn: baseDN, directoryProvider: new MockDirectoryProvider({ users, groups: [] }), authProviders: [new MockAuthProvider()] }
+            { name: 'test-realm', baseDn: baseDN, directoryProvider: new MockDirectoryProvider({ users, groups: [] }), authProviders: [new MockAuthProvider()], authBackendTypes: new Map() }
           ]
         });
 
@@ -884,19 +674,19 @@ describe('LdapEngine Multi-Realm', () => {
           { username: 'serviceuser', uid_number: 2002, gid_number: 2000, first_name: 'Service', last_name: 'Account', auth_backends: 'sql-auth' }
         ];
 
-        const registry = new Map([['sql-auth', sqlAuth]]);
+        const authBackendTypes = new Map([['sql-auth', sqlAuth], ['notification', notificationAuth]]);
 
         engine = new LdapEngine({
           port: TEST_PORT,
           bindIp: '127.0.0.1',
           logger: mockLogger,
-          authProviderRegistry: registry,
           realms: [
             {
               name: 'mfa-realm',
               baseDn: baseDN,
               directoryProvider: new MockDirectoryProvider({ users, groups: [] }),
-              authProviders: [sqlAuth, notificationAuth]
+              authProviders: [sqlAuth, notificationAuth],
+              authBackendTypes
             }
           ]
         });

@@ -34,7 +34,7 @@ function createClient() {
   return ldap.createClient({ url: `ldap://127.0.0.1:${port}` });
 }
 
-// Minimal directory stub – only needs findUser so _authenticateAcrossRealms
+// Minimal directory stub – only needs findUser so _authenticateInRealm
 // can locate the user before delegating to the auth provider.
 const directoryStub = {
   initialize: async () => {},

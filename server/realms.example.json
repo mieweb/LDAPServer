@@ -2,6 +2,7 @@
   {
     "name": "example-corp",
     "baseDn": "dc=example,dc=com",
+    "default": true,
     "directory": {
       "backend": "sql",
       "options": {
