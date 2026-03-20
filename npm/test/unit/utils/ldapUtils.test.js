@@ -160,6 +160,55 @@ describe('ldapUtils', () => {
       expect(entry.attributes.sn).toBe('Smith');
       expect(entry.attributes.gecos).toBe('Smith');
     });
+
+    test('should include sshPublicKey attribute when sshpublickey field is provided', () => {
+      const user = {
+        username: 'sshuser',
+        uid_number: 3000,
+        gid_number: 3000,
+        sshpublickey: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDKey... user@host'
+      };
+
+      const entry = createLdapEntry(user, baseDN);
+
+      expect(entry.attributes.sshPublicKey).toBe('ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDKey... user@host');
+      expect(entry.attributes.objectClass).toContain('ldapPublicKey');
+      expect(entry.attributes.objectClass).toEqual(['top', 'posixAccount', 'inetOrgPerson', 'ldapPublicKey']);
+    });
+
+    test('should handle multiple SSH public keys as array', () => {
+      const user = {
+        username: 'multikey',
+        uid_number: 3001,
+        gid_number: 3001,
+        sshpublickey: [
+          'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDKey1... user@host1',
+          'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKey2... user@host2'
+        ]
+      };
+
+      const entry = createLdapEntry(user, baseDN);
+
+      expect(entry.attributes.sshPublicKey).toEqual([
+        'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDKey1... user@host1',
+        'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKey2... user@host2'
+      ]);
+      expect(entry.attributes.objectClass).toContain('ldapPublicKey');
+    });
+
+    test('should not include sshPublicKey or ldapPublicKey when sshpublickey is not provided', () => {
+      const user = {
+        username: 'nossh',
+        uid_number: 3002,
+        gid_number: 3002
+      };
+
+      const entry = createLdapEntry(user, baseDN);
+
+      expect(entry.attributes.sshPublicKey).toBeUndefined();
+      expect(entry.attributes.objectClass).not.toContain('ldapPublicKey');
+      expect(entry.attributes.objectClass).toEqual(['top', 'posixAccount', 'inetOrgPerson']);
+    });
   });
 
   describe('createLdapGroupEntry', () => {

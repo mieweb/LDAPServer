@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
   uidNumber INT NOT NULL,
   gidNumber INT NOT NULL,
   homeDirectory VARCHAR(256) NOT NULL,
-  loginShell VARCHAR(64) NOT NULL DEFAULT '/bin/bash'
+  loginShell VARCHAR(64) NOT NULL DEFAULT '/bin/bash',
+  sshpublickey TEXT
 );
 
 CREATE TABLE IF NOT EXISTS `groups` (
@@ -29,12 +30,13 @@ CREATE TABLE IF NOT EXISTS `groups` (
 -- Password: 'password123' (bcrypt hashed with 10 rounds)
 -- Pre-hashed because this SQL is loaded directly by MySQL, not processed by Node.js
 -- Hash generated with: bcrypt.hash('password123', 10)
-INSERT INTO users (uid, cn, sn, mail, userPassword, uidNumber, gidNumber, homeDirectory)
+INSERT INTO users (uid, cn, sn, mail, userPassword, uidNumber, gidNumber, homeDirectory, sshpublickey)
 VALUES
-  ('testuser', 'Test User', 'User', 'testuser@example.com', '$2b$10$DJylnYTJZBhXqzYDV62nTOCW3/6ytjmXITpGo.tSqR5eCppmERflS', 10100, 20100, '/home/testuser');
+  ('testuser', 'Test User', 'User', 'testuser@example.com', '$2b$10$DJylnYTJZBhXqzYDV62nTOCW3/6ytjmXITpGo.tSqR5eCppmERflS', 10100, 20100, '/home/testuser', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKogUL8oT4Sn4+V2zBa4Jtis4CIryh+igq2PTCoYXSw4 testuser@e2e-test'),
+  ('nokeyuser', 'NoKey User', 'NoKey', 'nokeyuser@example.com', '$2b$10$DJylnYTJZBhXqzYDV62nTOCW3/6ytjmXITpGo.tSqR5eCppmERflS', 10101, 20100, '/home/nokeyuser', NULL);
 
 -- Test groups with testuser as member
 INSERT INTO `groups` (cn, gidNumber, member_uids)
 VALUES
-  ('developers', 20100, JSON_ARRAY('testuser')),
+  ('developers', 20100, JSON_ARRAY('testuser', 'nokeyuser')),
   ('devops', 20101, JSON_ARRAY('testuser'));

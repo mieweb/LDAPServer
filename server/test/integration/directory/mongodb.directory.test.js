@@ -131,14 +131,14 @@ maybeDescribe('MongoDB Directory Backend - Acceptance Tests', () => {
         scope: 'sub'
       });
 
-      // Should return users (4) + groups (4)
-      expect(results.length).toBeGreaterThanOrEqual(8);
+      // Should return users (5) + groups (4)
+      expect(results.length).toBeGreaterThanOrEqual(9);
       
       // Verify we have both users and groups
       const userEntries = results.filter(r => r.dn.includes('uid='));
       const groupEntries = results.filter(r => r.dn.includes('cn='));
       
-      expect(userEntries.length).toBe(4);
+      expect(userEntries.length).toBe(5);
       expect(groupEntries.length).toBe(4);
     });
 
@@ -148,7 +148,7 @@ maybeDescribe('MongoDB Directory Backend - Acceptance Tests', () => {
         scope: 'sub'
       });
 
-      expect(results.length).toBe(4);
+      expect(results.length).toBe(5);
 
       // Verify all results are user entries
       results.forEach(entry => {
@@ -166,6 +166,7 @@ maybeDescribe('MongoDB Directory Backend - Acceptance Tests', () => {
       expect(usernames).toContain('admin');
       expect(usernames).toContain('jdoe');
       expect(usernames).toContain('disabled');
+      expect(usernames).toContain('sshuser');
     });
 
     test('c. (objectClass=posixGroup) should return all groups', async () => {

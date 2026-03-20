@@ -15,6 +15,11 @@ It validates full authentication flow:
 - `getent passwd testuser` returns correct home directory and shell
 - SSH authentication works end-to-end
 
+It validates SSH public key retrieval via `sss_ssh_authorizedkeys`:
+- `sss_ssh_authorizedkeys testuser` returns the correct SSH public key from LDAP
+- `sss_ssh_authorizedkeys nokeyuser` returns empty for users without SSH keys
+- SSH key-based authentication works using the key stored in LDAP
+
 ## Test Classification
 
 - **Unit tests** (`test/unit/`): Fast, isolated tests with mocked dependencies

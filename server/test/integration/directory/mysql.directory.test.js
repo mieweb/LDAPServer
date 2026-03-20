@@ -45,8 +45,8 @@ maybeDescribe('MySQL Directory Backend (real DB) - Integration', () => {
   function configureEnv() {
     process.env.SQL_URI = url;
     process.env.SQL_SSL = 'false';  // Disable TLS for local testing
-    process.env.SQL_QUERY_ALL_USERS = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number FROM users';
-    process.env.SQL_QUERY_ONE_USER = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, password_hash AS password FROM users WHERE username = ?';
+    process.env.SQL_QUERY_ALL_USERS = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, sshpublickey FROM users';
+    process.env.SQL_QUERY_ONE_USER = 'SELECT username, full_name, surname, mail, home_directory, login_shell, uid_number, gid_number, sshpublickey, password_hash AS password FROM users WHERE username = ?';
     process.env.SQL_QUERY_ALL_GROUPS = 'SELECT cn AS name, gid_number AS gid_number, member_uids FROM `groups`';
     process.env.SQL_QUERY_GROUPS_BY_MEMBER = 'SELECT cn AS name, gid_number AS gid_number, member_uids FROM `groups` WHERE JSON_CONTAINS(member_uids, JSON_QUOTE(?), "$")';
   }
@@ -75,19 +75,19 @@ maybeDescribe('MySQL Directory Backend (real DB) - Integration', () => {
     test('a. (objectClass=*) should return all objects (users + groups)', async () => {
       await startServer(false);
       const results = await doSearch(client, acceptanceFilters.allObjects);
-      // 4 users + 4 groups = 8
-      expect(results.length).toBeGreaterThanOrEqual(8);
+      // 5 users + 4 groups = 9
+      expect(results.length).toBeGreaterThanOrEqual(9);
       const userEntries = results.filter(r => /uid=/.test(r.dn));
       const groupEntries = results.filter(r => /cn=/.test(r.dn));
-      expect(userEntries.length).toBe(4);
+      expect(userEntries.length).toBe(5);
       expect(groupEntries.length).toBe(4);
     });
 
     test('b. (objectClass=posixAccount) should return all users', async () => {
       await startServer(false);
       const results = await doSearch(client, acceptanceFilters.allUsers);
-      // From common.users.json → 4 users
-      expect(results.length).toBe(4);
+      // From common.users.json → 5 users
+      expect(results.length).toBe(5);
       
       // Verify all results are user entries with required attributes
       results.forEach(entry => {
@@ -111,6 +111,7 @@ maybeDescribe('MySQL Directory Backend (real DB) - Integration', () => {
       expect(usernames).toContain('admin');
       expect(usernames).toContain('jdoe');
       expect(usernames).toContain('disabled');
+      expect(usernames).toContain('sshuser');
     });
 
     test('c. (objectClass=posixGroup) should return all groups', async () => {
@@ -154,6 +155,21 @@ maybeDescribe('MySQL Directory Backend (real DB) - Integration', () => {
       expect(user.attributes.loginShell).toBe('/bin/bash');
       expect(user.attributes.objectClass).toContain('posixAccount');
       expect(user.attributes.objectClass).toContain('inetOrgPerson');
+    });
+
+    test('d2. (uid=sshuser) should return user with SSH public key', async () => {
+      await startServer(false);
+      const results = await doSearch(client, acceptanceFilters.specificUser('sshuser'));
+      expect(results.length).toBe(1);
+      
+      const user = results[0];
+      expect(user.dn).toBe(`uid=sshuser,${baseDn}`);
+      expect(user.attributes.uid).toBe('sshuser');
+      expect(user.attributes.cn).toBe('SSH Test User');
+      expect(user.attributes.sshPublicKey).toBe('ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC8... sshuser@testhost');
+      expect(user.attributes.objectClass).toContain('posixAccount');
+      expect(user.attributes.objectClass).toContain('inetOrgPerson');
+      expect(user.attributes.objectClass).toContain('ldapPublicKey');
     });
 
     test('e. (cn=groupname) should return specific group', async () => {
