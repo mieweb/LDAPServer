@@ -334,6 +334,12 @@ class LdapEngine extends EventEmitter {
     // Resolve the auth chain: per-user override or realm default
     const authChain = this._resolveAuthChain(realm, user, username);
 
+    // Reject auth if no providers are configured (directory-only realm)
+    if (authChain.length === 0) {
+      this.logger.warn(`Realm '${realm.name}' has no auth providers configured — rejecting bind for '${username}'`);
+      return { authenticated: false };
+    }
+
     // Authenticate sequentially against the resolved auth chain
     for (const provider of authChain) {
       const result = await provider.authenticate(username, password, req);

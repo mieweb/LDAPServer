@@ -71,7 +71,8 @@ async function startServer(config) {
 
       // Build per-realm auth backend type map using explicit type names from config
       const authBackendTypes = new Map();
-      const authProviders = realmCfg.auth.backends.map(backendCfg => {
+      const authBackends = realmCfg.auth?.backends || [];
+      const authProviders = authBackends.map(backendCfg => {
         const provider = providerFactory.createAuthProvider(backendCfg.type, backendCfg.options || {});
         const typeKey = backendCfg.type.toLowerCase();
         if (!authBackendTypes.has(typeKey)) {
@@ -81,8 +82,12 @@ async function startServer(config) {
         return provider;
       });
 
+      if (authBackends.length === 0) {
+        logger.warn(`Realm '${realmCfg.name}': no auth backends configured — bind requests will be rejected`);
+      }
+
       logger.info(`Realm '${realmCfg.name}': baseDN=${realmCfg.baseDn}, ` +
-        `directory=${realmCfg.directory.backend}, auth=[${realmCfg.auth.backends.map(b => b.type).join(', ')}]` +
+        `directory=${realmCfg.directory.backend}, auth=[${authBackends.map(b => b.type).join(', ')}]` +
         (realmCfg.default ? ' (default)' : ''));
 
       const realmObj = {
