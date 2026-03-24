@@ -27,7 +27,7 @@ homepage: "https://github.com/mieweb/LDAPServer"
 license: "MIT"
 
 depends:
-  - nodejs (>= 18.0.0)
+  - nodejs (>= 24.0.0)
 
 provides:
   - ldap-gateway
@@ -76,9 +76,9 @@ deb:
 overrides:
   deb:
     depends:
-      - nodejs (>= 18.0.0)
+      - nodejs (>= 24.0.0)
       - systemd
   rpm:
     depends:
-      - nodejs >= 18.0.0
+      - nodejs >= 24.0.0
       - systemd

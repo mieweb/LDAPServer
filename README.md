@@ -292,14 +292,14 @@ AD_DOMAIN=your-domain.com
 LDAP_BIND_DN=CN=service,DC=your-domain,DC=com
 SQL_URL=mysql://ldap_user:secure_password@localhost:3306/your_database
 SQL_QUERY_ONE_USER='SELECT * FROM users WHERE username = ?'
-SQL_QUERY_GROUPS_BY_MEMBER='SELECT * FROM groups g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))'
+SQL_QUERY_GROUPS_BY_MEMBER='SELECT * FROM `groups` g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))'
 SQL_QUERY_ALL_USERS='SELECT * FROM users'
 SQL_QUERY_ALL_GROUPS='SELECT
     g.gid_number,
     g.name,
     g.gid_number AS id,
     GROUP_CONCAT(u.username) AS member_uids
-FROM groups g
+FROM `groups` g
 LEFT JOIN user_groups ug ON g.gid_number = ug.group_id
 LEFT JOIN users u ON ug.user_id = u.id
 GROUP BY g.gid_number, g.name
@@ -312,14 +312,14 @@ DIRECTORY_BACKEND=mysql   # User info from MySQL
 AUTH_BACKENDS=mysql       # Passwords in MySQL
 SQL_URL=mysql://ldap_user:secure_password@localhost:3306/your_database
 SQL_QUERY_ONE_USER='SELECT * FROM users WHERE username = ?'
-SQL_QUERY_GROUPS_BY_MEMBER='SELECT * FROM groups g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))'
+SQL_QUERY_GROUPS_BY_MEMBER='SELECT * FROM `groups` g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))'
 SQL_QUERY_ALL_USERS='SELECT * FROM users'
 SQL_QUERY_ALL_GROUPS='SELECT
     g.gid_number,
     g.name,
     g.gid_number AS id,
     GROUP_CONCAT(u.username) AS member_uids
-FROM groups g
+FROM `groups` g
 LEFT JOIN user_groups ug ON g.gid_number = ug.group_id
 LEFT JOIN users u ON ug.user_id = u.id
 GROUP BY g.gid_number, g.name
@@ -351,14 +351,14 @@ DIRECTORY_BACKEND=sql    # User info from SQL
 AUTH_BACKENDS=sql,ldap   # Try SQL auth first, fallback to LDAP
 SQL_URL=mysql://ldap_user:secure_password@localhost:3306/your_database
 SQL_QUERY_ONE_USER='SELECT * FROM users WHERE username = ?'
-SQL_QUERY_GROUPS_BY_MEMBER='SELECT * FROM groups g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))'
+SQL_QUERY_GROUPS_BY_MEMBER='SELECT * FROM `groups` g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))'
 SQL_QUERY_ALL_USERS='SELECT * FROM users'
 SQL_QUERY_ALL_GROUPS='SELECT
     g.gid_number,
     g.name,
     g.gid_number AS id,
     GROUP_CONCAT(u.username) AS member_uids
-FROM groups g
+FROM `groups` g
 LEFT JOIN user_groups ug ON g.gid_number = ug.group_id
 LEFT JOIN users u ON ug.user_id = u.id
 GROUP BY g.gid_number, g.name
@@ -375,14 +375,14 @@ AD_DOMAIN=your-domain.com
 LDAP_BIND_DN=CN=service,DC=your-domain,DC=com
 SQL_URL=mysql://ldap_user:secure_password@localhost:3306/your_database
 SQL_QUERY_ONE_USER='SELECT * FROM users WHERE username = ?'
-SQL_QUERY_GROUPS_BY_MEMBER='SELECT * FROM groups g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))'
+SQL_QUERY_GROUPS_BY_MEMBER='SELECT * FROM `groups` g WHERE JSON_CONTAINS(g.member_uids, JSON_QUOTE(?))'
 SQL_QUERY_ALL_USERS='SELECT * FROM users'
 SQL_QUERY_ALL_GROUPS='SELECT
     g.gid_number,
     g.name,
     g.gid_number AS id,
     GROUP_CONCAT(u.username) AS member_uids
-FROM groups g
+FROM `groups` g
 LEFT JOIN user_groups ug ON g.gid_number = ug.group_id
 LEFT JOIN users u ON ug.user_id = u.id
 GROUP BY g.gid_number, g.name
@@ -575,10 +575,11 @@ LDAPServer/
 # Install dependencies
 npm install
 
-# Build core package
-npm run build:core
+# Start the server (no build required for local development)
+npm start
 
-# Build server package  
+# Build for releases (only needed for npm publishing and distribution packages)
+npm run build:core
 npm run build:server
 
 # Create binary
