@@ -1,34 +1,23 @@
 const { AuthProvider } = require('@ldap-gateway/core');
 const logger = require('../utils/logger');
 const { Sequelize } = require('sequelize');
+const { buildSequelizeOptions } = require('../utils/sqlUtils');
 const argon2 = require('argon2');
 const bcrypt = require('bcrypt');
 const unixcrypt = require('unixcrypt');
-
-/**
- * Build Sequelize options with optional SSL configuration
- * Set SQL_SSL=false to disable TLS for testing with local databases
- */
-function buildSequelizeOptions() {
-  const options = { logging: msg => logger.debug(msg) };
-  
-  if (process.env.SQL_SSL === 'false') {
-    options.dialectOptions = { ssl: false };
-  }
-  
-  return options;
-}
 
 /**
  * SQL Authentication Provider
  * Handles user authentication against SQL database
  */
 class SQLAuthProvider extends AuthProvider {
-  constructor() {
-    super();
+  constructor(options = {}) {
+    super(options);
+    this.sqlUri = options.sqlUri ?? process.env.SQL_URI;
+    this.sqlQueryOneUser = options.sqlQueryOneUser ?? process.env.SQL_QUERY_ONE_USER;
     this.sequelize = new Sequelize(
-      process.env.SQL_URI,
-      buildSequelizeOptions()
+      this.sqlUri,
+      buildSequelizeOptions(options)
     );
   }
 
@@ -84,7 +73,7 @@ class SQLAuthProvider extends AuthProvider {
     try {
       logger.debug(`[SQLAuthProvider] Authenticating user: ${username}`);
       const [results, _] = await this.sequelize.query(
-        process.env.SQL_QUERY_ONE_USER,
+        this.sqlQueryOneUser,
         { replacements: [username] }
       );
 

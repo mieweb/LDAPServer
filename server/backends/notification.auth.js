@@ -7,8 +7,9 @@ const logger = require('../utils/logger');
  * Works as a standalone auth provider in the chain (doesn't wrap other providers)
  */
 class NotificationAuthProvider extends AuthProvider {
-  constructor() {
-    super();
+  constructor(options = {}) {
+    super(options);
+    this.notificationUrl = options.notificationUrl ?? process.env.NOTIFICATION_URL ?? null;
     this.initialized = false;
   }
 
@@ -23,7 +24,7 @@ class NotificationAuthProvider extends AuthProvider {
     try {
       logger.debug(`[NotificationAuthProvider] Sending MFA notification for ${username}`);
       
-      const response = await NotificationService.sendAuthenticationNotification(username);
+      const response = await NotificationService.sendAuthenticationNotification(username, this.notificationUrl);
       
       if (response.action === "approve") {
         logger.debug(`[NotificationAuthProvider] MFA approved for ${username}`);

@@ -17,12 +17,12 @@ const http = require('http');
 
 class ApiAuthBackend extends AuthProvider {
   constructor(options = {}) {
-    super();
+    super(options);
     
-    // Load configuration from environment
-    this.apiUrl = process.env.API_AUTH_URL || 'https://api.example.com/auth';
-    this.apiToken = process.env.API_AUTH_TOKEN;
-    this.timeout = parseInt(process.env.API_AUTH_TIMEOUT || '5000', 10);
+    // Use options with env var fallback — enables multi-realm support
+    this.apiUrl = options.apiUrl ?? process.env.API_AUTH_URL ?? 'https://api.example.com/auth';
+    this.apiToken = options.apiToken ?? process.env.API_AUTH_TOKEN;
+    this.timeout = options.timeout ?? parseInt(process.env.API_AUTH_TIMEOUT || '5000', 10);
     
     if (!this.apiUrl) {
       console.warn('[ApiAuthBackend] No API_AUTH_URL configured');

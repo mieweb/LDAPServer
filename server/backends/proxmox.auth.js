@@ -6,14 +6,14 @@ const { AuthProvider } = require('@ldap-gateway/core');
 const logger = require('../utils/logger');
 
 class ProxmoxBackend extends AuthProvider {
-  constructor(directoryProvider = null) {
-    super();
-    this.shadowPath = process.env.PROXMOX_SHADOW_CFG || null;
+  constructor(options = {}) {
+    super(options);
+    this.shadowPath = options.proxmoxShadowCfg ?? process.env.PROXMOX_SHADOW_CFG ?? null;
     this.shadowCache = null;
     this.fileWatcher = null;
     this.reloadTimeout = null;
     this.initialized = false;
-    this.directoryProvider = directoryProvider;
+    this.directoryProvider = options.directoryProvider ?? null;
   }
 
   async initialize() {

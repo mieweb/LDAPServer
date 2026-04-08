@@ -11,7 +11,7 @@ const { testUsers, testGroups } = require('./testData');
 // Simple implementation for testing auth flows
 class MockAuthProvider extends AuthProvider {
   constructor(options = {}) {
-    super();
+    super(options);
     this.name = options.name || 'mock-auth';
     this.shouldSucceed = options.shouldSucceed !== undefined ? options.shouldSucceed : true;
     this.delay = options.delay || 0;
@@ -56,7 +56,7 @@ class MockAuthProvider extends AuthProvider {
 // Simple implementation for testing directory lookups
 class MockDirectoryProvider extends DirectoryProvider {
   constructor(options = {}) {
-    super();
+    super(options);
     this.name = options.name || 'mock-directory';
     this.users = options.users || testUsers.map(u => ({ ...u }));
     this.groups = options.groups || testGroups.map(g => ({ ...g }));
@@ -155,7 +155,7 @@ class MockDirectoryProvider extends DirectoryProvider {
 // Always succeeds if notification succeeds, regardless of password
 class MockNotificationAuthProvider extends AuthProvider {
   constructor(options = {}) {
-    super();
+    super(options);
     this.name = 'mock-notification';
     this.notificationShouldSucceed = options.notificationShouldSucceed !== undefined 
       ? options.notificationShouldSucceed 

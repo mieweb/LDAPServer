@@ -16,15 +16,11 @@ const { AuthProvider, DirectoryProvider } = require('@ldap-gateway/core');
 
 class MyAuthBackend extends AuthProvider {
   constructor(options = {}) {
-    super();
+    super(options);
     
-    // Initialize your backend with options
-    // Options may include: databaseService, ldapServerPool, or custom config
-    this.options = options;
-    
-    // Access environment variables for configuration
-    this.apiUrl = process.env.MY_API_URL;
-    this.apiKey = process.env.MY_API_KEY;
+    // Use options with env var fallback — enables multi-realm support
+    this.apiUrl = options.apiUrl ?? process.env.MY_API_URL;
+    this.apiKey = options.apiKey ?? process.env.MY_API_KEY;
     
     // Initialize any connections, clients, or state here
   }
@@ -66,12 +62,10 @@ class MyAuthBackend extends AuthProvider {
 
 class MyDirectoryBackend extends DirectoryProvider {
   constructor(options = {}) {
-    super();
+    super(options);
     
-    this.options = options;
-    
-    // Access environment variables
-    this.dataPath = process.env.MY_DATA_PATH;
+    // Use options with env var fallback — enables multi-realm support
+    this.dataPath = options.dataPath ?? process.env.MY_DATA_PATH;
     
     // Initialize your data source
   }

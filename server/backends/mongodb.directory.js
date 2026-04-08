@@ -7,13 +7,14 @@ const logger = require('../utils/logger');
  * Handles user and group directory operations against MongoDB database
  */
 class MongoDBDirectoryProvider extends DirectoryProvider {
-  constructor() {
-    super();
+  constructor(options = {}) {
+    super(options);
     this.config = {
       type: 'mongodb',
-      uri: process.env.MONGO_URI || "mongodb://localhost:27017/ldap_user_db",
-      database: process.env.MONGO_DATABASE || "ldap_user_db"
+      uri: options.mongoUri ?? process.env.MONGO_URI ?? "mongodb://localhost:27017/ldap_user_db",
+      database: options.mongoDatabase ?? process.env.MONGO_DATABASE ?? "ldap_user_db"
     };
+    this.ldapBaseDn = options.ldapBaseDn ?? process.env.LDAP_BASE_DN;
     this.initialized = false;
   }
 
@@ -99,7 +100,7 @@ class MongoDBDirectoryProvider extends DirectoryProvider {
               memberUids: [user.username],
               gid_number: gidNum,
               gidNumber: gidNum,
-              dn: `cn=${user.username},${process.env.LDAP_BASE_DN}`,
+              dn: `cn=${user.username},${this.ldapBaseDn}`,
               objectClass: ["posixGroup"],
             }];
           }

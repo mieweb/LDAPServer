@@ -28,10 +28,12 @@ CREATE TABLE IF NOT EXISTS users (
   uid_number INT UNIQUE,
   gid_number INT,
   home_directory VARCHAR(200),
+  auth_backends VARCHAR(255) DEFAULT NULL,
   FOREIGN KEY (gid_number) REFERENCES `groups`(gid_number)
 );
 
 -- 4. Now insert users (gid_number matches existing groups)
+-- Passwords are SHA-512 crypt(3) hashes ($6$): ann=maya, abrol=abrol, evan=evan, hrits=maya, chris=chris
 INSERT INTO users (username, password, full_name, email, uid_number, gid_number, home_directory) VALUES
   ('ann', '$6$Zmtz1yzJJyslWIK/$OoLdG1FNvPbSsyqekHGNIKdx.X1IlMQBVqACvr/WI8IFze.jzvLDzB1y3/Tigjk1mzcGKgowZ1lwCVF8EXv2q.', 'Ann', 'ann@mieweb.com', 1001, 1001, '/home/ann'),
   ('abrol','$6$7KbEtgYeI.FFS7sw$EcFip4Ros8inRQQ2nGhBa32s3qA7h2pFXGfrP8x0NRMIM0bGaZ8bIObVh207yhQ.YW1KkMW2o7RIkEuDWG3wb/', 'Abrol', 'abrol@mieweb.com', 1002, 1002, '/home/abrol'),

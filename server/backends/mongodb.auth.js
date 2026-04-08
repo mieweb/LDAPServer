@@ -8,12 +8,12 @@ const bcrypt = require('bcrypt');
  * Handles user authentication against MongoDB database
  */
 class MongoDBAuthProvider extends AuthProvider {
-  constructor() {
-    super();
+  constructor(options = {}) {
+    super(options);
     this.config = {
       type: 'mongodb',
-      uri: process.env.MONGO_URI || "mongodb://localhost:27017/ldap_user_db",
-      database: process.env.MONGO_DATABASE || "ldap_user_db"
+      uri: options.mongoUri ?? process.env.MONGO_URI ?? "mongodb://localhost:27017/ldap_user_db",
+      database: options.mongoDatabase ?? process.env.MONGO_DATABASE ?? "ldap_user_db"
     };
     this.initialized = false;
   }
